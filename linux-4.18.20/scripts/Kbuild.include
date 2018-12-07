@@ -238,6 +238,7 @@ objectify = $(foreach o,$(1),$(if $(filter /%,$(o)),$(o),$(obj)/$(o)))
 # if_changed_rule - as if_changed but execute rule instead
 # See Documentation/kbuild/makefiles.txt for more info
 
+#arg-check检查编译目标的命令相对上次是否发生变化
 ifneq ($(KBUILD_NOCMDDEP),1)
 # Check if both arguments are the same including their order. Result is empty
 # string if equal. User may override this check using make KBUILD_NOCMDDEP=1
@@ -257,8 +258,12 @@ make-cmd = $(call escsq,$(subst $(pound),$$(pound),$(subst $$,$$$$,$(cmd_$(1))))
 
 # Find any prerequisites that is newer than target or that does not exist.
 # PHONY targets skipped in both cases.
+#any-prereq检查是否有依赖比目标新,或者依赖还没有创建
 any-prereq = $(filter-out $(PHONY),$?) $(filter-out $(PHONY) $(wildcard $^),$^)
 
+#strip的作用是去除字符串开头和结尾的空格,$(any-prereq)和$(arg-check)分别
+#根据前一次编译保存的.cmd文件来检测依赖项或者编译命令行参数是否发生了变化
+#if_changed 核心功能就是当目标的依赖或者编译命令发生变化时,执行表达式“cmd_$(1)”展开后的值
 # Execute command if command has changed or prerequisite(s) are updated.
 if_changed = $(if $(strip $(any-prereq) $(arg-check)),                       \
 	@set -e;                                                             \
@@ -308,6 +313,8 @@ endif
 # Usage: $(call if_changed_rule,foo)
 # Will check if $(cmd_foo) or any of the prerequisites changed,
 # and if so will execute $(rule_foo).
+#strip的作用是去除字符串开头和结尾的空格,$(any-prereq)和$(arg-check)分别
+#根据前一次编译保存的.cmd文件来检测依赖项或者编译命令行参数是否发生了变化
 if_changed_rule = $(if $(strip $(any-prereq) $(arg-check) ),                 \
 	@set -e;                                                             \
 	$(rule_$(1)), @:)

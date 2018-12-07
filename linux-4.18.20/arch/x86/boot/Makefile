@@ -30,6 +30,7 @@ targets		:= vmlinux.bin setup.bin setup.elf bzImage
 targets		+= fdimage fdimage144 fdimage288 image.iso mtools.conf
 subdir-		:= compressed
 
+#为生成setup.bin文件赋值
 setup-y		+= a20.o bioscall.o cmdline.o copy.o cpu.o cpuflags.o cpucheck.o
 setup-y		+= early_serial_console.o edd.o header.o main.o memory.o
 setup-y		+= pm.o pmjump.o printf.o regs.o string.o tty.o video.o
@@ -74,17 +75,24 @@ $(obj)/bzImage: asflags-y  := $(SVGA_MODE)
 
 quiet_cmd_image = BUILD   $@
 silent_redirect_image = >/dev/null
+
+#调用build工具,把setup.bin,vmlinux.bin写入到bzImage
 cmd_image = $(obj)/tools/build $(obj)/setup.bin $(obj)/vmlinux.bin \
 			       $(obj)/zoffset.h $@ $($(quiet)redirect_image)
 
+#默认的构建目标为bzImage,依赖关系为setup.bin,vmlinux.bin,build工具
 $(obj)/bzImage: $(obj)/setup.bin $(obj)/vmlinux.bin $(obj)/tools/build FORCE
 	$(call if_changed,image)
+
+	#Kernel: arch/x86/boot/bzImage is ready  (#1)
 	@$(kecho) 'Kernel: $@ is ready' ' (#'`cat .version`')'
 
+#vmlinux.bin是通过arch/x86/boot/compressed/vmlinux处理后得到vrch/x86/boot/mlinux.bin
 OBJCOPYFLAGS_vmlinux.bin := -O binary -R .note -R .comment -S
 $(obj)/vmlinux.bin: $(obj)/compressed/vmlinux FORCE
 	$(call if_changed,objcopy)
 
+#为setup.bin依赖的文件赋值
 SETUP_OBJS = $(addprefix $(obj)/,$(setup-y))
 
 sed-zoffset := -e 's/^\([0-9a-fA-F]*\) [ABCDGRSTVW] \(startup_32\|startup_64\|efi32_stub_entry\|efi64_stub_entry\|efi_pe_entry\|input_data\|_end\|_ehead\|_text\|z_.*\)$$/\#define ZO_\2 0x\1/p'
@@ -100,15 +108,19 @@ $(obj)/zoffset.h: $(obj)/compressed/vmlinux FORCE
 AFLAGS_header.o += -I$(objtree)/$(obj)
 $(obj)/header.o: $(obj)/zoffset.h
 
+#链接器ld使用链接脚本arch/x86/boot/setup.ld,生成setup.elf文件
 LDFLAGS_setup.elf	:= -T
 $(obj)/setup.elf: $(src)/setup.ld $(SETUP_OBJS) FORCE
 	$(call if_changed,ld)
 
+#arch/x86/boot/setup.bin是通过objcopy命令处理arch/x86/boot/setup.elf的结果
 OBJCOPYFLAGS_setup.bin	:= -O binary
 $(obj)/setup.bin: $(obj)/setup.elf FORCE
 	$(call if_changed,objcopy)
 
+#arch/x86/boot/compressed/vmlinux的生成规则,
 $(obj)/compressed/vmlinux: FORCE
+	#make -f scripts/Makefile.build obj=arch/x86/boot/compressed arch/x86/boot/compressed/vmlinux
 	$(Q)$(MAKE) $(build)=$(obj)/compressed $@
 
 # Set this if you want to pass append arguments to the

@@ -71,6 +71,10 @@ unexport GREP_OPTIONS
 # To put more focus on warnings, be less verbose as default
 # Use 'make V=1' to see the full commands
 
+#origin是makefile的一个内置函数,它判定出Makefile中的一个变量是在哪里定义的,
+#如果在shell中输入make V=1 vmlinux,origin将返回"command line";如果这当前shell
+#中的环境变量中定义了V,在shell中输入make vmlinux,origin返回"environment".这里
+#主要是保证V=1来自命令行,才定义KBUILD_VERBOSE
 ifeq ("$(origin V)", "command line")
   KBUILD_VERBOSE = $(V)
 endif
@@ -291,6 +295,7 @@ else
 
 # We need some generic definitions (do not try to remake the file).
 scripts/Kbuild.include: ;
+#包含公共的规则定义,在该文件中定义build=-f scripts/Makefile.build obj=,通过-f动态的组成完整的Makefile
 include scripts/Kbuild.include
 
 # Read KERNELRELEASE from include/config/kernel.release (if it exists)
@@ -298,6 +303,7 @@ KERNELRELEASE = $(shell cat include/config/kernel.release 2> /dev/null)
 KERNELVERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUBLEVEL)))$(EXTRAVERSION)
 export VERSION PATCHLEVEL SUBLEVEL KERNELRELEASE KERNELVERSION
 
+#通过该文件查询本机使用的架构,如x86,x86_64都使用的是$(SUBARCH)=x86
 include scripts/subarch.include
 
 # Cross compiling and selecting different set of gcc/bin-utils
@@ -318,10 +324,13 @@ include scripts/subarch.include
 # Alternatively CROSS_COMPILE can be set in the environment.
 # Default value for CROSS_COMPILE is not to prefix executables
 # Note: Some architectures assign CROSS_COMPILE in their arch/*/Makefile
+#执行完该指令默认的ARCH=x86
 ARCH		?= $(SUBARCH)
 
 # Architecture as present in compile.h
 UTS_MACHINE 	:= $(ARCH)
+
+#默认本机编译是SRCARCH=x86
 SRCARCH 	:= $(ARCH)
 
 # Additional ARCH settings for x86
@@ -577,6 +586,7 @@ endif
 
 export KBUILD_MODULES KBUILD_BUILTIN
 
+#为生成顶层vmlinux依赖的变量赋值
 ifeq ($(KBUILD_EXTMOD),)
 # Objects we will link into vmlinux / subdirs we need to visit
 init-y		:= init/
@@ -595,6 +605,8 @@ endif
 # command line.
 # This allow a user to issue only 'make' to build a kernel including modules
 # Defaults to vmlinux, but the arch makefile usually adds further targets
+
+#在顶层执行Make命令的时候,默认执行的目标
 all: vmlinux
 
 CFLAGS_GCOV	:= -fprofile-arcs -ftest-coverage \
@@ -607,6 +619,8 @@ export CFLAGS_GCOV
 ARCH_CPPFLAGS :=
 ARCH_AFLAGS :=
 ARCH_CFLAGS :=
+
+#包含架构相关的Makefile以组成完整的Makefile.
 include arch/$(SRCARCH)/Makefile
 
 ifeq ($(dot-config),1)
@@ -951,6 +965,7 @@ endif
 ifeq ($(KBUILD_EXTMOD),)
 core-y		+= kernel/ certs/ mm/ fs/ ipc/ security/ crypto/ block/
 
+#filter的目的是过滤掉这些变量中的非目录,patsubst将过滤出来的子目录后面的字符"/"去掉
 vmlinux-dirs	:= $(patsubst %/,%,$(filter %/, $(init-y) $(init-m) \
 		     $(core-y) $(core-m) $(drivers-y) $(drivers-m) \
 		     $(net-y) $(net-m) $(libs-y) $(libs-m) $(virt-y)))
@@ -958,7 +973,9 @@ vmlinux-dirs	:= $(patsubst %/,%,$(filter %/, $(init-y) $(init-m) \
 vmlinux-alldirs	:= $(sort $(vmlinux-dirs) $(patsubst %/,%,$(filter %/, \
 		     $(init-) $(core-) $(drivers-) $(net-) $(libs-) $(virt-))))
 
+#patsubst是make的内置函数,功能是在输入的文本中查找与模式匹配的字符串,然后使用特定字符串进行替换
 init-y		:= $(patsubst %/, %/built-in.a, $(init-y))
+#替换后为core-y += kernel/built-in.a certs/built-in.a mm/built-in.a等
 core-y		:= $(patsubst %/, %/built-in.a, $(core-y))
 drivers-y	:= $(patsubst %/, %/built-in.a, $(drivers-y))
 net-y		:= $(patsubst %/, %/built-in.a, $(net-y))
@@ -966,6 +983,7 @@ libs-y1		:= $(patsubst %/, %/lib.a, $(libs-y))
 libs-y2		:= $(patsubst %/, %/built-in.a, $(filter-out %.a, $(libs-y)))
 virt-y		:= $(patsubst %/, %/built-in.a, $(virt-y))
 
+#导出vmlinux依赖的几个变量供子Makefile使用
 # Externally visible symbols (used by link-vmlinux.sh)
 export KBUILD_VMLINUX_INIT := $(head-y) $(init-y)
 export KBUILD_VMLINUX_MAIN := $(core-y) $(libs-y2) $(drivers-y) $(net-y) $(virt-y)
@@ -975,6 +993,7 @@ export LDFLAGS_vmlinux
 # used by scripts/package/Makefile
 export KBUILD_ALLDIRS := $(sort $(filter-out arch/%,$(vmlinux-alldirs)) arch Documentation include samples scripts tools)
 
+#vmlinux的依赖,在此处为vmlinux-deps赋值
 vmlinux-deps := $(KBUILD_LDS) $(KBUILD_VMLINUX_INIT) $(KBUILD_VMLINUX_MAIN) $(KBUILD_VMLINUX_LIBS)
 
 # Recurse until adjust_autoksyms.sh is satisfied
@@ -1001,10 +1020,13 @@ $(autoksyms_h):
 ARCH_POSTLINK := $(wildcard $(srctree)/arch/$(SRCARCH)/Makefile.postlink)
 
 # Final link of vmlinux with optional arch pass after final link
+#$<:这是make的自动变量,翻译自"Automatic Variable",意指变量名相同,但是make根据具体上下文,将其自动替换为合适的值
+#下面的命令行展开后为:scripts/link-vmlinux.sh
 cmd_link-vmlinux =                                                 \
 	$(CONFIG_SHELL) $< $(LD) $(LDFLAGS) $(LDFLAGS_vmlinux) ;    \
 	$(if $(ARCH_POSTLINK), $(MAKE) -f $(ARCH_POSTLINK) $@, true)
 
+#构建vmlinux的规则以及命令,主要构建使用scripts/link-vmlinux.sh脚本以及依赖文件vmlinux-deps
 vmlinux: scripts/link-vmlinux.sh autoksyms_recursive $(vmlinux-deps) FORCE
 ifdef CONFIG_HEADERS_CHECK
 	$(Q)$(MAKE) -f $(srctree)/Makefile headers_check
@@ -1012,6 +1034,7 @@ endif
 ifdef CONFIG_GDB_SCRIPTS
 	$(Q)ln -fsn $(abspath $(srctree)/scripts/gdb/vmlinux-gdb.py)
 endif
+	#如果后面的依赖改变了，则执行cmd_link-vmlinux命令
 	+$(call if_changed,link-vmlinux)
 
 # Build samples along the rest of the kernel
@@ -1021,6 +1044,7 @@ endif
 
 # The actual objects are generated when descending,
 # make sure no implicit rule kicks in
+#vmlinux-deps依赖$(vmlinux-dirs),注意该规则没有执行体
 $(sort $(vmlinux-deps)): $(vmlinux-dirs) ;
 
 # Handle descending into subdirectories listed in $(vmlinux-dirs)
@@ -1030,6 +1054,9 @@ $(sort $(vmlinux-deps)): $(vmlinux-dirs) ;
 # Error messages still appears in the original language
 
 PHONY += $(vmlinux-dirs)
+
+#构建依赖的目标, $@是make的自动变量,表示规则的目标,所以这里会被make自动替换为构建的子目录,
+#如init、kernel等,即相当于逐个编译这些子目录,使用的Makefile是Makefile.build
 $(vmlinux-dirs): prepare scripts
 	$(Q)$(MAKE) $(build)=$@ need-builtin=1
 

@@ -71,6 +71,7 @@ $(obj)/../voffset.h: vmlinux FORCE
 
 $(obj)/misc.o: $(obj)/../voffset.h
 
+#链接vmlinux依赖的文件
 vmlinux-objs-y := $(obj)/vmlinux.lds $(obj)/head_$(BITS).o $(obj)/misc.o \
 	$(obj)/string.o $(obj)/cmdline.o $(obj)/error.o \
 	$(obj)/piggy.o $(obj)/cpuflags.o
@@ -111,24 +112,29 @@ endef
 quiet_cmd_check-and-link-vmlinux = LD      $@
       cmd_check-and-link-vmlinux = $(cmd_check_data_rel); $(cmd_ld)
 
+#调用连接器ld生成当前目录下的arch/x86/boot/compressed/vmlinux,不同与顶层的vmlinux
 $(obj)/vmlinux: $(vmlinux-objs-y) FORCE
 	$(call if_changed,check-and-link-vmlinux)
 
+#把顶层生成的vmlinux,使用objcopy处理后生成arch/x86/boot/compressed/vmlinux.bin
 OBJCOPYFLAGS_vmlinux.bin :=  -R .comment -S
 $(obj)/vmlinux.bin: vmlinux FORCE
 	$(call if_changed,objcopy)
 
 targets += $(patsubst $(obj)/%,%,$(vmlinux-objs-y)) vmlinux.bin.all vmlinux.relocs
 
+#使用arch/x86/tools/relocs工具从vmlinux中提取重定位信息到文件vmlinux.relocs中
 CMD_RELOCS = arch/x86/tools/relocs
 quiet_cmd_relocs = RELOCS  $@
       cmd_relocs = $(CMD_RELOCS) $< > $@;$(CMD_RELOCS) --abs-relocs $<
 $(obj)/vmlinux.relocs: vmlinux FORCE
 	$(call if_changed,relocs)
 
+#再次处理vmlinux.bin,如果配置为可重定位,则追加重定位表到vmlinux.bin的末尾
 vmlinux.bin.all-y := $(obj)/vmlinux.bin
 vmlinux.bin.all-$(CONFIG_X86_NEED_RELOCS) += $(obj)/vmlinux.relocs
 
+#根据不同的压缩选项,调用对应的压缩函数进行处理
 $(obj)/vmlinux.bin.gz: $(vmlinux.bin.all-y) FORCE
 	$(call if_changed,gzip)
 $(obj)/vmlinux.bin.bz2: $(vmlinux.bin.all-y) FORCE
@@ -142,6 +148,7 @@ $(obj)/vmlinux.bin.lzo: $(vmlinux.bin.all-y) FORCE
 $(obj)/vmlinux.bin.lz4: $(vmlinux.bin.all-y) FORCE
 	$(call if_changed,lz4)
 
+#根据内核配置的压缩选项,设置对应的压缩后缀,默认为CONFIG_KERNEL_GZIP=y
 suffix-$(CONFIG_KERNEL_GZIP)	:= gz
 suffix-$(CONFIG_KERNEL_BZIP2)	:= bz2
 suffix-$(CONFIG_KERNEL_LZMA)	:= lzma
@@ -149,9 +156,23 @@ suffix-$(CONFIG_KERNEL_XZ)	:= xz
 suffix-$(CONFIG_KERNEL_LZO) 	:= lzo
 suffix-$(CONFIG_KERNEL_LZ4) 	:= lz4
 
+#展开后为:cmd_mkpiggy = arch/x86/boot/compressed/mkpiggy arch/x86/boot/compressed/vmlinux.bin.gz > arch/x86/boot/compressed/piggy.S
 quiet_cmd_mkpiggy = MKPIGGY $@
       cmd_mkpiggy = $(obj)/mkpiggy $< > $@ || ( rm -f $@ ; false )
 
 targets += piggy.S
+
+#生成的piggy.S文件如下:
+#.section ".rodata..compressed","a",@progbits
+#.globl z_input_len
+#z_input_len = 8096170
+#.globl z_output_len
+#z_output_len = 30546500
+#.globl input_data, input_data_end
+#input_data:
+#.incbin "arch/x86/boot/compressed/vmlinux.bin.gz"
+#input_data_end:
+
+#使用mkpiggy工具对vmlinux.bin.gz进行处理,生成piggy.S文件,然后汇编为piggy.o
 $(obj)/piggy.S: $(obj)/vmlinux.bin.$(suffix-y) $(obj)/mkpiggy FORCE
 	$(call if_changed,mkpiggy)

@@ -78,6 +78,7 @@ modpost_link()
 	${LD} ${LDFLAGS} -r -o ${1} ${objects}
 }
 
+#链接脚本的赋值为${KBUILD_LDS}=arch/$(SRCARCH)/kernel/vmlinux.lds
 # Link of vmlinux
 # ${1} - optional extra .o files
 # ${2} - output file
@@ -86,6 +87,7 @@ vmlinux_link()
 	local lds="${objtree}/${KBUILD_LDS}"
 	local objects
 
+	#把所有的build-in.a链接为vmlinux,并放在顶层
 	if [ "${SRCARCH}" != "um" ]; then
 		objects="--whole-archive			\
 			built-in.a				\
@@ -95,6 +97,7 @@ vmlinux_link()
 			--end-group				\
 			${1}"
 
+		#使用ld链接命令，根据lds脚本链接objects中的目标,输出vmlinux中
 		${LD} ${LDFLAGS} ${LDFLAGS_vmlinux} -o ${2}	\
 			-T ${lds} ${objects}
 	else
@@ -279,6 +282,8 @@ if [ -n "${CONFIG_KALLSYMS}" ]; then
 fi
 
 info LD vmlinux
+
+#该shell主要执行如下命令,其中的vmlinux_link的定义在上面
 vmlinux_link "${kallsymso}" vmlinux
 
 if [ -n "${CONFIG_BUILDTIME_EXTABLE_SORT}" ]; then

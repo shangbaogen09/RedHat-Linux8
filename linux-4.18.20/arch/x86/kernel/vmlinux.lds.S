@@ -14,10 +14,11 @@
  * change if kernel is relocated, make the symbol section relative and
  * put it inside the section definition.
  */
-
+/*LOAD_OFFSET定义的值为:include/asm/page_64_types.h:#define __START_KERNEL_map _AC(0xffffffff80000000, UL)*/
 #ifdef CONFIG_X86_32
 #define LOAD_OFFSET __PAGE_OFFSET
 #else
+/*具体的值为2G地址处*/
 #define LOAD_OFFSET __START_KERNEL_map
 #endif
 
@@ -31,6 +32,7 @@
 
 #undef i386     /* in case the preprocessor is a 32bit one */
 
+/*生成顶层vmlinux的链接脚本,CONFIG_OUTPUT_FORMAT="elf64-x86-64"*/
 OUTPUT_FORMAT(CONFIG_OUTPUT_FORMAT, CONFIG_OUTPUT_FORMAT, CONFIG_OUTPUT_FORMAT)
 
 #ifdef CONFIG_X86_32
@@ -38,6 +40,7 @@ OUTPUT_ARCH(i386)
 ENTRY(phys_startup_32)
 jiffies = jiffies_64;
 #else
+/*定义非压缩部分的入口点为phys_startup_64*/
 OUTPUT_ARCH(i386:x86-64)
 ENTRY(phys_startup_64)
 jiffies_64 = jiffies;
@@ -92,11 +95,17 @@ SECTIONS
 	. = LOAD_OFFSET + LOAD_PHYSICAL_ADDR;
 	phys_startup_32 = ABSOLUTE(startup_32 - LOAD_OFFSET);
 #else
+	/*#define __PHYSICAL_START ALIGN(CONFIG_PHYSICAL_START, CONFIG_PHYSICAL_ALIGN), config文件中定义的为CONFIG_PHYSICAL_START=0x1000000(16M)*/
+	/*__START_KERNEL定义为:arch/x86/include/asm/page_types.h:#define __START_KERNEL (__START_KERNEL_map + __PHYSICAL_START)*/
 	. = __START_KERNEL;
+
+	/*获取符号startup_64的物理起始地址,startup_64为链接时的地址0xFFFFFFFF81000000,处理后phys_startup_64=0x0000000001000000*/
 	phys_startup_64 = ABSOLUTE(startup_64 - LOAD_OFFSET);
 #endif
 
+	/*代码段的起始地址为__START_KERNEL0xFFFFFFFF81000000*/
 	/* Text and read-only data */
+	/*关键字AT规定了这个节的加载地址(LVA),ADDR(.text)表示.text的起始地址,处理后链接地址为0x0000000001000000(16M)*/
 	.text :  AT(ADDR(.text) - LOAD_OFFSET) {
 		_text = .;
 		_stext = .;
@@ -133,6 +142,7 @@ SECTIONS
 
 		/* End of text section */
 		_etext = .;
+	/*:text = 0x9090表示对齐空出来的部分用0x9090填充*/
 	} :text = 0x9090
 
 	NOTES :text :note
@@ -145,6 +155,7 @@ SECTIONS
 	RO_DATA(PAGE_SIZE)
 	X64_ALIGN_RODATA_END
 
+	/*vmlinux的数据段*/
 	/* Data */
 	.data : AT(ADDR(.data) - LOAD_OFFSET) {
 		/* Start of data section */
@@ -346,6 +357,7 @@ SECTIONS
 	}
 #endif
 
+	/*定义bss段*/
 	/* BSS */
 	. = ALIGN(PAGE_SIZE);
 	.bss : AT(ADDR(.bss) - LOAD_OFFSET) {
@@ -356,6 +368,7 @@ SECTIONS
 		__bss_stop = .;
 	}
 
+	/*定义堆段*/
 	. = ALIGN(PAGE_SIZE);
 	.brk : AT(ADDR(.brk) - LOAD_OFFSET) {
 		__brk_base = .;
