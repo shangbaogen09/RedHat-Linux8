@@ -36,6 +36,8 @@ SYSSEG		= 0x1000		/* historical load address >> 4 */
 #define ROOT_RDONLY 1
 #endif
 
+#下面的这些代码是内核自带的bootloader，很久以前可以使用这个bootloader来启动linux，现在只输出一行错误信息
+#定义一个".bstext"段
 	.code16
 	.section ".bstext", "ax"
 
@@ -88,6 +90,7 @@ bs_die:
 	.long	pe_header
 #endif /* CONFIG_EFI_STUB */
 
+#定义一个bsdata段
 	.section ".bsdata", "a"
 bugger_off_msg:
 	.ascii	"Use a boot loader.\r\n"
@@ -269,6 +272,7 @@ section_table:
 
 #endif /* CONFIG_EFI_STUB */
 
+#内核的setup header头结构开始的第一部分,在链接脚本中定义为495地址开始
 	# Kernel attributes; used by setup.  This is part 1 of the
 	# header, from the old boot sector.
 
@@ -276,6 +280,7 @@ section_table:
 	.globl	sentinel
 sentinel:	.byte 0xff, 0xff        /* Used to detect broken loaders */
 
+#在第一个c函数中会使用该标签hdr，拷贝这些参数到零页中
 	.globl	hdr
 hdr:
 setup_sects:	.byte 0			/* Filled in by build.c */
@@ -286,6 +291,8 @@ vid_mode:	.word SVGA_MODE
 root_dev:	.word 0			/* Filled in by build.c */
 boot_flag:	.word 0xAA55
 
+
+#495+17字节的头得出偏移512字节,内核真正的运行代码开始在此处，bootloader会跳过前512字节到该处执行
 	# offset 512, entry point
 
 	.globl	_start
@@ -293,10 +300,13 @@ _start:
 		# Explicitly enter this as bytes, or the assembler
 		# tries to generate a 3-byte jump here, which causes
 		# everything else to push off to the wrong offset.
+
+		#跳转到start_of_setup标号处执行，jump跟在后面的是一个相对地址
 		.byte	0xeb		# short (2-byte) jump
 		.byte	start_of_setup-1f
 1:
 
+	#内核的setup header头结构开始的第二部分
 	# Part 2 of the header, from the old setup.S
 
 		.ascii	"HdrS"		# header signature
@@ -559,12 +569,18 @@ init_size:		.long INIT_SIZE		# kernel initialization size
 handover_offset:	.long 0			# Filled in by build.c
 
 # End of setup header #####################################################
+#内核的setup header头结尾
 
+#内核开始的跳转指令直接跳转到该处执行
 	.section ".entrytext", "ax"
 start_of_setup:
+#将ds和es段寄存器的内容设置成一样
 # Force %es = %ds
 	movw	%ds, %ax
 	movw	%ax, %es
+
+#指令CLD，功能是方向标志DF清0，位置指针SI或DI往正向（地址增大方向）移动，字串处理是由前往后;
+#指令STD, 功能是方向标志DF置1，位置指针SI或DI往反向（地址减小方向）移动，字串处理是由后往前;
 	cld
 
 # Apparently some ancient versions of LILO invoked the kernel with %ss != %ds,
@@ -572,9 +588,17 @@ start_of_setup:
 # pointer if %ss is invalid.  Otherwise leave it alone, LOADLIN sets up the
 # stack behind its own code, so we can't blindly put it directly past the heap.
 
+#当进入这段代码的时候，ss寄存器的值可能是一下三种情况之一：
+#ss寄存器的值是0x10000(和其他除了cs寄存器之外的所有寄存器的一样）
+#ss寄存器的值不是0x10000，但是CAN_USE_HEAP标志被设置了
+#ss寄存器的值不是0x10000，同时CAN_USE_HEAP标志没有被设置
+
+#检查ss寄存器的内容，如果寄存器的内容不对，那么将进行更正
 	movw	%ss, %dx
 	cmpw	%ax, %dx	# %ds == %ss?
 	movw	%sp, %dx
+
+#ss寄存器的值是0x10000，在这种情况下，代码将直接跳转到标号为2的代码处执行
 	je	2f		# -> assume %sp is reasonably set
 
 	# Invalid %ss, make up a new stack
@@ -586,26 +610,40 @@ start_of_setup:
 	jnc	2f
 	xorw	%dx, %dx	# Prevent wraparound
 
+#首先将dx寄存器的值（就是当前sp寄存器的值）4字节对齐，然后检查是否为0（如果是0，
+#堆栈就不对了，因为堆栈是从大地址向小地址发展的），如果是0，那么就将dx寄存器的
+#值设置成0xfffc(64KB地址段的最后一个4字节地址),如果不是0，那么就保持当前值不变
 2:	# Now %dx should point to the end of our stack space
 	andw	$~3, %dx	# dword align (might as well...)
 	jnz	3f
 	movw	$0xfffc, %dx	# Make sure we're not zero
+
+#将ax寄存器的值（0x10000）设置到ss寄存器，并根据dx寄存器的值设置正确的sp
 3:	movw	%ax, %ss
 	movzwl	%dx, %esp	# Clear upper half of %esp
+
+#CLI禁止中断发生
+#STL允许中断发生
 	sti			# Now we should have a working stack
 
 # We will have entered with %cs = %ds+0x20, normalize %cs so
 # it is on par with the other segments.
+#把ds和cs设成一样的值
 	pushw	%ds
 	pushw	$6f
 	lretw
 6:
 
 # Check signature at end of setup
+#检查魔数是否正确，setup_sig定义在ld链接脚本中
 	cmpl	$0x5a5aaa55, setup_sig
 	jne	setup_bad
 
 # Zero the bss
+#首先将__bss_start地址放入di寄存器，然后将_end + 3(4字节对齐)
+#地址放入cx,接着使用xor指令将ax寄存器清零,接着计算BSS段的大小
+#(cx-di),然后将大小放入cx寄存器.接下来将cx寄存器除4,最后使用
+#rep;stosl指令将ax寄存器的值(0)写入寄存器整个BSS段
 	movw	$__bss_start, %di
 	movw	$_end+3, %cx
 	xorl	%eax, %eax
@@ -613,6 +651,7 @@ start_of_setup:
 	shrw	$2, %cx
 	rep; stosl
 
+#调用c函数代码:arch/x86/boot/main.c
 # Jump to C code (should not return)
 	calll	main
 
