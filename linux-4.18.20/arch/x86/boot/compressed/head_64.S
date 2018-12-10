@@ -137,7 +137,7 @@ ENTRY(startup_32)
 	movl	$LOAD_PHYSICAL_ADDR, %ebx
 1:
 
-	/*ebx被设为内核解压缩的目标地址*/
+	/*ebx被设为内核解压缩的目标地址,紧接着该地址放临时页表*/
 	/* Target address to relocate to for decompression */
 	movl	BP_init_size(%esi), %eax
 	subl	$_end, %eax
@@ -308,6 +308,7 @@ ENTRY(startup_64)
 	 * and command line.
 	 */
 
+	/*把段寄存器清零*/
 	/* Setup data segments. */
 	xorl	%eax, %eax
 	movl	%eax, %ds
@@ -329,25 +330,35 @@ ENTRY(startup_64)
 	 * may have been invoked via the 64-bit entry point.
 	 */
 
+	/*计算内核编译时的位置和它被加载的位置的差*/
 	/* Start with the delta to where the kernel will run at. */
 #ifdef CONFIG_RELOCATABLE
+	/*处理rbp对齐后的地址*/
 	leaq	startup_32(%rip) /* - $startup_32 */, %rbp
 	movl	BP_kernel_alignment(%rsi), %eax
 	decl	%eax
 	addq	%rax, %rbp
 	notq	%rax
 	andq	%rax, %rbp
+
+	/*比较对齐后的地址与预设的地址*/
 	cmpq	$LOAD_PHYSICAL_ADDR, %rbp
+
+	/*如果对齐后的地址大于预设的地址，则okay*/
 	jge	1f
 #endif
+	/*如果小于预设的地址，则直接设置为预设的地址，也就是解压缩的源地址*/
 	movq	$LOAD_PHYSICAL_ADDR, %rbp
 1:
 
+	/*下面代码执行后rbx会包含用于解压缩的目的地址*/
 	/* Target address to relocate to for decompression */
 	movl	BP_init_size(%rsi), %ebx
 	subl	$_end, %ebx
 	addq	%rbp, %rbx
 
+	/*rbx寄存器包含了内核解压后代码的起始地址，我们把这个地址的boot_stack_end
+	  偏移地址相加放到表示栈顶指针的rsp寄存器*/
 	/* Set up the stack */
 	leaq	boot_stack_end(%rbx), %rsp
 
@@ -358,16 +369,19 @@ ENTRY(startup_64)
 	 * Zero RAX for adjust_got: the GOT was not adjusted before;
 	 * there's no adjustment to undo.
 	 */
+	/*清零rax寄存器*/
 	xorq	%rax, %rax
 
 	/*
 	 * Calculate the address the binary is loaded at and use it as
 	 * a GOT adjustment.
 	 */
+	/*计算该文件的起始地址并放入rdi中，用于got表调整*/
 	call	1f
 1:	popq	%rdi
 	subq	$1b, %rdi
 
+	/*调用该函数，调整got表*/
 	call	adjust_got
 
 	/*
@@ -395,6 +409,7 @@ ENTRY(startup_64)
 	 * tested on every boot.
 	 */
 
+	/*使用32位的全局描述符设置gdt64标号描述符，并加载到gdtr寄存器*/
 	/* Make sure we have GDT with 32-bit code segment */
 	leaq	gdt(%rip), %rax
 	movq	%rax, gdt64+2(%rip)
@@ -447,6 +462,7 @@ trampoline_return:
 	call	cleanup_trampoline
 	popq	%rsi
 
+	/*清除eflags寄存器*/
 	/* Zero EFLAGS */
 	pushq	$0
 	popfq
@@ -458,6 +474,7 @@ trampoline_return:
 	 * Calculate the address the binary is loaded at, so that we can
 	 * undo the previous GOT adjustment.
 	 */
+	/*重新调整got表*/
 	call	1f
 1:	popq	%rax
 	subq	$1b, %rax
@@ -470,20 +487,40 @@ trampoline_return:
  * Copy the compressed kernel to the end of our buffer
  * where decompression in place becomes safe.
  */
+	/*rsi中包含boot_params指针，所以先保存起来*/
 	pushq	%rsi
+
+	/*rsi包含_bss-8的绝对地址,也就是移动前压缩镜像的末尾*/
 	leaq	(_bss-8)(%rip), %rsi
+
+	/*rdi包含_bss-8的相对地址,也就是移动后压缩镜像的末尾*/
 	leaq	(_bss-8)(%rbx), %rdi
+
+	/*把要拷贝的大小放入rcx中*/
 	movq	$_bss /* - $startup_32 */, %rcx
+
+	/*每次拷贝8个字节*/
 	shrq	$3, %rcx
+
+	/*设置方向标记，意味着从后往前复制这些字节*/
 	std
+
+	/*循环拷贝*/
 	rep	movsq
+
+	/*重新清除标记*/
 	cld
+
+	/*把保存在栈中的boot_params重新弹出到rsi寄存器*/
 	popq	%rsi
 
 /*
  * Jump to the relocated address.
  */
+	/*把相对于rbx的地址偏移relocated(rbx+relocated)放入rax中*/
 	leaq	relocated(%rbx), %rax
+
+	/*跳转到标签relocated处执行*/
 	jmp	*%rax
 
 #ifdef CONFIG_EFI_STUB
@@ -559,6 +596,7 @@ relocated:
 /*
  * Clear BSS (stack is currently empty)
  */
+	/*清除bss段*/
 	xorl	%eax, %eax
 	leaq    _bss(%rip), %rdi
 	leaq    _ebss(%rip), %rcx
@@ -569,19 +607,27 @@ relocated:
 /*
  * Do the extraction, and jump to the new kernel..
  */
+	/*解压缩内核，然后跳到解压处执行,返回地址放在rax处*/
 	pushq	%rsi			/* Save the real mode argument */
+
+	/*为extract_kernel函数准备参数,rdi,%rsi,%rdx,%rcx,%r8,%r9用
+	  作函数参数,依次对应第1参数,第2参数,......*/
 	movq	%rsi, %rdi		/* real mode address */
 	leaq	boot_heap(%rip), %rsi	/* malloc area for uncompression */
 	leaq	input_data(%rip), %rdx  /* input_data */
 	movl	$z_input_len, %ecx	/* input_len */
 	movq	%rbp, %r8		/* output target address */
 	movq	$z_output_len, %r9	/* decompressed length, end of relocs */
+
+	/*调用该函数解压内核,解压后内核的地址保存在rax中*/
 	call	extract_kernel		/* returns kernel location in %rax */
 	popq	%rsi
 
 /*
  * Jump to the decompressed kernel.
  */
+	/*跳到内核解压后的地址startup_64执行,解压缩后的内核镜像的入口
+	点startup_64定义在arch/x86/kernel/head_64.S*/
 	jmp	*%rax
 
 /*
