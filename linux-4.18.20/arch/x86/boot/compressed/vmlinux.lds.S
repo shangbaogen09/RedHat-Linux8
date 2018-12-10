@@ -21,6 +21,7 @@ SECTIONS
 	/* Be careful parts of head_64.S assume startup_32 is at
 	 * address 0.
 	 */
+	/*startup_32的链接地址为0*/
 	. = 0;
 	.head.text : {
 		_head = . ;
