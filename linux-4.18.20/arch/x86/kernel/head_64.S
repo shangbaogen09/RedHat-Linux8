@@ -48,6 +48,7 @@ L4_START_KERNEL = l4_index(__START_KERNEL_map)
 
 L3_START_KERNEL = pud_index(__START_KERNEL_map)
 
+/*内核解压缩后的跳转的执行地址*/
 	.text
 	__HEAD
 	.code64
@@ -72,6 +73,7 @@ startup_64:
 	 * tables and then reload them.
 	 */
 
+	/*为调用verify_cpu函数设置堆栈*/
 	/* Set up the stack for verify_cpu(), similar to initial_stack below */
 	leaq	(__end_init_task - SIZEOF_PTREGS)(%rip), %rsp
 
@@ -84,6 +86,7 @@ startup_64:
 	 * is active) to be added to the initial pgdir entry that will be
 	 * programmed into CR3.
 	 */
+	/*为调用__startup_64准备参数rdi,rsi*/
 	leaq	_text(%rip), %rdi
 	pushq	%rsi
 	call	__startup_64
@@ -91,6 +94,8 @@ startup_64:
 
 	/* Form the CR3 value being sure to include the CR3 modifier */
 	addq	$(early_top_pgt - __START_KERNEL_map), %rax
+
+	/*针对主cpu跳转到1f地址处执行*/
 	jmp 1f
 ENTRY(secondary_startup_64)
 	UNWIND_HINT_EMPTY
@@ -123,6 +128,7 @@ ENTRY(secondary_startup_64)
 	addq	$(init_top_pgt - __START_KERNEL_map), %rax
 1:
 
+	/*使能pae模式，设置cr4寄存器*/
 	/* Enable PAE mode, PGE and LA57 */
 	movl	$(X86_CR4_PAE | X86_CR4_PGE), %ecx
 #ifdef CONFIG_X86_5LEVEL
@@ -133,10 +139,12 @@ ENTRY(secondary_startup_64)
 #endif
 	movq	%rcx, %cr4
 
+	/*设置启动早期的页表*/
 	/* Setup early boot stage 4-/5-level pagetables. */
 	addq	phys_base(%rip), %rax
 	movq	%rax, %cr3
 
+	/*跳转到1f继续执行*/
 	/* Ensure I am executing from virtual addresses */
 	movq	$1f, %rax
 	ANNOTATE_RETPOLINE_SAFE
@@ -144,29 +152,52 @@ ENTRY(secondary_startup_64)
 1:
 	UNWIND_HINT_EMPTY
 
+	/*检查CPU是否支持NX位,将0x80000001放入eax中,然后执行cpuid指令来得到处理器信息.
+	  这条指令的结果会存放在edx中，我们把他再放到edi里*/
 	/* Check if nx is implemented */
 	movl	$0x80000001, %eax
 	cpuid
 	movl	%edx,%edi
 
+	/*把MSR_EFER放入ecx,然后执行rdmsr指令来读取CPU中的MSR寄存器,返回结果将存放于edx:eax*/
 	/* Setup EFER (Extended Feature Enable Register) */
 	movl	$MSR_EFER, %ecx
 	rdmsr
+
+	/*将EFER读入edx:eax之后,通过btsl来将_EFER_SCE(即第0位)置1，设置SCE位将会启用SYSCALL以及SYSRET指令*/
 	btsl	$_EFER_SCE, %eax	/* Enable System Call */
+
+	/*检查edi(即cpuid的结果)中的第20位,如果第20位(即NX位)置位,我们就只把EFER_SCE写入MSR*/
 	btl	$20,%edi		/* No Execute supported? */
 	jnc     1f
+
+	/*如果支持NX那么我们就把_EFER_NX也写入MSR*/
 	btsl	$_EFER_NX, %eax
 	btsq	$_PAGE_BIT_NX,early_pmd_flags(%rip)
 1:	wrmsr				/* Make changes effective */
 
+	/*
+	在设置了NX后，还要对cr0（control register）中的一些位进行设置：
+	X86_CR0_PE - 系统处于保护模式;
+	X86_CR0_MP - 与CR0的TS标志位一同控制 WAIT/FWAIT 指令的功能；
+	X86_CR0_ET - 386允许指定外部数学协处理器为80287或80387;
+	X86_CR0_NE - 如果置位，则启用内置的x87浮点错误报告，否则启用PC风格的x87错误检测；
+	X86_CR0_WP - 如果置位，则CPU在特权等级为0时无法写入只读内存页;
+	X86_CR0_AM - 当AM位置位、EFLGS中的AC位置位、特权等级为3时，进行对齐检查;
+	X86_CR0_PG - 启用分页.
+	#define CR0_STATE (X86_CR0_PE | X86_CR0_MP | X86_CR0_ET | X86_CR0_NE | X86_CR0_WP 
+	| X86_CR0_AM | X86_CR0_PG)
+	*/
 	/* Setup cr0 */
 	movl	$CR0_STATE, %eax
 	/* Make changes effective */
 	movq	%rax, %cr0
 
+	/*设置一个启动时用的堆栈*/
 	/* Setup a boot time stack */
 	movq initial_stack(%rip), %rsp
 
+	/*把eflag寄存器清零*/
 	/* zero EFLAGS after setting rsp */
 	pushq $0
 	popfq
@@ -177,8 +208,11 @@ ENTRY(secondary_startup_64)
 	 * addresses where we're currently running on. We have to do that here
 	 * because in 32bit we couldn't load a 64bit linear address.
 	 */
+	/*需要重新加载全局描述符表的原因:虽然目前内核工作在用户空间的低地址中，
+	  但很快内核将会在它自己的内存地址空间中运行*/
 	lgdt	early_gdt_descr(%rip)
 
+	/*在加载好了新的全局描述附表之后，跟之前一样我们重新加载一下各个段*/
 	/* set up data segments */
 	xorl %eax,%eax
 	movl %eax,%ds
@@ -200,6 +234,14 @@ ENTRY(secondary_startup_64)
 	 * located at %gs:40.  Note that, on SMP, the boot cpu uses
 	 * init data section till per cpu areas are set up.
 	 */
+	/*把MSR_GS_BASE放入ecx寄存器,同时利用wrmsr指令向eax和edx处的地址加载数据(即指向initial_gs)
+	cs,fs,ds和ss段寄存器在64位模式下不用来寻址,但fs和gs可以使用.fs和gs有一个隐含的部分(与实模式
+	下的cs段寄存器类似)这个隐含部分存储了一个描述符,其指向Model Specific Registers.因此上面的
+	0xc0000101是一个gs.baseMSR地址.当发生系统调用或者中断时,入口点处并没有内核栈,因此MSR_GS_BASE
+	将会用来存放中断栈。
+	*/
+
+	/*设置一下gs寄存器，令它指向一个特殊的栈irqstack ，用于处理中断*/
 	movl	$MSR_GS_BASE,%ecx
 	movl	initial_gs(%rip),%eax
 	movl	initial_gs+4(%rip),%edx
@@ -207,6 +249,7 @@ ENTRY(secondary_startup_64)
 
 	/* rsi is pointer to real mode structure with interesting info.
 	   pass it to C */
+	/*准备向c函数传递参数*/
 	movq	%rsi, %rdi
 
 .Ljump_to_C_code:
@@ -237,9 +280,13 @@ ENTRY(secondary_startup_64)
 	 */
 	pushq	$.Lafter_lret	# put return address on stack for unwinder
 	xorq	%rbp, %rbp	# clear frame pointer
+
+	/*向栈中压入跳转地址*/
 	movq	initial_code(%rip), %rax
 	pushq	$__KERNEL_CS	# set correct cs
 	pushq	%rax		# target address in negative space
+
+	/*执行该指令，弹出压入的cs:ip值，执行initial_code标签处的指令x86_64_start_kernel*/
 	lretq
 .Lafter_lret:
 END(secondary_startup_64)

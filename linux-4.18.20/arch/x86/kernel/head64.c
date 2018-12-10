@@ -392,7 +392,10 @@ asmlinkage __visible void __init x86_64_start_kernel(char * real_mode_data)
 	 * Build-time sanity checks on the kernel image and module
 	 * area mappings. (these are purely build-time and produce no code)
 	 */
+	/*模块的虚拟地址MODULES_VADDR不能低于内核text段基地址__START_KERNEL_map*/
 	BUILD_BUG_ON(MODULES_VADDR < __START_KERNEL_map);
+
+	/*包含模块的内核text段的空间大小不能小于内核镜像大小*/
 	BUILD_BUG_ON(MODULES_VADDR - __START_KERNEL_map < KERNEL_IMAGE_SIZE);
 	BUILD_BUG_ON(MODULES_LEN + KERNEL_IMAGE_SIZE > 2*PUD_SIZE);
 	BUILD_BUG_ON((__START_KERNEL_map & ~PMD_MASK) != 0);
@@ -402,11 +405,15 @@ asmlinkage __visible void __init x86_64_start_kernel(char * real_mode_data)
 				(__START_KERNEL & PGDIR_MASK)));
 	BUILD_BUG_ON(__fix_to_virt(__end_of_fixed_addresses) <= MODULES_END);
 
+	/*调用了cr4_init_shadow函数，其中存储了每个CPU中cr4的Shadow Copy,上下文
+	  切换可能会修改cr4中的位，因此需要保存每个CPU中cr4的内容*/
 	cr4_init_shadow();
 
+	/*它重置了所有的全局页目录项，同时向cr3中重新写入了的全局页目录表的地址*/
 	/* Kill off the identity-map trampoline */
 	reset_early_page_tables();
 
+	/*清空了从__bss_stop到__bss_start的_bss段*/
 	clear_bss();
 
 	clear_page(init_top_pgt);
@@ -420,23 +427,29 @@ asmlinkage __visible void __init x86_64_start_kernel(char * real_mode_data)
 
 	kasan_early_init();
 
+	/*设置早期的中断描述符*/
 	idt_setup_early_handler();
 
+	/*拷贝实模式下的参数到boot_params变量中*/
 	copy_bootdata(__va(real_mode_data));
 
 	/*
 	 * Load microcode early on BSP.
 	 */
+	/*调用load_ucode_bsp函数来加载处理器微代码（microcode）*/
 	load_ucode_bsp();
 
+	/*把它的最后一项设置为内核高地址的映射*/
 	/* set init_top_pgt kernel high mapping*/
 	init_top_pgt[511] = early_top_pgt[511];
 
+	/*调用该函数并传入参数real_mode_data*/
 	x86_64_start_reservations(real_mode_data);
 }
 
 void __init x86_64_start_reservations(char *real_mode_data)
 {
+	/*如果版本号为0，则再次调用copy_bootdata ，并传入real_mode_data的虚拟地址*/
 	/* version is always not zero if it is copied */
 	if (!boot_params.hdr.version)
 		copy_bootdata(__va(real_mode_data));
@@ -451,5 +464,6 @@ void __init x86_64_start_reservations(char *real_mode_data)
 		break;
 	}
 
+	/*调用启动内核的函数start_kernel*/
 	start_kernel();
 }
