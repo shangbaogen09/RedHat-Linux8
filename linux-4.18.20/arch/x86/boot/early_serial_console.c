@@ -50,6 +50,11 @@ static void parse_earlyprintk(void)
 	int pos = 0;
 	int port = 0;
 
+	/*earlyprintk选项可能的取值：
+	serial,0x3f8,115200
+	serial,ttyS0,115200
+	ttyS0,115200
+	*/
 	if (cmdline_find_option("earlyprintk", arg, sizeof arg) > 0) {
 		char *e;
 
@@ -94,6 +99,7 @@ static void parse_earlyprintk(void)
 			baud = DEFAULT_BAUD;
 	}
 
+	/*得到控制台将使用的串口信息，然后进行串口的初始化*/
 	if (port)
 		early_serial_init(port, baud);
 }
@@ -147,6 +153,7 @@ static void parse_console_uart8250(void)
 
 void console_init(void)
 {
+	/*首先查看命令行参数是否包含earlyprintk选项*/
 	parse_earlyprintk();
 
 	if (!early_serial_base)

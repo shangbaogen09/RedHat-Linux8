@@ -36,6 +36,7 @@ static void copy_boot_params(void)
 	const struct old_cmdline * const oldcmd =
 		(const struct old_cmdline *)OLD_CL_ADDRESS;
 
+	/*该函数使用的符号hdr,定义在汇编文件copy.S(\arch\x86\boot)*/
 	BUILD_BUG_ON(sizeof boot_params != 4096);
 	memcpy(&boot_params.hdr, &hdr, sizeof hdr);
 
@@ -134,17 +135,24 @@ static void init_heap(void)
 
 void main(void)
 {
+	/*将内核设置信息拷贝到boot_params结构的相应字段*/
 	/* First, copy the boot header into the "zeropage" */
 	copy_boot_params();
 
+	/*该函数定义在文件arch/x86/boot/early_serial_console.c*/
 	/* Initialize the early-boot console */
 	console_init();
+
+	/*当串口初始化成功之后，如果命令行参数包含debug选项,则输出如下信息*/
 	if (cmdline_find_option_bool("debug"))
 		puts("early console in setup code\n");
 
+	/*堆的初始化*/
 	/* End of heap check */
 	init_heap();
 
+	/*内核代码通过调用arch/x86/boot/cpu.c提供的validate_cpu
+	方法检查CPU级别以确定系统是否能够在当前的CPU上运行*/
 	/* Make sure we have all the proper CPU support */
 	if (validate_cpu()) {
 		puts("Unable to boot - please use a kernel appropriate "
@@ -155,9 +163,11 @@ void main(void)
 	/* Tell the BIOS what CPU mode we intend to run in. */
 	set_bios_mode();
 
+	/*内核调用detect_memory方法进行内存侦测，以得到系统当前内存的使用分布*/
 	/* Detect memory layout */
 	detect_memory();
 
+	/*进行键盘初始化操作*/
 	/* Set keyboard repeat rate (why?) and query the lock flags */
 	keyboard_init();
 
@@ -174,9 +184,11 @@ void main(void)
 	query_edd();
 #endif
 
+	/*显示模式的初始化*/
 	/* Set the video mode */
 	set_video();
 
+	/*该函数将进行最后的准备工作然后进入保护模式*/
 	/* Do the last things and invoke protected mode */
 	go_to_protected_mode();
 }
