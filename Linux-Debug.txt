@@ -1,0 +1,50 @@
+编译内核的步骤:
+---------------------------------------------------------------------
+使用系统默认的x86_64配置文件配置内核,把生成的config文件放到0指定的目录
+make 0=/tmp/linux-4.18.20-obj/ x86_64_defconfig
+
+编译内核,并把输出文件放到0指定的目录
+make 0=/tmp/linux-4.18.20-obj/ 
+
+
+编译busybox的步骤:
+-----------------------------------------------------
+下载最新的稳定版busybox:
+https://busybox.net/downloads/busybox-1.29.3.tar.bz2
+
+解压文件busybox-1.29.3.tar.bz2
+#tar xvf busybox-1.29.3.tar.bz2
+
+配置文件:
+#cd busybox-1.29.3
+#make menuconfig
+     Busybox Settings  --->  
+           Build Options  ---> 
+               [*] Build BusyBox as a static binary (no shared libs) //静态方式编译
+     Networking Utilities  --->
+          [ ] inetd  //去掉inetd
+
+编译busybox:
+#make 
+
+安装busybox:
+#make install
+执行完该命令后生成如下目录:
+#/home/barry-shang/linux-4.18.20/busybox-1.29.3/_install
+
+创建根文件系统:
+-----------------------------------------------------------
+#cd /home/barry-shang/linux-4.18.20/busybox-1.29.3/_install
+# mkdir -pv proc sys dev etc etc/init.d
+#cat << EOF > etc/init.d/rcS
+#!/bin/sh
+mount -t proc none /proc
+mount -t sysfs none /sys
+/sbin/mdev -s
+EOF
+#chmod 777 ./etc/init.d/rcS
+#find . | cpio -o --format=newc > ./rootfs.img
+#gzip -c rootfs.img > rootfs.img.gz
+
+使用qemu启动kernel和rootfs:
+qemu-system-x86_64 -kernel linux-4.18.20/arch/i386/boot/bzImage -initrd ./rootfs.img.gz -append "root=/dev/ram rdinit=sbin/init noapic"
