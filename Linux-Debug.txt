@@ -48,3 +48,14 @@ EOF
 
 使用qemu启动kernel和rootfs:
 qemu-system-x86_64 -kernel linux-4.18.20/arch/i386/boot/bzImage -initrd ./rootfs.img.gz -append "root=/dev/ram rdinit=sbin/init noapic"
+
+printk_ratelimit()这个函数，其作用就如其名，限制printk的打印数量.
+使用方法如下:
+
+if(printk_ratelimit())
+    printk("****");
+
+该函数的速率控制根据两个文件来确定，分别是:
+1. /proc/sys/kernel/printk_ratelimit 限制的时间间隔，默认值是5
+2. /proc/sys/kernel/printk_ratelimit_burst 时间间隔内的最大打印条数，默认值是10
+所以默认的打印速率是每5秒最多打印10条
