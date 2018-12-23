@@ -1,0 +1,33 @@
+Host ccm1 pek-lpd-ccm1.wrs.com
+	HostName pek-lpd-ccm1.wrs.com
+
+Host ccm2 pek-lpd-ccm1.wrs.com
+        HostName pek-lpd-ccm2.wrs.com
+
+Host ccm3 pek-lpd-ccm1.wrs.com 
+        HostName pek-lpd-ccm3.wrs.com
+
+host huawei 128.224.155.25
+	HostName 128.224.155.25
+
+# Connect to ala-gcc-build01 through ala-lpd-susbld2
+# See http://superuser.com/questions/276533/scp-files-via-intermediate-host
+Host gcc1 ala-gcc-build01
+	User bshang
+	ForwardX11 no
+	ForwardX11Trusted no
+	HostName ala-gcc-build01
+	ServerAliveInterval 60
+	ProxyCommand ssh -o ServerAliveInterval=60 -W %h:%p bshang@ala-lpd-susbld2
+
+# Default
+Host *
+	User bshang
+	ForwardX11 yes
+	ForwardX11Trusted yes
+
+	ControlMaster auto
+	ControlPath "/tmp/%u@%l->%r@%h:%p"
+	ControlPersist 600
+
+#barry-shang@pek-bshang-d1:~$ cat ~/.ssh/config
