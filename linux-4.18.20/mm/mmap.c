@@ -1362,9 +1362,11 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 			unsigned long pgoff, unsigned long *populate,
 			struct list_head *uf)
 {
+	/*获取当前的进程地址空间结构体mm_struct*/
 	struct mm_struct *mm = current->mm;
 	int pkey = 0;
 
+	/*把传入的参数populate的内容初始为0*/
 	*populate = 0;
 
 	if (!len)
@@ -1387,15 +1389,18 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 	if (!(flags & MAP_FIXED))
 		addr = round_hint_to_min(addr);
 
+	/*对长度按页对齐处理*/
 	/* Careful about overflows.. */
 	len = PAGE_ALIGN(len);
 	if (!len)
 		return -ENOMEM;
 
+	/*检测pgoff是否溢出*/
 	/* offset overflow? */
 	if ((pgoff + (len >> PAGE_SHIFT)) < pgoff)
 		return -EOVERFLOW;
 
+	/*检测映射区域是否超过系统限制*/
 	/* Too many mappings? */
 	if (mm->map_count > sysctl_max_map_count)
 		return -ENOMEM;
@@ -1403,6 +1408,7 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 	/* Obtain the address to map to. we verify (or select) it and ensure
 	 * that it represents a valid section of the address space.
 	 */
+	/*在线性地址空间找到一个足够大的未使用区间,并返回起始地址*/
 	addr = get_unmapped_area(file, addr, len, pgoff, flags);
 	if (offset_in_page(addr))
 		return addr;
@@ -1424,6 +1430,7 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 	 * to. we assume access permissions have been handled by the open
 	 * of the memory object, so we don't do any here.
 	 */
+	/*通过传入的prot和flags参数计算本vma的vm_flags*/
 	vm_flags |= calc_vm_prot_bits(prot, pkey) | calc_vm_flag_bits(flags) |
 			mm->def_flags | VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC;
 
@@ -1434,7 +1441,9 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 	if (mlock_future_check(mm, vm_flags, len))
 		return -EAGAIN;
 
+	/*文件映射处理*/
 	if (file) {
+		/*如果是文件映射，则用file_inode找到相应的索引节点*/
 		struct inode *inode = file_inode(file);
 		unsigned long flags_mask;
 
@@ -1443,6 +1452,7 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 
 		flags_mask = LEGACY_MAP_MASK | file->f_op->mmap_supported_flags;
 
+		/*根据映射时传入的flag来设置对应的vm_flags*/
 		switch (flags & MAP_TYPE) {
 		case MAP_SHARED:
 			/*
@@ -1496,7 +1506,7 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 		default:
 			return -EINVAL;
 		}
-	} else {
+	} else {/*如果不是文件映射，则进行如下处理*/
 		switch (flags & MAP_TYPE) {
 		case MAP_SHARED:
 			if (vm_flags & (VM_GROWSDOWN|VM_GROWSUP))
@@ -1507,6 +1517,7 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 			pgoff = 0;
 			vm_flags |= VM_SHARED | VM_MAYSHARE;
 			break;
+		/*匿名映射的私有映射,重新设置pgoff为addr>>PAGE_SHIFT*/
 		case MAP_PRIVATE:
 			/*
 			 * Set pgoff according to addr for anon_vma.
@@ -1532,11 +1543,14 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 			vm_flags |= VM_NORESERVE;
 	}
 
+	/*使用处理过的参数继续调用mmap_region*/
 	addr = mmap_region(file, addr, len, vm_flags, pgoff, uf);
 	if (!IS_ERR_VALUE(addr) &&
 	    ((vm_flags & VM_LOCKED) ||
 	     (flags & (MAP_POPULATE | MAP_NONBLOCK)) == MAP_POPULATE))
 		*populate = len;
+
+	/*向上层返回映射的地址*/
 	return addr;
 }
 
@@ -1547,6 +1561,7 @@ unsigned long ksys_mmap_pgoff(unsigned long addr, unsigned long len,
 	struct file *file = NULL;
 	unsigned long retval;
 
+	/*先通过传入的flags判断是否是匿名映射*/
 	if (!(flags & MAP_ANONYMOUS)) {
 		audit_mmap_fd(fd, flags);
 		file = fget(fd);
@@ -1557,7 +1572,7 @@ unsigned long ksys_mmap_pgoff(unsigned long addr, unsigned long len,
 		retval = -EINVAL;
 		if (unlikely(flags & MAP_HUGETLB && !is_file_hugepages(file)))
 			goto out_fput;
-	} else if (flags & MAP_HUGETLB) {
+	} else if (flags & MAP_HUGETLB) {/*处理设置hugetlb的场景*/
 		struct user_struct *user = NULL;
 		struct hstate *hs;
 
@@ -1580,8 +1595,10 @@ unsigned long ksys_mmap_pgoff(unsigned long addr, unsigned long len,
 			return PTR_ERR(file);
 	}
 
+	/*清除掉flag对应的标记*/
 	flags &= ~(MAP_EXECUTABLE | MAP_DENYWRITE);
 
+	/*使用处理过的参数，继续调用vm_mmap_pgoff函数*/
 	retval = vm_mmap_pgoff(file, addr, len, prot, flags, pgoff);
 out_fput:
 	if (file)
@@ -1678,12 +1695,14 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
 		unsigned long len, vm_flags_t vm_flags, unsigned long pgoff,
 		struct list_head *uf)
 {
+	/*取出当前的内存空间结构体*/
 	struct mm_struct *mm = current->mm;
 	struct vm_area_struct *vma, *prev;
 	int error;
 	struct rb_node **rb_link, *rb_parent;
 	unsigned long charged = 0;
 
+	/*检查地址空间容量是否超过资源的限制*/
 	/* Check against address space limit. */
 	if (!may_expand_vm(mm, vm_flags, len >> PAGE_SHIFT)) {
 		unsigned long nr_pages;
@@ -1699,9 +1718,11 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
 			return -ENOMEM;
 	}
 
+	/*检查是否与现有的vma重叠*/
 	/* Clear old maps */
 	while (find_vma_links(mm, addr, addr + len, &prev, &rb_link,
 			      &rb_parent)) {
+		/*有重叠的话，则用do_munmap()删除该映射*/
 		if (do_munmap(mm, addr, len, uf))
 			return -ENOMEM;
 	}
@@ -1719,6 +1740,7 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
 	/*
 	 * Can we just expand an old mapping?
 	 */
+	/*尝试与现有的vma合并，如果合并成功，则不需要创建新的vma*/
 	vma = vma_merge(mm, prev, addr, addr + len, vm_flags,
 			NULL, file, pgoff, NULL, NULL_VM_UFFD_CTX);
 	if (vma)
@@ -1729,18 +1751,23 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
 	 * specific mapper. the address has already been validated, but
 	 * not unmapped, but the maps are removed from the list.
 	 */
+	/*如果合并不成功，则创建新的vma*/
 	vma = vm_area_alloc(mm);
 	if (!vma) {
 		error = -ENOMEM;
 		goto unacct_error;
 	}
 
+	/*使用传入的参数初始化vma的成员*/
 	vma->vm_start = addr;
 	vma->vm_end = addr + len;
 	vma->vm_flags = vm_flags;
+
+	/*使用vm_flags中的成员计算出该vma的vm_page_prot属性*/
 	vma->vm_page_prot = vm_get_page_prot(vm_flags);
 	vma->vm_pgoff = pgoff;
 
+	/*对文件映射的处理*/
 	if (file) {
 		if (vm_flags & VM_DENYWRITE) {
 			error = deny_write_access(file);
@@ -1758,7 +1785,10 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
 		 * and map writably if VM_SHARED is set. This usually means the
 		 * new file must not have been exposed to user-space, yet.
 		 */
+		/*file增加引用计数后，使用vm_file指向该file*/
 		vma->vm_file = get_file(file);
+
+		/*文件映射调用该file的mmap函数，在打开文件的过程中会使f->f_op = fops_get(inode->i_fop);*/
 		error = call_mmap(file, vma);
 		if (error)
 			goto unmap_and_free_vma;
@@ -1772,16 +1802,18 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
 		 */
 		WARN_ON_ONCE(addr != vma->vm_start);
 
+		/*取出该vma的起始地址，以便返回上层*/
 		addr = vma->vm_start;
 		vm_flags = vma->vm_flags;
 	} else if (vm_flags & VM_SHARED) {
 		error = shmem_zero_setup(vma);
 		if (error)
 			goto free_vma;
-	} else {
+	} else { /*匿名映射的设置*/
 		vma_set_anonymous(vma);
 	}
 
+	/*将新的vma插入到线性链表，红黑树以及对应文件的地址空间adress_space->i_mmap或者adress_space->i_mmap_nonlinear*/
 	vma_link(mm, vma, prev, rb_link, rb_parent);
 	/* Once vma denies write, undo our temporary denial count */
 	if (file) {
@@ -1817,6 +1849,7 @@ out:
 
 	vma_set_page_prot(vma);
 
+	/*向上层调用返回映射后的address*/
 	return addr;
 
 unmap_and_free_vma:
@@ -2157,7 +2190,10 @@ get_unmapped_area(struct file *file, unsigned long addr, unsigned long len,
 	if (len > TASK_SIZE)
 		return -ENOMEM;
 
+	/*取出当前进程的地址空间mm的获取vma函数*/
 	get_area = current->mm->get_unmapped_area;
+
+	/*如果是文件映射，并且有自己的处理函数，则使用自己的处理函数*/
 	if (file) {
 		if (file->f_op->get_unmapped_area)
 			get_area = file->f_op->get_unmapped_area;
@@ -2171,6 +2207,7 @@ get_unmapped_area(struct file *file, unsigned long addr, unsigned long len,
 		get_area = shmem_get_unmapped_area;
 	}
 
+	/*对应于传统布局，该函数为arch_get_unmapped_area()*/
 	addr = get_area(file, addr, len, pgoff, flags);
 	if (IS_ERR_VALUE(addr))
 		return addr;

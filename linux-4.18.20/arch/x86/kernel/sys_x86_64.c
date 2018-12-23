@@ -88,15 +88,25 @@ static int __init control_va_addr_alignment(char *str)
 }
 __setup("align_va_addr", control_va_addr_alignment);
 
+/*系统调用sys_mmap的定义*/
 SYSCALL_DEFINE6(mmap, unsigned long, addr, unsigned long, len,
 		unsigned long, prot, unsigned long, flags,
 		unsigned long, fd, unsigned long, off)
 {
 	long error;
 	error = -EINVAL;
+
+	/*检查参数off是否是页对齐*/
 	if (off & ~PAGE_MASK)
 		goto out;
 
+	/*主要工作委托给该函数完成:
+	  addr:指向欲映射的内存起始地址，通常为null，指出让系统自动选定
+	  len:指出将文件中多大的部分映射到内存
+	  fd:将要映射到内存中的文件描述符
+	  off:被映射文件区间的偏移量，通常为0，代表从文件起始处开始映射，该值必须是PAGE_SIZA的整数倍
+	  prot:映射区域的保护属性
+	  flag:影响映射区域的各种特性*/
 	error = ksys_mmap_pgoff(addr, len, prot, flags, fd, off >> PAGE_SHIFT);
 out:
 	return error;

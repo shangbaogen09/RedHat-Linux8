@@ -2303,6 +2303,7 @@ do_mmap_pgoff(struct file *file, unsigned long addr,
 	unsigned long pgoff, unsigned long *populate,
 	struct list_head *uf)
 {
+	/*调用do_mmap进行处理*/
 	return do_mmap(file, addr, len, prot, flags, 0, pgoff, populate, uf);
 }
 
