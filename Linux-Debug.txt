@@ -59,3 +59,55 @@ if(printk_ratelimit())
 1. /proc/sys/kernel/printk_ratelimit 限制的时间间隔，默认值是5
 2. /proc/sys/kernel/printk_ratelimit_burst 时间间隔内的最大打印条数，默认值是10
 所以默认的打印速率是每5秒最多打印10条
+
+Linux ps命令详解:
+barry-shang@pek-bshang-d1:~/linux-4.18.20/vm$ ps aux
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.0 185396  5556 ?        Ss   Sep30   1:04 /lib/systemd/systemd --system --deserialize 27
+root         2  0.0  0.0      0     0 ?        S    Sep30   0:00 [kthreadd]
+root         3  0.0  0.0      0     0 ?        S    Sep30   0:16 [ksoftirqd/0]
+root         5  0.0  0.0      0     0 ?        S<   Sep30   0:00 [kworker/0:0H]
+root         7  0.1  0.0      0     0 ?        S    Sep30 146:23 [rcu_sched]
+root         8  0.0  0.0      0     0 ?        S    Sep30   0:00 [rcu_bh]
+root         9  0.0  0.0      0     0 ?        S    Sep30   0:02 [migration/0]
+root        10  0.0  0.0      0     0 ?        S    Sep30   0:19 [watchdog/0]
+barry-s+ 25186  0.2  2.0 1430972 169696 ?      SLl  Nov19 132:02 /opt/google/chrome/chrome
+barry-s+ 28386  0.0  0.0   4352   648 pts/21   T    14:36   0:00 ./HelloWorld-getchar
+
+USER   用户名
+PID    进程ID（Process ID）
+%CPU   进程的cpu占用率
+%MEM   进程的内存占用率
+VSZ    进程所使用的虚存的大小（Virtual Size）
+RSS    进程使用的驻留集大小或者是实际内存的大小，Kbytes字节。
+TTY    与进程关联的终端（tty）
+STAT   进程的状态：进程状态使用字符表示的（STAT的状态码）
+R 运行     Runnable (on run queue)正在运行或在运行队列中等待。
+S 睡眠     Sleeping 休眠中, 受阻, 在等待某个条件的形成或接受到信号。
+I 空闲     Idle
+Z 僵死     Zombie（a defunct process)进程已终止, 但进程描述符存在, 直到父进程调用wait4()系统调用后释放。
+D 不可中断 Uninterruptible sleep (ususally IO)收到信号不唤醒和不可运行, 进程必须等待直到有中断发生。
+T 终止     Terminate 进程收到SIGSTOP, SIGSTP, SIGTIN, SIGTOU信号后停止运行运行。
+P 等待交换页
+W 无驻留页 has no resident pages 没有足够的记忆体分页可分配。
+X 死掉的进程
+< 高优先级进程  
+N 低优先级进程
+L 内存锁页Lock有记忆体分页分配并缩在记忆体内
+s 进程的领导者（在它之下有子进程）；
+l 多进程的（使用 CLONE_THREAD, 类似 NPTL pthreads）
++ 位于后台的进程组 
+START   进程启动时间和日期
+TIME    进程使用的总cpu时间
+COMMAND 正在执行的命令行命令
+
+Linux alias命令：
+命令结构：
+alias name='string'
+在命令"alias"之后，输入"name"，紧接着(没有空格)是一个等号，等号之后是一串用引号引起的字符串，字符串的内容要赋值给name
+[pek-lpd-ccm1:~]$alias vlmstart
+alias vlmstart='ssh -Y pek-hig2.wrs.com /folk/vlm/bin/vlmstart'
+[pek-lpd-ccm1:~]$type vlmstart
+vlmstart is aliased to `ssh -Y pek-hig2.wrs.com /folk/vlm/bin/vlmstart'
+[pek-lpd-ccm1:~]$
+
