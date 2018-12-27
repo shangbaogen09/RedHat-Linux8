@@ -198,7 +198,7 @@ typedef struct elf64_sym {
   Elf64_Xword st_size;		/* Associated symbol size */
 } Elf64_Sym;
 
-
+/*定义为16个字符，每个字符都有对应的意义*/
 #define EI_NIDENT	16
 
 typedef struct elf32_hdr{
@@ -218,20 +218,75 @@ typedef struct elf32_hdr{
   Elf32_Half	e_shstrndx;
 } Elf32_Ehdr;
 
+/*使用readelf命令读取的elf文件头*/
+/*
+barry-shang@pek-bshang-d1:~/linux-4.18.20/vm$ readelf -h HelloWorld
+ELF Header:
+  /*标记:7f. 45,4c,46:elf字符串. 02:elf文件类型,0无效文件,1表示32为,2表示64位
+　　01:表示字节序,0表示无效格式,1表示小端,2表示大端. 01:表示elf的版本号*/
+  Magic:   7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00 
+  Class:                             ELF64
+  Data:                              2's complement, little endian
+  Version:                           1 (current)
+  OS/ABI:                            UNIX - System V
+  ABI Version:                       0
+  Type:                              EXEC (Executable file)
+  Machine:                           Advanced Micro Devices X86-64
+  Version:                           0x1
+  Entry point address:               0x400430
+  Start of program headers:          64 (bytes into file)
+  Start of section headers:          6624 (bytes into file)
+  Flags:                             0x0
+  Size of this header:               64 (bytes)
+  Size of program headers:           56 (bytes)
+  Number of program headers:         9
+  Size of section headers:           64 (bytes)
+  Number of section headers:         31
+  Section header string table index: 28
+*/
+
+/*elf文件的文件头结构体,对应上面的elf命令读取的内容*/
 typedef struct elf64_hdr {
+  /*文件标识,*/
   unsigned char	e_ident[EI_NIDENT];	/* ELF "magic number" */
+
+  /*文件类型*/
   Elf64_Half e_type;
+
+  /*机器类型*/
   Elf64_Half e_machine;
+
+  /*版本信息*/
   Elf64_Word e_version;
+
+  /*可执行文件入口地址*/
   Elf64_Addr e_entry;		/* Entry point virtual address */
+
+  /*程序头表在文件中的偏移*/
   Elf64_Off e_phoff;		/* Program header table file offset */
+
+  /*段头表在文件中的偏移*/
   Elf64_Off e_shoff;		/* Section header table file offset */
+
+  /*特定处理器标记，暂无用*/
   Elf64_Word e_flags;
+
+  /*ELF文件头大小*/
   Elf64_Half e_ehsize;
+
+  /*程序头表每一项的长度*/
   Elf64_Half e_phentsize;
+
+  /*程序头表中条目个数，每个条目对应一个segment*/
   Elf64_Half e_phnum;
+
+  /*段头表中每一项的长度*/
   Elf64_Half e_shentsize;
+
+  /*段头表条目的个数，每个条目对应一个section*/
   Elf64_Half e_shnum;
+
+  /*保存段名的符号段序号*/
   Elf64_Half e_shstrndx;
 } Elf64_Ehdr;
 
@@ -252,14 +307,64 @@ typedef struct elf32_phdr{
   Elf32_Word	p_align;
 } Elf32_Phdr;
 
+/*使用readelf命令读取程序头
+barry-shang@pek-bshang-d1:~/linux-4.18.20/vm$ readelf -l HelloWorld
+Elf file type is EXEC (Executable file)
+Entry point 0x400430
+There are 9 program headers, starting at offset 64
+Program Headers:
+  Type           Offset             VirtAddr           PhysAddr
+                 FileSiz            MemSiz              Flags  Align
+  PHDR           0x0000000000000040 0x0000000000400040 0x0000000000400040
+                 0x00000000000001f8 0x00000000000001f8  R E    8
+  INTERP         0x0000000000000238 0x0000000000400238 0x0000000000400238
+                 0x000000000000001c 0x000000000000001c  R      1
+      [Requesting program interpreter: /lib64/ld-linux-x86-64.so.2]
+  LOAD           0x0000000000000000 0x0000000000400000 0x0000000000400000
+                 0x00000000000006fc 0x00000000000006fc  R E    200000
+  LOAD           0x0000000000000e10 0x0000000000600e10 0x0000000000600e10
+                 0x0000000000000228 0x0000000000000230  RW     200000
+  DYNAMIC        0x0000000000000e28 0x0000000000600e28 0x0000000000600e28
+                 0x00000000000001d0 0x00000000000001d0  RW     8
+  NOTE           0x0000000000000254 0x0000000000400254 0x0000000000400254
+                 0x0000000000000044 0x0000000000000044  R      4
+ ......
+ Section to Segment mapping:
+  Segment Sections...
+   00     
+   01     .interp 
+   02     .interp .note.ABI-tag .note.gnu.build-id .gnu.hash .dynsym .dynstr .gnu.version .gnu.version_r .rela.dyn .rela.plt .init .plt .plt.got .text .fini .rodata .eh_frame_hdr .eh_frame 
+   03     .init_array .fini_array .jcr .dynamic .got .got.plt .data .bss 
+   04     .dynamic 
+   05     .note.ABI-tag .note.gnu.build-id 
+   06     .eh_frame_hdr 
+   07     
+   08     .init_array .fini_array .jcr .dynamic .got 
+*/
+/*文件程序头结构体*/
 typedef struct elf64_phdr {
+  /*segment类型,如PT_LOAD，表示需要装入的段*/
   Elf64_Word p_type;
+
+  /*该段的访问权限(PF_R/PF_W/PF_X)*/
   Elf64_Word p_flags;
+  
+  /*segment在文件中的偏移量*/
   Elf64_Off p_offset;		/* Segment file offset */
+ 
+  /*该段映射到虚存空间的起始地址(PT_LOAD类型的段)*/
   Elf64_Addr p_vaddr;		/* Segment virtual address */
+
+  /*同上，在没有虚存的系统中，使用该值*/
   Elf64_Addr p_paddr;		/* Segment physical address */
+
+  /*segment文件影像中的大小*/
   Elf64_Xword p_filesz;		/* Segment size in file */
+
+  /*segment内存中的大小*/
   Elf64_Xword p_memsz;		/* Segment size in memory */
+
+  /*边界对齐要求*/
   Elf64_Xword p_align;		/* Segment alignment, file & memory */
 } Elf64_Phdr;
 
@@ -313,16 +418,111 @@ typedef struct elf32_shdr {
   Elf32_Word	sh_entsize;
 } Elf32_Shdr;
 
+/*
+barry-shang@pek-bshang-d1:~/linux-4.18.20/vm$ readelf -S HelloWorld
+There are 31 section headers, starting at offset 0x19e0:
+
+Section Headers:
+  [Nr] Name              Type             Address           Offset
+       Size              EntSize          Flags  Link  Info  Align
+  [ 0]                   NULL             0000000000000000  00000000
+       0000000000000000  0000000000000000           0     0     0
+  [ 1] .interp           PROGBITS         0000000000400238  00000238
+       000000000000001c  0000000000000000   A       0     0     1
+  [ 2] .note.ABI-tag     NOTE             0000000000400254  00000254
+       0000000000000020  0000000000000000   A       0     0     4
+  [ 3] .note.gnu.build-i NOTE             0000000000400274  00000274
+       0000000000000024  0000000000000000   A       0     0     4
+  [ 4] .gnu.hash         GNU_HASH         0000000000400298  00000298
+       000000000000001c  0000000000000000   A       5     0     8
+  [ 5] .dynsym           DYNSYM           00000000004002b8  000002b8
+       0000000000000060  0000000000000018   A       6     1     8
+  [ 6] .dynstr           STRTAB           0000000000400318  00000318
+       000000000000003d  0000000000000000   A       0     0     1
+  [ 7] .gnu.version      VERSYM           0000000000400356  00000356
+       0000000000000008  0000000000000002   A       5     0     2
+  [ 8] .gnu.version_r    VERNEED          0000000000400360  00000360
+       0000000000000020  0000000000000000   A       6     1     8
+  [ 9] .rela.dyn         RELA             0000000000400380  00000380
+       0000000000000018  0000000000000018   A       5     0     8
+  [10] .rela.plt         RELA             0000000000400398  00000398
+       0000000000000030  0000000000000018  AI       5    24     8
+  [11] .init             PROGBITS         00000000004003c8  000003c8
+       000000000000001a  0000000000000000  AX       0     0     4
+  [12] .plt              PROGBITS         00000000004003f0  000003f0
+       0000000000000030  0000000000000010  AX       0     0     16
+  [13] .plt.got          PROGBITS         0000000000400420  00000420
+       0000000000000008  0000000000000000  AX       0     0     8
+  [14] .text             PROGBITS         0000000000400430  00000430
+       0000000000000182  0000000000000000  AX       0     0     16
+  [15] .fini             PROGBITS         00000000004005b4  000005b4
+       0000000000000009  0000000000000000  AX       0     0     4
+  [16] .rodata           PROGBITS         00000000004005c0  000005c0
+       0000000000000011  0000000000000000   A       0     0     4
+  [17] .eh_frame_hdr     PROGBITS         00000000004005d4  000005d4
+       0000000000000034  0000000000000000   A       0     0     4
+  [18] .eh_frame         PROGBITS         0000000000400608  00000608
+       00000000000000f4  0000000000000000   A       0     0     8
+  [19] .init_array       INIT_ARRAY       0000000000600e10  00000e10
+       0000000000000008  0000000000000000  WA       0     0     8
+  [20] .fini_array       FINI_ARRAY       0000000000600e18  00000e18
+       0000000000000008  0000000000000000  WA       0     0     8
+  [21] .jcr              PROGBITS         0000000000600e20  00000e20
+       0000000000000008  0000000000000000  WA       0     0     8
+  [22] .dynamic          DYNAMIC          0000000000600e28  00000e28
+       00000000000001d0  0000000000000010  WA       6     0     8
+  [23] .got              PROGBITS         0000000000600ff8  00000ff8
+       0000000000000008  0000000000000008  WA       0     0     8
+  [24] .got.plt          PROGBITS         0000000000601000  00001000
+       0000000000000028  0000000000000008  WA       0     0     8
+  [25] .data             PROGBITS         0000000000601028  00001028
+       0000000000000010  0000000000000000  WA       0     0     8
+  [26] .bss              NOBITS           0000000000601038  00001038
+       0000000000000008  0000000000000000  WA       0     0     1
+  [27] .comment          PROGBITS         0000000000000000  00001038
+       0000000000000035  0000000000000001  MS       0     0     1
+  [28] .shstrtab         STRTAB           0000000000000000  000018d1
+       000000000000010c  0000000000000000           0     0     1
+  [29] .symtab           SYMTAB           0000000000000000  00001070
+       0000000000000648  0000000000000018          30    47     8
+  [30] .strtab           STRTAB           0000000000000000  000016b8
+       0000000000000219  0000000000000000           0     0     1
+Key to Flags:
+  W (write), A (alloc), X (execute), M (merge), S (strings), l (large)
+  I (info), L (link order), G (group), T (TLS), E (exclude), x (unknown)
+  O (extra OS processing required) o (OS specific), p (processor specific)
+*/
+
+/*节头表数据结构*/
 typedef struct elf64_shdr {
+  /*节的名字字符串索引*/
   Elf64_Word sh_name;		/* Section name, index in string tbl */
+
+  /*段类型*/
   Elf64_Word sh_type;		/* Type of section */
+ 
+  /*标志:SHF_WRITE,SHF_ALLOC,SHF_EXECINST*/
   Elf64_Xword sh_flags;		/* Miscellaneous section attributes */
+
+  /*该节映射到虚拟地址空间的位置*/
   Elf64_Addr sh_addr;		/* Section virtual addr at execution */
+
+  /*该节在文件中的偏移*/
   Elf64_Off sh_offset;		/* Section file offset */
+
+  /*该节在文件中的长度*/
   Elf64_Xword sh_size;		/* Size of section in bytes */
+
+  /*引用另一个节头表项*/
   Elf64_Word sh_link;		/* Index of another section */
+
+  /*与sh_link联合使用*/
   Elf64_Word sh_info;		/* Additional section information */
+
+  /*边界对齐要求*/
   Elf64_Xword sh_addralign;	/* Section alignment */
+
+  /*节中数据项的长度*/
   Elf64_Xword sh_entsize;	/* Entry size if section holds table */
 } Elf64_Shdr;
 

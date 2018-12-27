@@ -109,10 +109,12 @@ static inline pgprot_t arch_filter_pgprot(pgprot_t prot)
 
 pgprot_t vm_get_page_prot(unsigned long vm_flags)
 {
+	/*通过vm_flags的值计算出该页映射时页表的属性*/
 	pgprot_t ret = __pgprot(pgprot_val(protection_map[vm_flags &
 				(VM_READ|VM_WRITE|VM_EXEC|VM_SHARED)]) |
 			pgprot_val(arch_vm_get_page_prot(vm_flags)));
 
+	/*进行present位的掩码处理*/
 	return arch_filter_pgprot(ret);
 }
 EXPORT_SYMBOL(vm_get_page_prot);
@@ -502,21 +504,27 @@ static int find_vma_links(struct mm_struct *mm, unsigned long addr,
 {
 	struct rb_node **__rb_link, *__rb_parent, *rb_prev;
 
+	/*取出红黑树的根节点*/
 	__rb_link = &mm->mm_rb.rb_node;
 	rb_prev = __rb_parent = NULL;
 
+	/*从根节点开始遍历*/
 	while (*__rb_link) {
 		struct vm_area_struct *vma_tmp;
 
 		__rb_parent = *__rb_link;
 		vma_tmp = rb_entry(__rb_parent, struct vm_area_struct, vm_rb);
 
+		/*如果找到一个区间的结束地址大于要判定区间的起始地址*/
 		if (vma_tmp->vm_end > addr) {
+			/*并且区间起始地址小于要判定区间的结束地址,则表示重叠,返回-ENOMEM*/
 			/* Fail if an existing vma overlaps the area */
 			if (vma_tmp->vm_start < end)
 				return -ENOMEM;
+
+			/*走到这里说明符合条件,取出红黑树的左分支进行下一轮判断*/
 			__rb_link = &__rb_parent->rb_left;
-		} else {
+		} else {/*否则,寻找右子树的分支进行递归判断*/
 			rb_prev = __rb_parent;
 			__rb_link = &__rb_parent->rb_right;
 		}
@@ -527,6 +535,8 @@ static int find_vma_links(struct mm_struct *mm, unsigned long addr,
 		*pprev = rb_entry(rb_prev, struct vm_area_struct, vm_rb);
 	*rb_link = __rb_link;
 	*rb_parent = __rb_parent;
+	
+	/*如果成功返回0,则说明没有重叠*/
 	return 0;
 }
 
@@ -586,8 +596,10 @@ static void __vma_link_file(struct vm_area_struct *vma)
 {
 	struct file *file;
 
+	/*取出该vma关联的file结构体*/
 	file = vma->vm_file;
 	if (file) {
+		/*获取该file关联的address_space结构体*/
 		struct address_space *mapping = file->f_mapping;
 
 		if (vma->vm_flags & VM_DENYWRITE)
@@ -596,6 +608,8 @@ static void __vma_link_file(struct vm_area_struct *vma)
 			atomic_inc(&mapping->i_mmap_writable);
 
 		flush_dcache_mmap_lock(mapping);
+		
+		/*插入到mapping->i_mmap中*/
 		vma_interval_tree_insert(vma, &mapping->i_mmap);
 		flush_dcache_mmap_unlock(mapping);
 	}
@@ -606,7 +620,10 @@ __vma_link(struct mm_struct *mm, struct vm_area_struct *vma,
 	struct vm_area_struct *prev, struct rb_node **rb_link,
 	struct rb_node *rb_parent)
 {
+	/*进行链表插入操作*/
 	__vma_link_list(mm, vma, prev, rb_parent);
+
+	/*进行红黑树插入操作*/
 	__vma_link_rb(mm, vma, rb_link, rb_parent);
 }
 
@@ -621,7 +638,10 @@ static void vma_link(struct mm_struct *mm, struct vm_area_struct *vma,
 		i_mmap_lock_write(mapping);
 	}
 
+	/*进行mm结构中链表和红黑树插入操作*/
 	__vma_link(mm, vma, prev, rb_link, rb_parent);
+
+	/*插入到对应文件的地址空间adress_space->i_mmap或者adress_space->i_mmap_nonlinear*/
 	__vma_link_file(vma);
 
 	if (mapping)
@@ -1564,6 +1584,7 @@ unsigned long ksys_mmap_pgoff(unsigned long addr, unsigned long len,
 	/*先通过传入的flags判断是否是匿名映射*/
 	if (!(flags & MAP_ANONYMOUS)) {
 		audit_mmap_fd(fd, flags);
+		/*如果是非匿名映射的话，则使用文件句柄fd获得对应的file结构体*/
 		file = fget(fd);
 		if (!file)
 			return -EBADF;
@@ -3153,6 +3174,7 @@ int insert_vm_struct(struct mm_struct *mm, struct vm_area_struct *vma)
 	struct vm_area_struct *prev;
 	struct rb_node **rb_link, *rb_parent;
 
+	/*检查是否与现有的vma重叠*/
 	if (find_vma_links(mm, vma->vm_start, vma->vm_end,
 			   &prev, &rb_link, &rb_parent))
 		return -ENOMEM;
@@ -3172,11 +3194,15 @@ int insert_vm_struct(struct mm_struct *mm, struct vm_area_struct *vma)
 	 * using the existing file pgoff checks and manipulations.
 	 * Similarly in do_mmap_pgoff and in do_brk.
 	 */
+	/*如果该vma属性匿名映射*/
 	if (vma_is_anonymous(vma)) {
 		BUG_ON(vma->anon_vma);
+
+		/*在vma->vm_pgoff中记录vma->vm_start页偏移*/
 		vma->vm_pgoff = vma->vm_start >> PAGE_SHIFT;
 	}
-
+	
+	/*把vma链接到mm组织的红黑树里面*/
 	vma_link(mm, vma, prev, rb_link, rb_parent);
 	return 0;
 }

@@ -277,6 +277,7 @@ extern unsigned int kobjsize(const void *objp);
 #define VM_STACK_DEFAULT_FLAGS VM_DATA_DEFAULT_FLAGS
 #endif
 
+/*x64默认没有定义CONFIG_STACK_GROWSUP*/
 #ifdef CONFIG_STACK_GROWSUP
 #define VM_STACK	VM_GROWSUP
 #else

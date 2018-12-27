@@ -38,6 +38,8 @@
  * what Xen requires.
  */
 #define __PAGE_OFFSET_BASE_L5	_AC(0xff10000000000000, UL)
+
+/*定义内核的虚拟地址空间的起始地址,ffff880000000000 - ffffc7ffffffffff (=64 TB)直接映射所有的物理内存*/
 #define __PAGE_OFFSET_BASE_L4	_AC(0xffff880000000000, UL)
 
 #ifdef CONFIG_DYNAMIC_MEMORY_LAYOUT
@@ -46,6 +48,7 @@
 #define __PAGE_OFFSET           __PAGE_OFFSET_BASE_L4
 #endif /* CONFIG_DYNAMIC_MEMORY_LAYOUT */
 
+/*定义为内核代码映射的虚拟地址ffffffff80000000 - ffffffffa0000000 (=512 MB)内核代码(从0号页帧开始512M)*/
 #define __START_KERNEL_map	_AC(0xffffffff80000000, UL)
 
 /* See Documentation/x86/x86_64/mm.txt for a description of the memory map. */
@@ -55,6 +58,7 @@
 #ifdef CONFIG_X86_5LEVEL
 #define __VIRTUAL_MASK_SHIFT	(pgtable_l5_enabled() ? 56 : 47)
 #else
+/*x64位系统默认定义为47*/
 #define __VIRTUAL_MASK_SHIFT	47
 #endif
 

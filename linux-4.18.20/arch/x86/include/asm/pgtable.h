@@ -518,11 +518,14 @@ static inline pud_t pud_clear_soft_dirty(pud_t pud)
  */
 static inline pgprotval_t massage_pgprot(pgprot_t pgprot)
 {
+	/*该宏直接返回当前值*/
 	pgprotval_t protval = pgprot_val(pgprot);
 
+	/*如果通过vm_flag计算出来的值里面有_PAGE_PRESENT位,则掩码掉其他位*/
 	if (protval & _PAGE_PRESENT)
 		protval &= __supported_pte_mask;
 
+	/*返回掩掉后的值*/
 	return protval;
 }
 
@@ -623,6 +626,7 @@ static inline pgprot_t pgprot_modify(pgprot_t oldprot, pgprot_t newprot)
 
 static inline pgprot_t arch_filter_pgprot(pgprot_t prot)
 {
+	/*如果prot值存在_PRESENT位,则进行掩码处理*/
 	return canon_pgprot(prot);
 }
 
@@ -977,8 +981,10 @@ static inline int pgd_none(pgd_t pgd)
  */
 #define pgd_offset_k(address) pgd_offset(&init_mm, (address))
 
-
+/*取出内核空间起始地址在顶级的页表pgd中的偏移量,也即是用户空间的pgd个数*/
 #define KERNEL_PGD_BOUNDARY	pgd_index(PAGE_OFFSET)
+
+/*除去用户空间pgd个数后,剩余kernel的pgd表项个数*/
 #define KERNEL_PGD_PTRS		(PTRS_PER_PGD - KERNEL_PGD_BOUNDARY)
 
 #ifndef __ASSEMBLY__
@@ -1187,6 +1193,7 @@ static inline pmd_t pmdp_establish(struct vm_area_struct *vma,
  */
 static inline void clone_pgd_range(pgd_t *dst, pgd_t *src, int count)
 {
+	/*使用memcpy函数复制对应的顶层页表项*/
 	memcpy(dst, src, count * sizeof(pgd_t));
 #ifdef CONFIG_PAGE_TABLE_ISOLATION
 	if (!static_cpu_has(X86_FEATURE_PTI))

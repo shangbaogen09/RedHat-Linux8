@@ -158,6 +158,7 @@ do {						\
 /*
  * This is used to ensure we don't load something for the wrong architecture.
  */
+/*验证架构是否是x86_64架构*/
 #define elf_check_arch(x)			\
 	((x)->e_machine == EM_X86_64)
 

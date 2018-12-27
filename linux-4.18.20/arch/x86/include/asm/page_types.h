@@ -33,6 +33,7 @@
 
 #define HUGE_MAX_HSTATE 2
 
+/*定义了内核空间的起始地址*/
 #define PAGE_OFFSET		((unsigned long)__PAGE_OFFSET)
 
 #define VM_DATA_DEFAULT_FLAGS \

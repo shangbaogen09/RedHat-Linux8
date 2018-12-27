@@ -570,6 +570,7 @@ fail_nomem:
 
 static inline int mm_alloc_pgd(struct mm_struct *mm)
 {
+	/*把分配好的页目录赋值给mm->pgd*/
 	mm->pgd = pgd_alloc(mm);
 	if (unlikely(!mm->pgd))
 		return -ENOMEM;
@@ -915,6 +916,7 @@ static void mm_init_uprobes_state(struct mm_struct *mm)
 static struct mm_struct *mm_init(struct mm_struct *mm, struct task_struct *p,
 	struct user_namespace *user_ns)
 {
+	/*初始化相关的mm成员*/
 	mm->mmap = NULL;
 	mm->mm_rb = RB_ROOT;
 	mm->vmacache_seqnum = 0;
@@ -950,6 +952,7 @@ static struct mm_struct *mm_init(struct mm_struct *mm, struct task_struct *p,
 		mm->def_flags = 0;
 	}
 
+	/*为mm_struct成员分配页目录表指针pgd成员*/
 	if (mm_alloc_pgd(mm))
 		goto fail_nopgd;
 
@@ -957,6 +960,8 @@ static struct mm_struct *mm_init(struct mm_struct *mm, struct task_struct *p,
 		goto fail_nocontext;
 
 	mm->user_ns = get_user_ns(user_ns);
+
+	/*向上层调用返回初始化好的mm*/
 	return mm;
 
 fail_nocontext:
@@ -973,11 +978,15 @@ struct mm_struct *mm_alloc(void)
 {
 	struct mm_struct *mm;
 
+	/*从对应的slab中分配一个mm_struct结构的空间*/
 	mm = allocate_mm();
 	if (!mm)
 		return NULL;
 
+	/*把该段内存清0*/
 	memset(mm, 0, sizeof(*mm));
+
+	/*初始化mm结构*/
 	return mm_init(mm, current, current_user_ns());
 }
 

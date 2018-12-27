@@ -74,6 +74,7 @@
 
 int suid_dumpable = 0;
 
+/*定义一个全局链表,链接不同的文件格式处理函数*/
 static LIST_HEAD(formats);
 static DEFINE_RWLOCK(binfmt_lock);
 
@@ -83,6 +84,7 @@ void __register_binfmt(struct linux_binfmt * fmt, int insert)
 	if (WARN_ON(!fmt->load_binary))
 		return;
 	write_lock(&binfmt_lock);
+	/*根据insert参数把该模块链接到全局链表formats的不同位置*/
 	insert ? list_add(&fmt->lh, &formats) :
 		 list_add_tail(&fmt->lh, &formats);
 	write_unlock(&binfmt_lock);
@@ -288,11 +290,16 @@ static int __bprm_mm_init(struct linux_binprm *bprm)
 {
 	int err;
 	struct vm_area_struct *vma = NULL;
+
+	/*该进程的内存空间结构体*/
 	struct mm_struct *mm = bprm->mm;
 
+	/*从对应的slab中分配一个vm_area_struct,并进行简单的初始化*/
 	bprm->vma = vma = vm_area_alloc(mm);
 	if (!vma)
 		return -ENOMEM;
+
+	/*设置该vma为匿名映射*/
 	vma_set_anonymous(vma);
 
 	if (down_write_killable(&mm->mmap_sem)) {
@@ -307,18 +314,29 @@ static int __bprm_mm_init(struct linux_binprm *bprm)
 	 * configured yet.
 	 */
 	BUILD_BUG_ON(VM_STACK_FLAGS & VM_STACK_INCOMPLETE_SETUP);
+	/*设置用户空间栈的栈底*/
 	vma->vm_end = STACK_TOP_MAX;
+
+	/*栈的初始大小是一个页面*/
 	vma->vm_start = vma->vm_end - PAGE_SIZE;
+
+	/*设置栈的flags标记，该标记在缺页中断里面会使用到VM_GROWSDOWN*/
 	vma->vm_flags = VM_SOFTDIRTY | VM_STACK_FLAGS | VM_STACK_INCOMPLETE_SETUP;
+
+	/*通过vm_flags的值计算出该页映射时页表的属性*/
 	vma->vm_page_prot = vm_get_page_prot(vma->vm_flags);
 
+	/*把该vma插入到mm组织的红黑树中*/
 	err = insert_vm_struct(mm, vma);
 	if (err)
 		goto err;
 
+	/*记录总的映射的页*/
 	mm->stack_vm = mm->total_vm = 1;
 	arch_bprm_mm_init(mm, vma);
 	up_write(&mm->mmap_sem);
+
+	/*当前堆栈的栈顶*/
 	bprm->p = vma->vm_end - sizeof(void *);
 	return 0;
 err:
@@ -405,6 +423,7 @@ static int bprm_mm_init(struct linux_binprm *bprm)
 	int err;
 	struct mm_struct *mm = NULL;
 
+	/*bprm结构体指针的mm指向该mm_struct*/
 	bprm->mm = mm = mm_alloc();
 	err = -ENOMEM;
 	if (!mm)
@@ -412,9 +431,11 @@ static int bprm_mm_init(struct linux_binprm *bprm)
 
 	/* Save current stack limit for all calculations made during exec. */
 	task_lock(current->group_leader);
+	/*取出当前进程的堆栈的最大限制值rlim[RLIMIT_STACK],并赋值给bprm->rlim_stack*/
 	bprm->rlim_stack = current->signal->rlim[RLIMIT_STACK];
 	task_unlock(current->group_leader);
 
+	/*为栈段创建vm_area_struct结构体*/
 	err = __bprm_mm_init(bprm);
 	if (err)
 		goto err;
@@ -505,16 +526,20 @@ static int copy_strings(int argc, struct user_arg_ptr argv,
 	unsigned long kpos = 0;
 	int ret;
 
+	/*使用一个循环，逐个拷贝*/
 	while (argc-- > 0) {
 		const char __user *str;
 		int len;
 		unsigned long pos;
 
 		ret = -EFAULT;
+
+		/*要拷贝参数的指针*/
 		str = get_user_arg_ptr(argv, argc);
 		if (IS_ERR(str))
 			goto out;
 
+		/*要拷贝参数的长度*/
 		len = strnlen_user(str, MAX_ARG_STRLEN);
 		if (!len)
 			goto out;
@@ -523,6 +548,7 @@ static int copy_strings(int argc, struct user_arg_ptr argv,
 		if (!valid_arg_len(bprm, len))
 			goto out;
 
+		/*取出栈顶的位置*/
 		/* We're going to work our way backwords. */
 		pos = bprm->p;
 		str += len;
@@ -598,6 +624,8 @@ int copy_strings_kernel(int argc, const char *const *__argv,
 	};
 
 	set_fs(KERNEL_DS);
+
+	/*拷贝传入的文件名到该进程的用户栈中*/
 	r = copy_strings(argc, argv, bprm);
 	set_fs(oldfs);
 
@@ -850,6 +878,7 @@ static struct file *do_open_execat(int fd, struct filename *name, int flags)
 	if (flags & AT_EMPTY_PATH)
 		open_exec_flags.lookup_flags |= LOOKUP_EMPTY;
 
+	/*传入的fd为当前工作路径AT_FDCWD,在fd指定的路径中进行可执行文件name的查找*/
 	file = do_filp_open(fd, name, &open_exec_flags);
 	if (IS_ERR(file))
 		goto out;
@@ -869,6 +898,7 @@ static struct file *do_open_execat(int fd, struct filename *name, int flags)
 		fsnotify_open(file);
 
 out:
+	/*向上层调用返回对应的file结构体*/
 	return file;
 
 exit:
@@ -1576,7 +1606,10 @@ int prepare_binprm(struct linux_binprm *bprm)
 		return retval;
 	bprm->called_set_creds = 1;
 
+	/*把该buf清零,buf的大小为128字节*/
 	memset(bprm->buf, 0, BINPRM_BUF_SIZE);
+
+	/*调用虚拟文件系统的接口vfs_read，读取文件的头部到buf中，读取的长度为BINPRM_BUF_SIZE,从偏移0处读取*/
 	return kernel_read(bprm->file, bprm->buf, BINPRM_BUF_SIZE, &pos);
 }
 
@@ -1644,11 +1677,16 @@ int search_binary_handler(struct linux_binprm *bprm)
 	retval = -ENOENT;
  retry:
 	read_lock(&binfmt_lock);
+
+	/*遍历全局链表中的所有模块，判断是否支持当前文件格式*/
 	list_for_each_entry(fmt, &formats, lh) {
+		/*如果对应的模块没加载，则尝试加载*/
 		if (!try_module_get(fmt->module))
 			continue;
 		read_unlock(&binfmt_lock);
 		bprm->recursion_depth++;
+
+		/*调用对应的加载器load_binary函数,针对elf文件为load_elf_binary()*/
 		retval = fmt->load_binary(bprm);
 		read_lock(&binfmt_lock);
 		put_binfmt(fmt);
@@ -1676,6 +1714,7 @@ int search_binary_handler(struct linux_binprm *bprm)
 		goto retry;
 	}
 
+	/*向上层调用返回执行结果*/
 	return retval;
 }
 EXPORT_SYMBOL(search_binary_handler);
@@ -1691,6 +1730,7 @@ static int exec_binprm(struct linux_binprm *bprm)
 	old_vpid = task_pid_nr_ns(current, task_active_pid_ns(current->parent));
 	rcu_read_unlock();
 
+	/*调用该函数，以准备好的bprm为参数，依次询问内核中注册的每一个加载器，是否能加载该文件*/
 	ret = search_binary_handler(bprm);
 	if (ret >= 0) {
 		audit_bprm(bprm);
@@ -1699,18 +1739,21 @@ static int exec_binprm(struct linux_binprm *bprm)
 		proc_exec_connector(current);
 	}
 
+	/*向上层返回执行的结果*/
 	return ret;
 }
 
 /*
  * sys_execve() executes a new program.
  */
+/*执行一个新程序*/
 static int __do_execve_file(int fd, struct filename *filename,
 			    struct user_arg_ptr argv,
 			    struct user_arg_ptr envp,
 			    int flags, struct file *file)
 {
 	char *pathbuf = NULL;
+	/*加载使用的指针变量*/
 	struct linux_binprm *bprm;
 	struct files_struct *displaced;
 	int retval;
@@ -1739,6 +1782,7 @@ static int __do_execve_file(int fd, struct filename *filename,
 		goto out_ret;
 
 	retval = -ENOMEM;
+	/*为要映射的文件分配struct linux_binprm结构体*/
 	bprm = kzalloc(sizeof(*bprm), GFP_KERNEL);
 	if (!bprm)
 		goto out_files;
@@ -1750,18 +1794,22 @@ static int __do_execve_file(int fd, struct filename *filename,
 	check_unsafe_exec(bprm);
 	current->in_execve = 1;
 
+	/*传入的参数file默认为null*/
 	if (!file)
+		/*打开传入的路径文件，并返回对应的file结构*/
 		file = do_open_execat(fd, filename, flags);
 	retval = PTR_ERR(file);
 	if (IS_ERR(file))
 		goto out_unmark;
 
+	/*如果是多核的话，则进行负载均衡*/
 	sched_exec();
 
+	/*把该file结构和filename填充到分配好的bprm结构体中*/
 	bprm->file = file;
 	if (!filename) {
 		bprm->filename = "none";
-	} else if (fd == AT_FDCWD || filename->name[0] == '/') {
+	} else if (fd == AT_FDCWD || filename->name[0] == '/') {/*通常走该路径*/
 		bprm->filename = filename->name;
 	} else {
 		if (filename->name[0] == '\0')
@@ -1782,43 +1830,55 @@ static int __do_execve_file(int fd, struct filename *filename,
 			bprm->interp_flags |= BINPRM_FLAGS_PATH_INACCESSIBLE;
 		bprm->filename = pathbuf;
 	}
+	/*现在还不知道可执行文件的格式，所以把interp指向filename*/
 	bprm->interp = bprm->filename;
 
+	/*分配一个mm_struct并创建一个栈段vma*/
 	retval = bprm_mm_init(bprm);
 	if (retval)
 		goto out_unmark;
 
+	/*计算参数的数目*/
 	bprm->argc = count(argv, MAX_ARG_STRINGS);
 	if ((retval = bprm->argc) < 0)
 		goto out;
 
+	/*计算环境变量的数目*/
 	bprm->envc = count(envp, MAX_ARG_STRINGS);
 	if ((retval = bprm->envc) < 0)
 		goto out;
 
+	/*读取文件头部部分内容到bprm->buf中*/
 	retval = prepare_binprm(bprm);
 	if (retval < 0)
 		goto out;
 
+	/*把用户态的可执行文件名，拷贝到该进程的用户栈中*/
 	retval = copy_strings_kernel(1, &bprm->filename, bprm);
 	if (retval < 0)
 		goto out;
 
+	/*记录可执行文件名的位置*/
 	bprm->exec = bprm->p;
+
+	/*把用户态的环境变量复制到该进程的用户栈中*/
 	retval = copy_strings(bprm->envc, envp, bprm);
 	if (retval < 0)
 		goto out;
 
+	/*把用户态参数复制到该进程的用户栈中*/
 	retval = copy_strings(bprm->argc, argv, bprm);
 	if (retval < 0)
 		goto out;
 
 	would_dump(bprm, bprm->file);
 
+	/*调用该函数，以准备好的bprm为参数，依次询问内核中注册的每一个加载器，是否能加载该文件*/
 	retval = exec_binprm(bprm);
 	if (retval < 0)
 		goto out;
 
+	/*执行成功后,信息的更新*/
 	/* execve succeeded */
 	current->fs->in_exec = 0;
 	current->in_execve = 0;
@@ -1832,6 +1892,8 @@ static int __do_execve_file(int fd, struct filename *filename,
 		putname(filename);
 	if (displaced)
 		put_files_struct(displaced);
+
+	/*向上层调用返回执行的结果*/
 	return retval;
 
 out:
@@ -1862,6 +1924,7 @@ static int do_execveat_common(int fd, struct filename *filename,
 			      struct user_arg_ptr envp,
 			      int flags)
 {
+	/*跟踪调用链,调用__do_execve_file进行处理*/
 	return __do_execve_file(fd, filename, argv, envp, flags, NULL);
 }
 
@@ -1879,6 +1942,8 @@ int do_execve(struct filename *filename,
 {
 	struct user_arg_ptr argv = { .ptr.native = __argv };
 	struct user_arg_ptr envp = { .ptr.native = __envp };
+
+	/*传入环境变量的值*/
 	return do_execveat_common(AT_FDCWD, filename, argv, envp, 0);
 }
 
@@ -1955,11 +2020,20 @@ void set_dumpable(struct mm_struct *mm, int value)
 	} while (cmpxchg(&mm->flags, old, new) != old);
 }
 
+/*glibc中的原型函数:
+int execve(const char *filename, char *const argv[], char *const envp[]); 
+execve()执行程序由filename决定.
+
+filename:必须是一个二进制的可执行文件,或者是一个脚本以#!格式开头的解释器参数参数,
+argv:是要调用的程序执行的参数序列,也就是我们要调用的程序需要传入的参数.
+envp:参数序列,一般来说他是一种键值对的形式key=value.作为新程序的环境.
+*/
 SYSCALL_DEFINE3(execve,
 		const char __user *, filename,
 		const char __user *const __user *, argv,
 		const char __user *const __user *, envp)
 {
+	/*拷贝用户太的路径到内核态中，并调用do_execve进行处理*/
 	return do_execve(getname(filename), argv, envp);
 }
 

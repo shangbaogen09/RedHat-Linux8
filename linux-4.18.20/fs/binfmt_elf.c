@@ -90,6 +90,7 @@ static int elf_core_dump(struct coredump_params *cprm);
 #define ELF_PAGEOFFSET(_v) ((_v) & (ELF_MIN_ALIGN-1))
 #define ELF_PAGEALIGN(_v) (((_v) + ELF_MIN_ALIGN - 1) & ~(ELF_MIN_ALIGN - 1))
 
+/*ELF文件的处理模块*/
 static struct linux_binfmt elf_format = {
 	.module		= THIS_MODULE,
 	.load_binary	= load_elf_binary,
@@ -425,6 +426,7 @@ static struct elf_phdr *load_elf_phdrs(struct elfhdr *elf_ex,
 	 * If the size of this structure has changed, then punt, since
 	 * we will be doing the wrong thing.
 	 */
+	/*判断程序头表中的每项大小是否符合*/
 	if (elf_ex->e_phentsize != sizeof(struct elf_phdr))
 		goto out;
 
@@ -434,14 +436,17 @@ static struct elf_phdr *load_elf_phdrs(struct elfhdr *elf_ex,
 		goto out;
 
 	/* ...and their total size. */
+	/*要读取的文件内容的大小(程序头表的元素个数*一个程序头的大小)*/
 	size = sizeof(struct elf_phdr) * elf_ex->e_phnum;
 	if (size > ELF_MIN_ALIGN)
 		goto out;
 
+	/*分配装载program header table的空间*/
 	elf_phdata = kmalloc(size, GFP_KERNEL);
 	if (!elf_phdata)
 		goto out;
 
+	/*从文件bprm->file偏移e_phoff处读取大小为size的程序头，并存放到elf_phdata处，也即是读取程序头表*/
 	/* Read in the program headers */
 	retval = kernel_read(elf_file, elf_phdata, size, &pos);
 	if (retval != size) {
@@ -456,6 +461,8 @@ out:
 		kfree(elf_phdata);
 		elf_phdata = NULL;
 	}
+
+	/*返回读取的程序头表内存指针*/
 	return elf_phdata;
 }
 
@@ -704,6 +711,8 @@ static int load_elf_binary(struct linux_binprm *bprm)
 	unsigned long reloc_func_desc __maybe_unused = 0;
 	int executable_stack = EXSTACK_DEFAULT;
 	struct pt_regs *regs = current_pt_regs();
+
+	/*承载文件头部的结构体*/
 	struct {
 		struct elfhdr elf_ex;
 		struct elfhdr interp_elf_ex;
@@ -711,43 +720,60 @@ static int load_elf_binary(struct linux_binprm *bprm)
 	struct arch_elf_state arch_state = INIT_ARCH_ELF_STATE;
 	loff_t pos;
 
+	/*分配对应的内存结构体，承载可执行文件的头部*/
 	loc = kmalloc(sizeof(*loc), GFP_KERNEL);
 	if (!loc) {
 		retval = -ENOMEM;
 		goto out_ret;
 	}
 	
+	/*从buf中取出可执行文件的头部*/
 	/* Get the exec-header */
 	loc->elf_ex = *((struct elfhdr *)bprm->buf);
 
 	retval = -ENOEXEC;
+
+	/*验证魔数是不是ELF文件*/
 	/* First of all, some simple consistency checks */
 	if (memcmp(loc->elf_ex.e_ident, ELFMAG, SELFMAG) != 0)
 		goto out;
 
+	/*如果文件的类型不是可执行文件与动态库,则退出*/
 	if (loc->elf_ex.e_type != ET_EXEC && loc->elf_ex.e_type != ET_DYN)
 		goto out;
+
+	/*验证架构是否是x86_64架构*/
 	if (!elf_check_arch(&loc->elf_ex))
 		goto out;
 	if (elf_check_fdpic(&loc->elf_ex))
 		goto out;
+
+	/*如果该文件映射没有mmap函数,则退出*/
 	if (!bprm->file->f_op->mmap)
 		goto out;
 
+	/*从磁盘文件中读取程序头表*/
 	elf_phdata = load_elf_phdrs(&loc->elf_ex, bprm->file);
 	if (!elf_phdata)
 		goto out;
 
+	/*把读出的程序头表的内容，保存到临时变量elf_ppnt*/
 	elf_ppnt = elf_phdata;
+
+	/*bss和brk初始化为0*/
 	elf_bss = 0;
 	elf_brk = 0;
 
+	/*初始化start_code为最大值*/
 	start_code = ~0UL;
 	end_code = 0;
 	start_data = 0;
 	end_data = 0;
 
+	/*本次循环只处理类型为PT_INTERP类型的段,也就是linux的动态装载器*/
 	for (i = 0; i < loc->elf_ex.e_phnum; i++) {
+
+		/*该段的类型为PT_INTERP*/
 		if (elf_ppnt->p_type == PT_INTERP) {
 			/* This is the program interpreter used for
 			 * shared libraries - for now assume that this
@@ -759,12 +785,16 @@ static int load_elf_binary(struct linux_binprm *bprm)
 				goto out_free_ph;
 
 			retval = -ENOMEM;
+			/*为装载器路径段分配内存*/
 			elf_interpreter = kmalloc(elf_ppnt->p_filesz,
 						  GFP_KERNEL);
 			if (!elf_interpreter)
 				goto out_free_ph;
 
+			/*取出从文件的偏移多少处读*/
 			pos = elf_ppnt->p_offset;
+
+			/*从磁盘读取文件的内容*/
 			retval = kernel_read(bprm->file, elf_interpreter,
 					     elf_ppnt->p_filesz, &pos);
 			if (retval != elf_ppnt->p_filesz) {
@@ -777,6 +807,7 @@ static int load_elf_binary(struct linux_binprm *bprm)
 			if (elf_interpreter[elf_ppnt->p_filesz - 1] != '\0')
 				goto out_free_interp;
 
+			/*打开装载器文件路径*/
 			interpreter = open_exec(elf_interpreter);
 			retval = PTR_ERR(interpreter);
 			if (IS_ERR(interpreter))
@@ -791,6 +822,8 @@ static int load_elf_binary(struct linux_binprm *bprm)
 
 			/* Get the exec headers */
 			pos = 0;
+
+			/*从磁盘读取装载连接器*/
 			retval = kernel_read(interpreter, &loc->interp_elf_ex,
 					     sizeof(loc->interp_elf_ex), &pos);
 			if (retval != sizeof(loc->interp_elf_ex)) {
@@ -801,10 +834,15 @@ static int load_elf_binary(struct linux_binprm *bprm)
 
 			break;
 		}
+		
+		/*处理下一个程序头表*/
 		elf_ppnt++;
 	}
 
+	/*重新赋值段表指针*/
 	elf_ppnt = elf_phdata;
+
+	/*该循环处理类型为PT_GNU_STACK,PT_LOPROC,PT_HIPROC的段*/
 	for (i = 0; i < loc->elf_ex.e_phnum; i++, elf_ppnt++)
 		switch (elf_ppnt->p_type) {
 		case PT_GNU_STACK:
@@ -879,11 +917,13 @@ static int load_elf_binary(struct linux_binprm *bprm)
 	if (!(current->personality & ADDR_NO_RANDOMIZE) && randomize_va_space)
 		current->flags |= PF_RANDOMIZE;
 
+	/*设置内存映射区的基地址，比如文件映射，共享内存等，动态库就映射在这个区域*/
 	setup_new_exec(bprm);
 	install_exec_creds(bprm);
 
 	/* Do this so that we can load the interpreter, if need be.  We will
 	   change some of these later */
+	/*再次设置该文件的栈段，并对传入的参数栈顶的地址进行了随机化处理*/
 	retval = setup_arg_pages(bprm, randomize_stack_top(STACK_TOP),
 				 executable_stack);
 	if (retval < 0)
@@ -893,12 +933,14 @@ static int load_elf_binary(struct linux_binprm *bprm)
 
 	/* Now we do a little grungy work by mmapping the ELF image into
 	   the correct location in memory. */
+	/*遍历program header table，调用elf_map映射类型为PT_LOAD的段到进程地址空间*/
 	for(i = 0, elf_ppnt = elf_phdata;
 	    i < loc->elf_ex.e_phnum; i++, elf_ppnt++) {
 		int elf_prot = 0, elf_flags, elf_fixed = MAP_FIXED_NOREPLACE;
 		unsigned long k, vaddr;
 		unsigned long total_size = 0;
 
+		/*如果段的类型不是PT_LOAD则跳到下一个*/
 		if (elf_ppnt->p_type != PT_LOAD)
 			continue;
 
@@ -936,6 +978,7 @@ static int load_elf_binary(struct linux_binprm *bprm)
 			elf_fixed = MAP_FIXED;
 		}
 
+		/*根据头文件的属性设置映射时的属性*/
 		if (elf_ppnt->p_flags & PF_R)
 			elf_prot |= PROT_READ;
 		if (elf_ppnt->p_flags & PF_W)
@@ -943,8 +986,10 @@ static int load_elf_binary(struct linux_binprm *bprm)
 		if (elf_ppnt->p_flags & PF_X)
 			elf_prot |= PROT_EXEC;
 
+		/*设置要传入的flag*/
 		elf_flags = MAP_PRIVATE | MAP_DENYWRITE | MAP_EXECUTABLE;
 
+		/*该段在进程空间映射的虚拟地址*/
 		vaddr = elf_ppnt->p_vaddr;
 		/*
 		 * If we are loading ET_EXEC or we have already performed
@@ -987,7 +1032,7 @@ static int load_elf_binary(struct linux_binprm *bprm)
 				load_bias = ELF_ET_DYN_BASE;
 				if (current->flags & PF_RANDOMIZE)
 					load_bias += arch_mmap_rnd();
-				elf_flags |= elf_fixed;
+				elf_flags |= elf_fixed; 
 			} else
 				load_bias = 0;
 
@@ -1008,6 +1053,8 @@ static int load_elf_binary(struct linux_binprm *bprm)
 			}
 		}
 
+        /*elf_map为每个段创建一个vm_area_struct对象，其中第二个参数就是段在进程地址空间中映射的地址，
+		 这个地址在编译时链接器就分配好的，其中load_bias是用于动态链接库的，对应可执行文件值为0*/
 		error = elf_map(bprm->file, load_bias + vaddr, elf_ppnt,
 				elf_prot, elf_flags, total_size);
 		if (BAD_ADDR(error)) {
@@ -1026,6 +1073,8 @@ static int load_elf_binary(struct linux_binprm *bprm)
 				reloc_func_desc = load_bias;
 			}
 		}
+
+		/*elf_ppnt->p_vaddr是段在进程空间中的起始地址*/
 		k = elf_ppnt->p_vaddr;
 		if (k < start_code)
 			start_code = k;
@@ -1045,8 +1094,11 @@ static int load_elf_binary(struct linux_binprm *bprm)
 			goto out_free_dentry;
 		}
 
+		/*elf_ppnt->p_vaddr段在进程空间中的起始地址，elf_ppnt->p_filesz是段在elf文件中占据的尺寸
+		 在第二轮循环后，k的值是数据段的起始地址和数据段(不包含BSS)的大小的和*/
 		k = elf_ppnt->p_vaddr + elf_ppnt->p_filesz;
 
+		/*把该值赋值给bss段的起始地址*/
 		if (k > elf_bss)
 			elf_bss = k;
 		if ((elf_ppnt->p_flags & PF_X) && end_code < k)
@@ -2413,6 +2465,7 @@ out:
 
 static int __init init_elf_binfmt(void)
 {
+	/*注册处理ELF文件的模块*/
 	register_binfmt(&elf_format);
 	return 0;
 }

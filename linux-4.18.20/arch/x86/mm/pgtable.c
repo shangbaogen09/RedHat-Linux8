@@ -113,6 +113,7 @@ static inline void pgd_list_del(pgd_t *pgd)
 	list_del(&page->lru);
 }
 
+/*由于默认的SHARED_KERNEL_PMD=0,所以UNSHARED_PTRS_PER_PGD的值为PTRS_PER_PGD=512*/
 #define UNSHARED_PTRS_PER_PGD				\
 	(SHARED_KERNEL_PMD ? KERNEL_PGD_BOUNDARY : PTRS_PER_PGD)
 
@@ -134,15 +135,19 @@ static void pgd_ctor(struct mm_struct *mm, pgd_t *pgd)
 	   references from swapper_pg_dir. */
 	if (CONFIG_PGTABLE_LEVELS == 2 ||
 	    (CONFIG_PGTABLE_LEVELS == 3 && SHARED_KERNEL_PMD) ||
-	    CONFIG_PGTABLE_LEVELS >= 4) {
+	    CONFIG_PGTABLE_LEVELS >= 4) {/*x64内核的配置CONFIG_PGTABLE_LEVELS = 4*/
+		/*从内核原始页表复制内核空间的所有页表到当前的页表中*/
 		clone_pgd_range(pgd + KERNEL_PGD_BOUNDARY,
 				swapper_pg_dir + KERNEL_PGD_BOUNDARY,
 				KERNEL_PGD_PTRS);
 	}
 
+	/*针对４级页表,默认情况下SHARED_KERNEL_PMD为0*/
 	/* list required to sync kernel mapping updates */
 	if (!SHARED_KERNEL_PMD) {
 		pgd_set_mm(pgd, mm);
+		
+		/*把pgd对应的页添加到pgd_list,供同步页表使用*/
 		pgd_list_add(pgd);
 	}
 }
@@ -167,7 +172,7 @@ static void pgd_dtor(pgd_t *pgd)
  * vmalloc faults work because attached pagetables are never freed.
  * -- nyc
  */
-
+/*x64系统默认没有配置PAE选项*/
 #ifdef CONFIG_X86_PAE
 /*
  * In PAE mode, we need to do a cr3 reload (=tlb flush) when
@@ -180,6 +185,7 @@ static void pgd_dtor(pgd_t *pgd)
  * not shared between pagetables (!SHARED_KERNEL_PMDS), we allocate
  * and initialize the kernel pmds here.
  */
+/*预分配的值为512*/
 #define PREALLOCATED_PMDS	UNSHARED_PTRS_PER_PGD
 
 void pud_populate(struct mm_struct *mm, pud_t *pudp, pmd_t *pmd)
@@ -349,6 +355,7 @@ static inline pgd_t *_pgd_alloc(void)
 	 * Now PAE kernel is not running as a Xen domain. We can allocate
 	 * a 32-byte slab for pgd to save memory space.
 	 */
+	/*从slab中分配一个能装顶级pgd的内存空间*/
 	return kmem_cache_alloc(pgd_cache, PGALLOC_GFP);
 }
 
@@ -377,13 +384,16 @@ pgd_t *pgd_alloc(struct mm_struct *mm)
 	pgd_t *pgd;
 	pmd_t *pmds[PREALLOCATED_PMDS];
 
+	/*分配顶级pgd空间*/
 	pgd = _pgd_alloc();
 
 	if (pgd == NULL)
 		goto out;
 
+	/*把分配好的页目录表地址赋值给对应的struct mm_struct成员pgd*/
 	mm->pgd = pgd;
 
+	/*x64系统默认不会进行预处理*/
 	if (preallocate_pmds(mm, pmds) != 0)
 		goto out_free_pgd;
 
@@ -397,11 +407,15 @@ pgd_t *pgd_alloc(struct mm_struct *mm)
 	 */
 	spin_lock(&pgd_lock);
 
+	/*拷贝内核空间的页表到当前进程的页表中*/
 	pgd_ctor(mm, pgd);
+
+	/*x64系统默认不会进行预处理*/
 	pgd_prepopulate_pmd(mm, pgd, pmds);
 
 	spin_unlock(&pgd_lock);
 
+	/*返回分配好的页目录*/
 	return pgd;
 
 out_free_pmds:

@@ -23,7 +23,10 @@ struct linux_binprm {
 # define MAX_ARG_PAGES	32
 	struct page *page[MAX_ARG_PAGES];
 #endif
+	/*该进程的内存空间结构体*/
 	struct mm_struct *mm;
+
+	/*栈顶的位置*/
 	unsigned long p; /* current top of mem */
 	unsigned int
 		/*
@@ -53,6 +56,7 @@ struct linux_binprm {
 	struct cred *cred;	/* new credentials */
 	int unsafe;		/* how unsafe this exec is (mask of LSM_UNSAFE_*) */
 	unsigned int per_clear;	/* bits to clear in current->personality */
+	/*参数和环境变量的数目*/
 	int argc, envc;
 	const char * filename;	/* Name of binary as seen by procps */
 	const char * interp;	/* Name of the binary really executed. Most
@@ -105,6 +109,7 @@ extern void __register_binfmt(struct linux_binfmt *fmt, int insert);
 /* Registration of default binfmt handlers */
 static inline void register_binfmt(struct linux_binfmt *fmt)
 {
+	/*跟踪调用链*/
 	__register_binfmt(fmt, 0);
 }
 /* Same as above, but adds a new binfmt at the top of the list */

@@ -45,6 +45,7 @@ extern unsigned int ptrs_per_p4d;
 
 #endif	/* !__ASSEMBLY__ */
 
+/*默认定义的SHARED_KERNEL_PMD为0*/
 #define SHARED_KERNEL_PMD	0
 
 #ifdef CONFIG_X86_5LEVEL
@@ -71,7 +72,10 @@ extern unsigned int ptrs_per_p4d;
 /*
  * PGDIR_SHIFT determines what a top-level page table entry can map
  */
+/*由于虚拟地址使用48位的虚拟地址空间,所以顶层页表使用9位的偏移进行索引*/
 #define PGDIR_SHIFT		39
+
+/*顶层页表包含512项*/
 #define PTRS_PER_PGD		512
 #define MAX_PTRS_PER_P4D	1
 

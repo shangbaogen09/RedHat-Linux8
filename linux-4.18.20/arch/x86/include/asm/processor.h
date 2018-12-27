@@ -881,6 +881,7 @@ static inline void spin_lock_prefetch(const void *x)
  *
  * With page table isolation enabled, we map the LDT in ... [stay tuned]
  */
+/*该地址为2^47减去一页的大小,也就是用户空间的最大值减去一页*/
 #define TASK_SIZE_MAX	((1UL << __VIRTUAL_MASK_SHIFT) - PAGE_SIZE)
 
 #define DEFAULT_MAP_WINDOW	((1UL << 47) - PAGE_SIZE)
@@ -899,6 +900,7 @@ static inline void spin_lock_prefetch(const void *x)
 					IA32_PAGE_OFFSET : TASK_SIZE_MAX)
 
 #define STACK_TOP		TASK_SIZE_LOW
+/*64位系统设置的用户空间的栈底*/
 #define STACK_TOP_MAX		TASK_SIZE_MAX
 
 #define INIT_THREAD  {						\
