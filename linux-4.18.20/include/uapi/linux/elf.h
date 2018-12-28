@@ -222,8 +222,8 @@ typedef struct elf32_hdr{
 /*
 barry-shang@pek-bshang-d1:~/linux-4.18.20/vm$ readelf -h HelloWorld
 ELF Header:
-  /*标记:7f. 45,4c,46:elf字符串. 02:elf文件类型,0无效文件,1表示32为,2表示64位
-　　01:表示字节序,0表示无效格式,1表示小端,2表示大端. 01:表示elf的版本号*/
+  标记:7f. 45,4c,46:elf字符串. 02:elf文件类型,0无效文件,1表示32为,2表示64位
+　　01:表示字节序,0表示无效格式,1表示小端,2表示大端. 01:表示elf的版本号
   Magic:   7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00 
   Class:                             ELF64
   Data:                              2's complement, little endian

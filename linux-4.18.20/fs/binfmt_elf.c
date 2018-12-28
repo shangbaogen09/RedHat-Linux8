@@ -87,6 +87,7 @@ static int elf_core_dump(struct coredump_params *cprm);
 #endif
 
 #define ELF_PAGESTART(_v) ((_v) & ~(unsigned long)(ELF_MIN_ALIGN-1))
+/*该宏是取出小于1页大小的偏移量*/
 #define ELF_PAGEOFFSET(_v) ((_v) & (ELF_MIN_ALIGN-1))
 #define ELF_PAGEALIGN(_v) (((_v) + ELF_MIN_ALIGN - 1) & ~(ELF_MIN_ALIGN - 1))
 
@@ -103,19 +104,26 @@ static struct linux_binfmt elf_format = {
 
 static int set_brk(unsigned long start, unsigned long end, int prot)
 {
+	/*把start和end对齐处理*/
 	start = ELF_PAGEALIGN(start);
 	end = ELF_PAGEALIGN(end);
+
+	/*如果对齐后的，前者不能覆盖后者，则调用vm_brk()为bss新创建一个段*/
 	if (end > start) {
 		/*
 		 * Map the last of the bss segment.
 		 * If the header is requesting these pages to be
 		 * executable, honour that (ppc32 needs this).
 		 */
+		/*主要工作委托给do_brk()函数来完成*/
 		int error = vm_brk_flags(start, end - start,
 				prot & PROT_EXEC ? VM_EXEC : 0);
 		if (error)
 			return error;
 	}
+
+	/*把堆的起始位置和结束位置都指向bss段的结束位置，内核初始时是不会为程序映射堆段的，
+	  只要在程序动态申请内存时，内核再按需扩展堆的大小，然后动态映射*/
 	current->mm->start_brk = current->mm->brk = end;
 	return 0;
 }
@@ -352,8 +360,14 @@ static unsigned long elf_map(struct file *filep, unsigned long addr,
 		unsigned long total_size)
 {
 	unsigned long map_addr;
+
+	/*要映射的段的大小*/
 	unsigned long size = eppnt->p_filesz + ELF_PAGEOFFSET(eppnt->p_vaddr);
+
+	/*要映射的段在文件中的偏移量,后面减去的偏移是为了计算偏移第几个页帧*/
 	unsigned long off = eppnt->p_offset - ELF_PAGEOFFSET(eppnt->p_vaddr);
+
+	/*虚拟地址与要映射的大小按页大小对齐处理*/
 	addr = ELF_PAGESTART(addr);
 	size = ELF_PAGEALIGN(size);
 
@@ -370,12 +384,14 @@ static unsigned long elf_map(struct file *filep, unsigned long addr,
 	* So we first map the 'big' image - and unmap the remainder at
 	* the end. (which unmap is needed for ELF images with holes.)
 	*/
+	/*针对装载器进行的处理*/
 	if (total_size) {
 		total_size = ELF_PAGEALIGN(total_size);
 		map_addr = vm_mmap(filep, addr, total_size, prot, type, off);
 		if (!BAD_ADDR(map_addr))
 			vm_munmap(map_addr+size, total_size-size);
 	} else
+		/*主要工作由该函数来完成，内部使用mmap进行映射*/
 		map_addr = vm_mmap(filep, addr, size, prot, type, off);
 
 	if ((type & MAP_FIXED_NOREPLACE) &&
@@ -383,6 +399,7 @@ static unsigned long elf_map(struct file *filep, unsigned long addr,
 		pr_info("%d (%s): Uhuuh, elf segment at %px requested but the memory is mapped already\n",
 			task_pid_nr(current), current->comm, (void *)addr);
 
+	/*返回map后的地址*/
 	return(map_addr);
 }
 
@@ -682,14 +699,19 @@ static unsigned long randomize_stack_top(unsigned long stack_top)
 {
 	unsigned long random_variable = 0;
 
+	/*如果支持随机化*/
 	if (current->flags & PF_RANDOMIZE) {
+		/*获取一个随机数*/
 		random_variable = get_random_long();
+
+		/*对随机数进行掩码处理*/
 		random_variable &= STACK_RND_MASK;
 		random_variable <<= PAGE_SHIFT;
 	}
 #ifdef CONFIG_STACK_GROWSUP
 	return PAGE_ALIGN(stack_top) + random_variable;
 #else
+	/*返回栈顶值*/
 	return PAGE_ALIGN(stack_top) - random_variable;
 #endif
 }
@@ -861,23 +883,30 @@ static int load_elf_binary(struct linux_binprm *bprm)
 			break;
 		}
 
+	/*如果存在装载连接器,则进行如下处理*/
 	/* Some simple consistency checks for the interpreter */
 	if (elf_interpreter) {
 		retval = -ELIBBAD;
+		
+		/*判断是否是一个elf格式的链接器*/
 		/* Not an ELF interpreter */
 		if (memcmp(loc->interp_elf_ex.e_ident, ELFMAG, SELFMAG) != 0)
 			goto out_free_dentry;
+
+		/*验证该链接器的arch*/
 		/* Verify the interpreter has a valid arch */
 		if (!elf_check_arch(&loc->interp_elf_ex) ||
 		    elf_check_fdpic(&loc->interp_elf_ex))
 			goto out_free_dentry;
 
+		/*读取链接器的程序头*/
 		/* Load the interpreter program headers */
 		interp_elf_phdata = load_elf_phdrs(&loc->interp_elf_ex,
 						   interpreter);
 		if (!interp_elf_phdata)
 			goto out_free_dentry;
 
+		/*把读出的程序头保存到一个临时变量中，并循环检查PT_LOPROC,PT_HIPROC类型的段*/
 		/* Pass PT_LOPROC..PT_HIPROC headers to arch code */
 		elf_ppnt = interp_elf_phdata;
 		for (i = 0; i < loc->interp_elf_ex.e_phnum; i++, elf_ppnt++)
@@ -897,6 +926,7 @@ static int load_elf_binary(struct linux_binprm *bprm)
 	 * still possible to return an error to the code that invoked
 	 * the exec syscall.
 	 */
+	/*该函数在当前版本为空*/
 	retval = arch_check_elf(&loc->elf_ex,
 				!!interpreter, &loc->interp_elf_ex,
 				&arch_state);
@@ -914,10 +944,11 @@ static int load_elf_binary(struct linux_binprm *bprm)
 	if (elf_read_implies_exec(loc->elf_ex, executable_stack))
 		current->personality |= READ_IMPLIES_EXEC;
 
+	/*判断是否需要随机化,如果需要的话,则设置对应的flag标记*/
 	if (!(current->personality & ADDR_NO_RANDOMIZE) && randomize_va_space)
 		current->flags |= PF_RANDOMIZE;
 
-	/*设置内存映射区的基地址，比如文件映射，共享内存等，动态库就映射在这个区域*/
+	/*设置内存映射区mmap的基地址，比如文件映射，共享内存等，动态库就映射在这个区域*/
 	setup_new_exec(bprm);
 	install_exec_creds(bprm);
 
@@ -929,6 +960,7 @@ static int load_elf_binary(struct linux_binprm *bprm)
 	if (retval < 0)
 		goto out_free_dentry;
 	
+	/*再次更新记录堆栈的起始地址*/
 	current->mm->start_stack = bprm->p;
 
 	/* Now we do a little grungy work by mmapping the ELF image into
@@ -944,6 +976,7 @@ static int load_elf_binary(struct linux_binprm *bprm)
 		if (elf_ppnt->p_type != PT_LOAD)
 			continue;
 
+		/*加载代码段的时候,不会进入该分支*/
 		if (unlikely (elf_brk > elf_bss)) {
 			unsigned long nbyte;
 	            
@@ -1076,8 +1109,12 @@ static int load_elf_binary(struct linux_binprm *bprm)
 
 		/*elf_ppnt->p_vaddr是段在进程空间中的起始地址*/
 		k = elf_ppnt->p_vaddr;
+		
+		/*start_code初始值为系统所能表示的最大值,所以执行完后start_code为代码段的起始地址*/
 		if (k < start_code)
 			start_code = k;
+
+		/*start_data的初始值为0，执行完代码段后start_data的值为代码段的起始地址*/
 		if (start_data < k)
 			start_data = k;
 
@@ -1098,20 +1135,28 @@ static int load_elf_binary(struct linux_binprm *bprm)
 		 在第二轮循环后，k的值是数据段的起始地址和数据段(不包含BSS)的大小的和*/
 		k = elf_ppnt->p_vaddr + elf_ppnt->p_filesz;
 
-		/*把该值赋值给bss段的起始地址*/
+		/*第一轮时，elf_bss的值为0, 把计算的k值赋值给bss段的起始地址*/
 		if (k > elf_bss)
 			elf_bss = k;
+
+		/*如果该段有可执行属性并且k大于end_code(end_code默认为0),则设置代码段的结束地址*/
 		if ((elf_ppnt->p_flags & PF_X) && end_code < k)
 			end_code = k;
+
+		/*第一轮时end_data也设置为代码段的结束地址*/
 		if (end_data < k)
 			end_data = k;
+
+		/*k的值是数据段的起始地址和数据段(包含BSS)的大小的和*/
 		k = elf_ppnt->p_vaddr + elf_ppnt->p_memsz;
 		if (k > elf_brk) {
 			bss_prot = elf_prot;
+			/*第一轮默认elf_brk=0,把该值赋值给brk段的结束地址*/
 			elf_brk = k;
 		}
 	}
 
+	/*对几个区间的的起始值进行偏移处理*/
 	loc->elf_ex.e_entry += load_bias;
 	elf_bss += load_bias;
 	elf_brk += load_bias;
@@ -1125,6 +1170,7 @@ static int load_elf_binary(struct linux_binprm *bprm)
 	 * mapping in the interpreter, to make sure it doesn't wind
 	 * up getting placed where the bss needs to go.
 	 */
+	/*调用该函数设置bss和break*/
 	retval = set_brk(elf_bss, elf_brk, bss_prot);
 	if (retval)
 		goto out_free_dentry;

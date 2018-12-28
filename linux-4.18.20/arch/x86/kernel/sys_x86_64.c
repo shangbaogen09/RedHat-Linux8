@@ -198,6 +198,7 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 	if (len > TASK_SIZE)
 		return -ENOMEM;
 
+	/*如果是设置了MAP_FIXED，则直接返回该地址*/
 	/* No address checking. See comment at mmap_address_hint_valid() */
 	if (flags & MAP_FIXED)
 		return addr;
@@ -206,18 +207,21 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 	if (!in_compat_syscall() && (flags & MAP_32BIT))
 		goto bottomup;
 
+	/*如果指定的地址不为null,并且没有设置MAP_FIXED，则遍历对应的vma检查是否与现有的虚存空间重叠*/
 	/* requesting a specific address */
 	if (addr) {
 		addr &= PAGE_MASK;
 		if (!mmap_address_hint_valid(addr, len))
 			goto get_unmapped_area;
 
+		/*如果不重叠则直接返回该地址*/
 		vma = find_vma(mm, addr);
 		if (!vma || addr + len <= vm_start_gap(vma))
 			return addr;
 	}
 get_unmapped_area:
 
+	/*初始化一个临时变量,传入vm_unmapped_area函数*/
 	info.flags = VM_UNMAPPED_AREA_TOPDOWN;
 	info.length = len;
 	info.low_limit = PAGE_SIZE;
@@ -238,6 +242,8 @@ get_unmapped_area:
 		info.align_mask = get_align_mask();
 		info.align_offset += get_align_bits();
 	}
+
+	/*如果没有指定地址，则调用该函数在mmap区找一块区域*/
 	addr = vm_unmapped_area(&info);
 	if (!(addr & ~PAGE_MASK))
 		return addr;

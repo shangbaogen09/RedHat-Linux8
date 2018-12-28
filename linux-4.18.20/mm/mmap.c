@@ -2143,6 +2143,7 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
  * This mmap-allocator allocates new areas top-down from below the
  * stack's low limit (the base):
  */
+/*默认内核定义了该宏*/
 #ifndef HAVE_ARCH_UNMAPPED_AREA_TOPDOWN
 unsigned long
 arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
@@ -2176,6 +2177,7 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 	info.low_limit = max(PAGE_SIZE, mmap_min_addr);
 	info.high_limit = mm->mmap_base;
 	info.align_mask = 0;
+
 	addr = vm_unmapped_area(&info);
 
 	/*
@@ -2228,7 +2230,7 @@ get_unmapped_area(struct file *file, unsigned long addr, unsigned long len,
 		get_area = shmem_get_unmapped_area;
 	}
 
-	/*对应于传统布局，该函数为arch_get_unmapped_area()*/
+	/*对应于新式布局，该函数为arch_get_unmapped_area_topdown()*/
 	addr = get_area(file, addr, len, pgoff, flags);
 	if (IS_ERR_VALUE(addr))
 		return addr;
@@ -2443,13 +2445,16 @@ int expand_upwards(struct vm_area_struct *vma, unsigned long address)
 /*
  * vma is the first one with address < vma->vm_start.  Have to extend vma.
  */
+/*向下扩展堆栈*/
 int expand_downwards(struct vm_area_struct *vma,
 				   unsigned long address)
 {
+	/*取出该vma所属的mm_struct*/
 	struct mm_struct *mm = vma->vm_mm;
 	struct vm_area_struct *prev;
 	int error;
 
+	/*对栈基地址进行对齐处理*/
 	address &= PAGE_MASK;
 	error = security_mmap_addr(address);
 	if (error)
@@ -2475,15 +2480,21 @@ int expand_downwards(struct vm_area_struct *vma,
 	 */
 	anon_vma_lock_write(vma->anon_vma);
 
+	/*如果基地址大于该vma的起始地址,表明需要进行扩展*/
 	/* Somebody else might have raced and expanded it already */
 	if (address < vma->vm_start) {
 		unsigned long size, grow;
 
+		/*总的栈空间的大小*/
 		size = vma->vm_end - address;
+
+		/*计算需要进行扩展的大小,按页进行计数*/
 		grow = (vma->vm_start - address) >> PAGE_SHIFT;
 
 		error = -ENOMEM;
+		/*判断增加的页数是否比系统的剩余的最大空间还大，该值为vma->vm_pgoff = vma->vm_start >> PAGE_SHIFT;*/
 		if (grow <= vma->vm_pgoff) {
+			/*做一些检查和统计工作*/
 			error = acct_stack_growth(vma, size, grow);
 			if (!error) {
 				/*
@@ -2502,7 +2513,11 @@ int expand_downwards(struct vm_area_struct *vma,
 					mm->locked_vm += grow;
 				vm_stat_account(mm, vma->vm_flags, grow);
 				anon_vma_interval_tree_pre_update_vma(vma);
+
+				/*更新该vma的起始地址*/
 				vma->vm_start = address;
+
+				/*调整vma->vm_pgoff的值,以便下次扩展时判断使用*/
 				vma->vm_pgoff -= grow;
 				anon_vma_interval_tree_post_update_vma(vma);
 				vma_gap_update(vma);
@@ -2556,6 +2571,7 @@ find_extend_vma(struct mm_struct *mm, unsigned long addr)
 	return prev;
 }
 #else
+/*向下扩展堆栈*/
 int expand_stack(struct vm_area_struct *vma, unsigned long address)
 {
 	return expand_downwards(vma, address);
@@ -2995,6 +3011,7 @@ static int do_brk_flags(unsigned long addr, unsigned long len, unsigned long fla
 		return -EINVAL;
 	flags |= VM_DATA_DEFAULT_FLAGS | VM_ACCOUNT | mm->def_flags;
 
+	/*获取一块固定地址长度的vma*/
 	error = get_unmapped_area(NULL, addr, len, 0, MAP_FIXED);
 	if (offset_in_page(error))
 		return error;
@@ -3012,6 +3029,10 @@ static int do_brk_flags(unsigned long addr, unsigned long len, unsigned long fla
 	/*
 	 * Clear old maps.  this also does some error checking for us
 	 */
+    /*find_vma_links函数扫描当前进程地址空间的vm_area_struct结构所形成的红黑树,试图找到结束地址高于addr的第一个区间；
+    如果找到了一个虚拟区,说明addr所在的虚拟区已经在使用,也就是已经有映射存在,因此要调用do_munmap()把这个老的虚拟区
+    从进程地址空间中撤销,如果撤销不成功,就返回一个负数;如果撤销成功,就继续查找,直到在红黑树中找不到addr所在的虚拟区,
+    并继续下面的检查*/
 	while (find_vma_links(mm, addr, addr + len, &prev, &rb_link,
 			      &rb_parent)) {
 		if (do_munmap(mm, addr, len, uf))
@@ -3028,6 +3049,7 @@ static int do_brk_flags(unsigned long addr, unsigned long len, unsigned long fla
 	if (security_vm_enough_memory_mm(mm, len >> PAGE_SHIFT))
 		return -ENOMEM;
 
+	/*判断与前一个vma是否可以合并, 如果可以合并，就将其合并为一个VMA区*/
 	/* Can we just expand an old private anonymous mapping? */
 	vma = vma_merge(mm, prev, addr, addr + len, flags,
 			NULL, NULL, pgoff, NULL, NULL_VM_UFFD_CTX);
@@ -3037,21 +3059,27 @@ static int do_brk_flags(unsigned long addr, unsigned long len, unsigned long fla
 	/*
 	 * create a vma struct for an anonymous mapping
 	 */
+	/*如果不可以合并，则新创建一个vma*/
 	vma = vm_area_alloc(mm);
 	if (!vma) {
 		vm_unacct_memory(len >> PAGE_SHIFT);
 		return -ENOMEM;
 	}
 
+	/*使用传入的参数设置对应的vma*/
 	vma_set_anonymous(vma);
 	vma->vm_start = addr;
 	vma->vm_end = addr + len;
 	vma->vm_pgoff = pgoff;
 	vma->vm_flags = flags;
 	vma->vm_page_prot = vm_get_page_prot(flags);
+
+	/*把该vma链入到各个数据结构*/
 	vma_link(mm, vma, prev, rb_link, rb_parent);
 out:
 	perf_event_mmap(vma);
+
+	/*更新统计信息*/
 	mm->total_vm += len >> PAGE_SHIFT;
 	mm->data_vm += len >> PAGE_SHIFT;
 	if (flags & VM_LOCKED)
@@ -3068,6 +3096,7 @@ int vm_brk_flags(unsigned long addr, unsigned long request, unsigned long flags)
 	bool populate;
 	LIST_HEAD(uf);
 
+	/*把传入的参数按页大小对齐*/	
 	len = PAGE_ALIGN(request);
 	if (len < request)
 		return -ENOMEM;
@@ -3076,13 +3105,16 @@ int vm_brk_flags(unsigned long addr, unsigned long request, unsigned long flags)
 
 	if (down_write_killable(&mm->mmap_sem))
 		return -EINTR;
-
+	
+	/*调用下面函数进行处理*/
 	ret = do_brk_flags(addr, len, flags, &uf);
 	populate = ((mm->def_flags & VM_LOCKED) != 0);
 	up_write(&mm->mmap_sem);
 	userfaultfd_unmap_complete(mm, &uf);
 	if (populate && !ret)
 		mm_populate(addr, len);
+
+	/*向上层调用返回执行结果*/
 	return ret;
 }
 EXPORT_SYMBOL(vm_brk_flags);

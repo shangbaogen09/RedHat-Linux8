@@ -711,8 +711,11 @@ early_param("idle", idle_setup);
 
 unsigned long arch_align_stack(unsigned long sp)
 {
+	/*如果支持随机化处理,则栈顶再次随机话*/
 	if (!(current->personality & ADDR_NO_RANDOMIZE) && randomize_va_space)
 		sp -= get_random_int() % 8192;
+
+	/*对栈顶进行16字节对齐处理*/
 	return sp & ~0xf;
 }
 

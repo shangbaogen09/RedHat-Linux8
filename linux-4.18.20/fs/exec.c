@@ -746,16 +746,23 @@ int setup_arg_pages(struct linux_binprm *bprm,
 	mm->arg_start = bprm->p - stack_shift;
 	bprm->p = vma->vm_end - stack_shift;
 #else
+	/*对栈顶再进行随机化处理*/
 	stack_top = arch_align_stack(stack_top);
+
+	/*进行页对齐处理*/
 	stack_top = PAGE_ALIGN(stack_top);
 
 	if (unlikely(stack_top < mmap_min_addr) ||
 	    unlikely(vma->vm_end - vma->vm_start >= stack_top - mmap_min_addr))
 		return -ENOMEM;
 
+	/*处理前后的空间差距*/
 	stack_shift = vma->vm_end - stack_top;
 
+	/*重新计算堆栈栈顶指针*/
 	bprm->p -= stack_shift;
+
+	/*指向栈中参数的起始地址*/
 	mm->arg_start = bprm->p;
 #endif
 
@@ -786,6 +793,7 @@ int setup_arg_pages(struct linux_binprm *bprm,
 		goto out_unlock;
 	BUG_ON(prev != vma);
 
+	/*对栈进行了随机处理后,重新调整vma*/
 	/* Move stack pages down in memory. */
 	if (stack_shift) {
 		ret = shift_arg_pages(vma, stack_shift);
@@ -796,6 +804,7 @@ int setup_arg_pages(struct linux_binprm *bprm,
 	/* mprotect_fixup is overkill to remove the temporary stack flags */
 	vma->vm_flags &= ~VM_STACK_INCOMPLETE_SETUP;
 
+	/*扩展堆栈的大小*/
 	stack_expand = 131072UL; /* randomly 32*4k (or 2*64k) pages */
 	stack_size = vma->vm_end - vma->vm_start;
 	/*
@@ -812,8 +821,10 @@ int setup_arg_pages(struct linux_binprm *bprm,
 	if (stack_size + stack_expand > rlim_stack)
 		stack_base = vma->vm_end - rlim_stack;
 	else
+		/*栈段扩展后的新的基地址*/
 		stack_base = vma->vm_start - stack_expand;
 #endif
+	/*把当前堆栈的栈顶赋值给start_stack*/
 	current->mm->start_stack = bprm->p;
 	ret = expand_stack(vma, stack_base);
 	if (ret)
@@ -1379,6 +1390,7 @@ void setup_new_exec(struct linux_binprm * bprm)
 			bprm->rlim_stack.rlim_cur = _STK_LIM;
 	}
 
+	/*获取mmap映射区的基地址和对应的获取映射区的函数*/
 	arch_pick_mmap_layout(current->mm, &bprm->rlim_stack);
 
 	current->sas_ss_sp = current->sas_ss_size = 0;
@@ -1397,12 +1409,15 @@ void setup_new_exec(struct linux_binprm * bprm)
 
 	arch_setup_new_exec();
 	perf_event_exec();
+
+	/*设置进程的名字*/
 	__set_task_comm(current, kbasename(bprm->filename), true);
 
 	/* Set the new mm task size. We have to do that late because it may
 	 * depend on TIF_32BIT which is only updated in flush_thread() on
 	 * some architectures like powerpc
 	 */
+	/*设置用户空间的最大值*/
 	current->mm->task_size = TASK_SIZE;
 
 	/* An exec changes our domain. We are no longer part of the thread

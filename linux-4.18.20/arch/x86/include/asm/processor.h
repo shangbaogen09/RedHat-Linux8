@@ -884,6 +884,7 @@ static inline void spin_lock_prefetch(const void *x)
 /*该地址为2^47减去一页的大小,也就是用户空间的最大值减去一页*/
 #define TASK_SIZE_MAX	((1UL << __VIRTUAL_MASK_SHIFT) - PAGE_SIZE)
 
+/*该地址为2^47减去一页的大小,也就是用户空间的最大值减去一页*/
 #define DEFAULT_MAP_WINDOW	((1UL << 47) - PAGE_SIZE)
 
 /* This decides where the kernel will search for a free chunk of vm

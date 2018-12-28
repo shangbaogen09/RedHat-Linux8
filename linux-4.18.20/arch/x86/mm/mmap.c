@@ -44,6 +44,7 @@ unsigned long task_size_32bit(void)
 	return IA32_PAGE_OFFSET;
 }
 
+/*返回64为用户空间的最大值*/
 unsigned long task_size_64bit(int full_addr_space)
 {
 	return full_addr_space ? TASK_SIZE_MAX : DEFAULT_MAP_WINDOW;
@@ -93,6 +94,7 @@ unsigned long arch_mmap_rnd(void)
 static unsigned long mmap_base(unsigned long rnd, unsigned long task_size,
 			       struct rlimit *rlim_stack)
 {
+	/*取出进程自己定义的堆栈大小*/
 	unsigned long gap = rlim_stack->rlim_cur;
 	unsigned long pad = stack_maxrandom_size(task_size) + stack_guard_gap;
 	unsigned long gap_min, gap_max;
@@ -105,20 +107,26 @@ static unsigned long mmap_base(unsigned long rnd, unsigned long task_size,
 	 * Top of mmap area (just below the process stack).
 	 * Leave an at least ~128 MB hole with possible stack randomization.
 	 */
+	/*堆栈预留的空间大小不能小于128M*/
 	gap_min = SIZE_128M;
+
+	/*堆栈预留的空间大小不能大于128T的5/6*/
 	gap_max = (task_size / 6) * 5;
 
+	/*检查用户自己定义的堆栈大小，确保在系统规定的范围内*/
 	if (gap < gap_min)
 		gap = gap_min;
 	else if (gap > gap_max)
 		gap = gap_max;
 
+	/*用户空间的最大值减去用户预留的堆栈空间，再减去一个随时数,则为mmap区的起始地址*/
 	return PAGE_ALIGN(task_size - gap - rnd);
 }
 
 static unsigned long mmap_legacy_base(unsigned long rnd,
 				      unsigned long task_size)
 {
+	/*用户空间地址的1/3处,加上随机值*/
 	return __TASK_UNMAPPED_BASE(task_size) + rnd;
 }
 
@@ -130,20 +138,29 @@ static void arch_pick_mmap_base(unsigned long *base, unsigned long *legacy_base,
 		unsigned long random_factor, unsigned long task_size,
 		struct rlimit *rlim_stack)
 {
+	
+	/*用户空间地址的1/3处,加上随机值random_factor*/
 	*legacy_base = mmap_legacy_base(random_factor, task_size);
+
+	/*如果是传统映射,则直接使用上面计算出的值*/
 	if (mmap_is_legacy())
 		*base = *legacy_base;
 	else
+		/*如果不是传统映射,需要使用如下方法进行计算*/
 		*base = mmap_base(random_factor, task_size, rlim_stack);
 }
 
 void arch_pick_mmap_layout(struct mm_struct *mm, struct rlimit *rlim_stack)
 {
+	/*对应的内核传统的(2.4版本)确定内存映射区域起始位置的方法*/
 	if (mmap_is_legacy())
+		/*从低地址向高地址在MMAP区域分配空闲的struct vm_area_struct对象*/
 		mm->get_unmapped_area = arch_get_unmapped_area;
 	else
+		/*从高地址向低地址在MMAP区域分配空闲的struct vm_area_struct对象*/
 		mm->get_unmapped_area = arch_get_unmapped_area_topdown;
 
+	/*获取mmap区域的基地址*/
 	arch_pick_mmap_base(&mm->mmap_base, &mm->mmap_legacy_base,
 			arch_rnd(mmap64_rnd_bits), task_size_64bit(0),
 			rlim_stack);
