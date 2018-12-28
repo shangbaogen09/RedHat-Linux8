@@ -1,0 +1,19 @@
+用vim时，想高亮显示一个单词并查找的方发，将光标移动到所找单词.
+1: shift + "*"  向下查找并高亮显示
+2: shift + "#"  向上查找并高亮显示
+3: "g" + "d"    高亮显示光标所属单词，"n" 查找！
+% 	跳转到配对的括号去
+vimrc的配置:
+"光标自动定位到上次关闭的位置处
+if has("autocmd")
+autocmd BufReadPost *
+\ if line("'\"") > 0 && line("'\"") <= line("$") |
+\   exe "normal g`\"" |
+\ endif
+endif
+
+"在项目根目录生成总的tags，任意子目录下即可自动加载
+set autochdir
+set tags=tags;
+
+
