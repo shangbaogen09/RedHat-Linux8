@@ -18,7 +18,7 @@
 #ifdef CONFIG_X86_32
 #define LOAD_OFFSET __PAGE_OFFSET
 #else
-/*具体的值为2G地址处*/
+/*具体的值为2G地址处,也就是内核的虚拟地址起始处*/
 #define LOAD_OFFSET __START_KERNEL_map
 #endif
 
@@ -103,7 +103,7 @@ SECTIONS
 	phys_startup_64 = ABSOLUTE(startup_64 - LOAD_OFFSET);
 #endif
 
-	/*代码段的起始地址为__START_KERNEL0xFFFFFFFF81000000*/
+	/*代码段的起始地址为__START_KERNEL=0xFFFFFFFF81000000*/
 	/* Text and read-only data */
 	/*关键字AT规定了这个节的加载地址(LVA),ADDR(.text)表示.text的起始地址,处理后链接地址为0x0000000001000000(16M)*/
 	.text :  AT(ADDR(.text) - LOAD_OFFSET) {

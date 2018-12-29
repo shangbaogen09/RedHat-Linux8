@@ -292,6 +292,7 @@ struct x86_apic_ops {
 	void		(*restore)(void);
 };
 
+/*x86标准平台相关的初始化函数*/
 extern struct x86_init_ops x86_init;
 extern struct x86_cpuinit_ops x86_cpuinit;
 extern struct x86_platform_ops x86_platform;

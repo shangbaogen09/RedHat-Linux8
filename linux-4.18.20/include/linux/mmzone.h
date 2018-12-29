@@ -359,6 +359,7 @@ enum zone_type {
 struct zone {
 	/* Read-mostly fields */
 
+	/*本内存域的三个水线值:高水线(比较充足),低水线，最低水线*/
 	/* zone watermarks, access with *_wmark_pages(zone) macros */
 	unsigned long watermark[NR_WMARK];
 
@@ -373,14 +374,21 @@ struct zone {
 	 * recalculated at runtime if the sysctl_lowmem_reserve_ratio sysctl
 	 * changes.
 	 */
+	/*为各个内存域指定了若干页，用于一些无论如何都不能失败的关键性内存分配*/
 	long lowmem_reserve[MAX_NR_ZONES];
 
+/*默认定义了CONFIG_NUMA=y*/
 #ifdef CONFIG_NUMA
+	/*所属的节点号*/
 	int node;
 #endif
+	/*zone所属的节点*/
 	struct pglist_data	*zone_pgdat;
+
+	/*实现每一个cpu的页帧缓存*/
 	struct per_cpu_pageset __percpu *pageset;
 
+/*默认定义了CONFIG_SPARSEMEM=y*/
 #ifndef CONFIG_SPARSEMEM
 	/*
 	 * Flags for a pageblock_nr_pages block. See pageblock-flags.h.
@@ -389,6 +397,7 @@ struct zone {
 	unsigned long		*pageblock_flags;
 #endif /* CONFIG_SPARSEMEM */
 
+	/*内存域第一个页帧的起始页帧号*/
 	/* zone_start_pfn == zone_start_paddr >> PAGE_SHIFT */
 	unsigned long		zone_start_pfn;
 
@@ -433,10 +442,16 @@ struct zone {
 	 * adjust_managed_page_count() should be used instead of directly
 	 * touching zone->managed_pages and totalram_pages.
 	 */
+	/*除掉启动内存管理器占用的页帧外*/
 	unsigned long		managed_pages;
+
+	/*页帧号的跨度*/
 	unsigned long		spanned_pages;
+
+	/*所含页帧数量*/
 	unsigned long		present_pages;
 
+	/*内存区的名字*/
 	const char		*name;
 
 #ifdef CONFIG_MEMORY_ISOLATION
@@ -458,15 +473,18 @@ struct zone {
 	/* Write-intensive fields used from the page allocator */
 	ZONE_PADDING(_pad1_)
 
+	/*记录buddy系统上的页帧,每个阶对应有不同的链表*/
 	/* free areas of different sizes */
 	struct free_area	free_area[MAX_ORDER];
 
+	/*zone的标志*/
 	/* zone flags, see below */
 	unsigned long		flags;
 
 	/* Primarily protects free_area */
 	spinlock_t		lock;
 
+	/*填充，cache行对齐*/
 	/* Write-intensive fields used by compaction and vmstats. */
 	ZONE_PADDING(_pad2_)
 
@@ -490,6 +508,7 @@ struct zone {
 	 * are skipped before trying again. The number attempted since
 	 * last failure is tracked with compact_considered.
 	 */
+	/*下面的标志用于判断是否需要在本管理区进行内存紧缩*/
 	unsigned int		compact_considered;
 	unsigned int		compact_defer_shift;
 	int			compact_order_failed;
@@ -502,7 +521,10 @@ struct zone {
 
 	bool			contiguous;
 
+	/*填充cache行对齐*/
 	ZONE_PADDING(_pad3_)
+
+	/*本内存域中页帧分类统计，有各个链表的长度值*/
 	/* Zone statistics */
 	atomic_long_t		vm_stat[NR_VM_ZONE_STAT_ITEMS];
 	atomic_long_t		vm_numa_stat[NR_VM_NUMA_STAT_ITEMS];
@@ -622,15 +644,25 @@ extern struct page *mem_map;
  */
 struct bootmem_data;
 typedef struct pglist_data {
+	/*本节上点的zone数组*/
 	struct zone node_zones[MAX_NR_ZONES];
+
+	/*内存分配的zone搜索顺序*/
 	struct zonelist node_zonelists[MAX_ZONELISTS];
+
+	/*本节点zone的数目*/
 	int nr_zones;
+
+	/*系统默认没有定义该宏*/
 #ifdef CONFIG_FLAT_NODE_MEM_MAP	/* means !SPARSEMEM */
+	/*指向本节点的page数组mem_map*/
 	struct page *node_mem_map;
 #ifdef CONFIG_PAGE_EXTENSION
 	struct page_ext *node_page_ext;
 #endif
 #endif
+
+/*内核配置CONFIG_NO_BOOTMEM=y*/
 #ifndef CONFIG_NO_BOOTMEM
 	struct bootmem_data *bdata;
 #endif
@@ -648,13 +680,22 @@ typedef struct pglist_data {
 	 */
 	spinlock_t node_size_lock;
 #endif
+	/*节点第一个页帧的编号*/
 	unsigned long node_start_pfn;
+
+	/*该节点的所有物理页，不包括空洞*/
 	unsigned long node_present_pages; /* total number of physical pages */
+
+	/*该节点的所有物理页，包括空洞*/
 	unsigned long node_spanned_pages; /* total size of physical page
 					     range, including holes */
+
+	/*节点号*/
 	int node_id;
 	wait_queue_head_t kswapd_wait;
 	wait_queue_head_t pfmemalloc_wait;
+
+	/*负责该节点的交换守护进程*/
 	struct task_struct *kswapd;	/* Protected by
 					   mem_hotplug_begin/end() */
 	int kswapd_order;
@@ -668,6 +709,8 @@ typedef struct pglist_data {
 	wait_queue_head_t kcompactd_wait;
 	struct task_struct *kcompactd;
 #endif
+
+/*下列成员与numa页帧迁移相关,默认CONFIG_NUMA_BALANCING没有定义*/
 #ifdef CONFIG_NUMA_BALANCING
 	/* Lock serializing the migrate rate limiting window */
 	spinlock_t numabalancing_migrate_lock;
@@ -688,7 +731,10 @@ typedef struct pglist_data {
 	/*
 	 * zone reclaim becomes active if more unmapped pages exist.
 	 */
+	/*当可回收的页，超过此值时，将进行页帧回收*/
 	unsigned long		min_unmapped_pages;
+
+	/*当slab的页，超过此值时，将进行页帧回收*/
 	unsigned long		min_slab_pages;
 #endif /* CONFIG_NUMA */
 

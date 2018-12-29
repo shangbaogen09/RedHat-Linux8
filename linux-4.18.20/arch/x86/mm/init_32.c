@@ -468,6 +468,7 @@ void __init sync_initial_page_table(void)
 			min(KERNEL_PGD_PTRS, KERNEL_PGD_BOUNDARY));
 }
 
+/*x86平台架构相关的物理内存初始化*/
 void __init native_pagetable_init(void)
 {
 	unsigned long pfn, va;

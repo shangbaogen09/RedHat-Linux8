@@ -37,6 +37,7 @@ static u64 u64_x86_init_noop(void) { return 0; }
  * The platform setup functions are preset with the default functions
  * for standard PC hardware.
  */
+/*标准x86默认的初始化函数*/
 struct x86_init_ops x86_init __initdata = {
 
 	.resources = {

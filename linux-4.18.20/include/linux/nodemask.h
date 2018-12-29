@@ -391,8 +391,10 @@ static inline void __nodes_fold(nodemask_t *dstp, const nodemask_t *origp,
 enum node_states {
 	N_POSSIBLE,		/* The node could become online at some point */
 	N_ONLINE,		/* The node is online */
+	/*节点有普通内存*/
 	N_NORMAL_MEMORY,	/* The node has regular memory */
 #ifdef CONFIG_HIGHMEM
+	/*节点有高端内存*/
 	N_HIGH_MEMORY,		/* The node has regular or high memory */
 #else
 	N_HIGH_MEMORY = N_NORMAL_MEMORY,

@@ -40,9 +40,11 @@
 	(((current->personality & READ_IMPLIES_EXEC) ? VM_EXEC : 0 ) | \
 	 VM_READ | VM_WRITE | VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC)
 
+/*Linux内核的物理基址: #define CONFIG_PHYSICAL_START 0x1000000 (16M),并且以2M对齐*/
 #define __PHYSICAL_START	ALIGN(CONFIG_PHYSICAL_START, \
 				      CONFIG_PHYSICAL_ALIGN)
 
+/*Linux内核的虚拟基址-0xffffffff81000000*/
 #define __START_KERNEL		(__START_KERNEL_map + __PHYSICAL_START)
 
 #ifdef CONFIG_X86_64
