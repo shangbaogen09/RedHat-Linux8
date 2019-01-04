@@ -37,8 +37,13 @@
 #define PAGE_ALLOC_COSTLY_ORDER 3
 
 enum migratetype {
+	/*不可移动页,在内存位置固定不可移动*/
 	MIGRATE_UNMOVABLE,
+
+	/*可移动页，可以任意移动*/
 	MIGRATE_MOVABLE,
+
+	/*可回收页，不能直接移动但可删除,其内容可以从后备设备上重新生成*/
 	MIGRATE_RECLAIMABLE,
 	MIGRATE_PCPTYPES,	/* the number of types on the pcp lists */
 	MIGRATE_HIGHATOMIC = MIGRATE_PCPTYPES,
@@ -267,20 +272,32 @@ enum zone_watermarks {
 	NR_WMARK
 };
 
+/*空闲页面数量少于该值，说明内存压力很大急需回收内存*/
 #define min_wmark_pages(z) (z->watermark[WMARK_MIN])
+
+/*空闲页面低于该值，说明内核需要开始将页面换出到磁盘*/
 #define low_wmark_pages(z) (z->watermark[WMARK_LOW])
+
+/*空闲页面多余该值，表示没有任何压力*/
 #define high_wmark_pages(z) (z->watermark[WMARK_HIGH])
 
 struct per_cpu_pages {
+	/*页帧数量*/
 	int count;		/* number of pages in the list */
+
+	/*上限*/
 	int high;		/* high watermark, emptying needed */
+
+	/*从伙伴系统一次获取的内存大小*/
 	int batch;		/* chunk size for buddy add/remove */
 
+	/*页帧缓存按迁移特性的链表*/
 	/* Lists of pages, one per migrate type stored on the pcp-lists */
 	struct list_head lists[MIGRATE_PCPTYPES];
 };
 
 struct per_cpu_pageset {
+	/*该成员管理页帧缓存*/
 	struct per_cpu_pages pcp;
 #ifdef CONFIG_NUMA
 	s8 expire;
@@ -1162,6 +1179,8 @@ struct mem_section {
 	 * Making it a UL at least makes someone do a cast
 	 * before using it wrong.
 	 */
+    /*对应的内存是动态分配的,如果这个section对应的物理内存不存在，即便是mem_section的
+	  空间会被分配，其对应的struct page的空间是不会被分配的*/
 	unsigned long section_mem_map;
 
 	/* See declaration of similar field in struct zone */

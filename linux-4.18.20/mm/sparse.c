@@ -22,6 +22,7 @@
  *
  * 1) mem_section	- memory sections, mem_map's for valid memory
  */
+/*默认定义为CONFIG_SPARSEMEM_EXTREME=y*/
 #ifdef CONFIG_SPARSEMEM_EXTREME
 struct mem_section **mem_section;
 #else

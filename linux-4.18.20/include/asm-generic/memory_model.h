@@ -28,11 +28,13 @@
 /*
  * supports 3 memory models.
  */
+/*支持的3种内存模型，第一个是平坦内存模型*/
 #if defined(CONFIG_FLATMEM)
 
 #define __pfn_to_page(pfn)	(mem_map + ((pfn) - ARCH_PFN_OFFSET))
 #define __page_to_pfn(page)	((unsigned long)((page) - mem_map) + \
 				 ARCH_PFN_OFFSET)
+/*第二种不连续内存模型*/
 #elif defined(CONFIG_DISCONTIGMEM)
 
 #define __pfn_to_page(pfn)			\
@@ -48,6 +50,7 @@
 	 __pgdat->node_start_pfn;					\
 })
 
+/*稀疏内存模型*/
 #elif defined(CONFIG_SPARSEMEM_VMEMMAP)
 
 /* memmap is virtually contiguous.  */
