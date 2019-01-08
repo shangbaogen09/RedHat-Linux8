@@ -138,6 +138,8 @@ static inline void pud_populate(struct mm_struct *mm, pud_t *pud, pmd_t *pmd)
 static inline void p4d_populate(struct mm_struct *mm, p4d_t *p4d, pud_t *pud)
 {
 	paravirt_alloc_pud(mm, __pa(pud) >> PAGE_SHIFT);
+
+	/*把对应的值设置到页表项中*/
 	set_p4d(p4d, __p4d(_PAGE_TABLE | __pa(pud)));
 }
 
@@ -147,6 +149,8 @@ static inline pud_t *pud_alloc_one(struct mm_struct *mm, unsigned long addr)
 
 	if (mm == &init_mm)
 		gfp &= ~__GFP_ACCOUNT;
+
+	/*向系统分配一页用户pud表*/
 	return (pud_t *)get_zeroed_page(gfp);
 }
 

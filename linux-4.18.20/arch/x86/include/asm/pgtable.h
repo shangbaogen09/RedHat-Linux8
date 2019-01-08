@@ -902,6 +902,7 @@ static inline unsigned long p4d_index(unsigned long address)
 	return (address >> P4D_SHIFT) & (PTRS_PER_P4D - 1);
 }
 
+/*内核默认的配置CONFIG_PGTABLE_LEVELS=4*/
 #if CONFIG_PGTABLE_LEVELS > 4
 static inline int pgd_present(pgd_t pgd)
 {
@@ -964,6 +965,7 @@ static inline int pgd_none(pgd_t pgd)
  * this macro returns the index of the entry in the pgd page which would
  * control the given virtual address
  */
+/*定义的pgd偏移为#define PGDIR_SHIFT 39, 其中PTRS_PER_PGD为512*/
 #define pgd_index(address) (((address) >> PGDIR_SHIFT) & (PTRS_PER_PGD - 1))
 
 /*
@@ -979,6 +981,7 @@ static inline int pgd_none(pgd_t pgd)
  * a shortcut which implies the use of the kernel's pgd, instead
  * of a process's
  */
+/*获取原始内核页表的pgd项*/
 #define pgd_offset_k(address) pgd_offset(&init_mm, (address))
 
 /*取出内核空间起始地址在顶级的页表pgd中的偏移量,也即是用户空间的pgd个数*/

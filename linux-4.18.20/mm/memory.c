@@ -4202,6 +4202,7 @@ int __p4d_alloc(struct mm_struct *mm, pgd_t *pgd, unsigned long address)
  */
 int __pud_alloc(struct mm_struct *mm, p4d_t *p4d, unsigned long address)
 {
+	/*为pud分配一页物理内存*/
 	pud_t *new = pud_alloc_one(mm, address);
 	if (!new)
 		return -ENOMEM;
@@ -4210,8 +4211,11 @@ int __pud_alloc(struct mm_struct *mm, p4d_t *p4d, unsigned long address)
 
 	spin_lock(&mm->page_table_lock);
 #ifndef __ARCH_HAS_5LEVEL_HACK
+	/*如果页表中_PAGE_PRESENT位没有置位*/
 	if (!p4d_present(*p4d)) {
 		mm_inc_nr_puds(mm);
+
+		/*进行页表项的填写处理*/
 		p4d_populate(mm, p4d, new);
 	} else	/* Another has populated it */
 		pud_free(mm, new);
@@ -4223,6 +4227,8 @@ int __pud_alloc(struct mm_struct *mm, p4d_t *p4d, unsigned long address)
 		pud_free(mm, new);
 #endif /* __ARCH_HAS_5LEVEL_HACK */
 	spin_unlock(&mm->page_table_lock);
+
+	/*向上层调用返回0*/
 	return 0;
 }
 #endif /* __PAGETABLE_PUD_FOLDED */

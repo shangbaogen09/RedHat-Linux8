@@ -52,11 +52,16 @@ unsigned int ptrs_per_p4d __ro_after_init = 1;
 EXPORT_SYMBOL(ptrs_per_p4d);
 #endif
 
+/*默认配置CONFIG_DYNAMIC_MEMORY_LAYOUT=y*/
 #ifdef CONFIG_DYNAMIC_MEMORY_LAYOUT
 unsigned long page_offset_base __ro_after_init = __PAGE_OFFSET_BASE_L4;
 EXPORT_SYMBOL(page_offset_base);
+
+/*vmalloc区的起始地址#define __VMALLOC_BASE_L4   0xffffc90000000000UL*/
 unsigned long vmalloc_base __ro_after_init = __VMALLOC_BASE_L4;
 EXPORT_SYMBOL(vmalloc_base);
+
+/*vmemmap区的起始地址#define __VMEMMAP_BASE_L4   0xffffea0000000000UL*/
 unsigned long vmemmap_base __ro_after_init = __VMEMMAP_BASE_L4;
 EXPORT_SYMBOL(vmemmap_base);
 #endif

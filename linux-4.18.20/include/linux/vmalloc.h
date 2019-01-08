@@ -14,8 +14,13 @@ struct vm_area_struct;		/* vma defining user mapping in mm_types.h */
 struct notifier_block;		/* in notifier.h */
 
 /* bits in flags of vmalloc's vm_struct below */
+/*表示通过ioremap将硬件的内存映射到内核的一段内存区*/
 #define VM_IOREMAP		0x00000001	/* ioremap() and friends */
+
+/*表示由vmalloc映射的内存区*/
 #define VM_ALLOC		0x00000002	/* vmalloc() */
+
+/*表示通过vmap映射的内存区*/
 #define VM_MAP			0x00000004	/* vmap()ed pages */
 #define VM_USERMAP		0x00000008	/* suitable for remap_vmalloc_range */
 #define VM_UNINITIALIZED	0x00000020	/* vm_struct is not fully initialized */
@@ -31,24 +36,45 @@ struct notifier_block;		/* in notifier.h */
 #define IOREMAP_MAX_ORDER	(7 + PAGE_SHIFT)	/* 128 pages */
 #endif
 
+/*管理vmalloc区中段的结构体*/
 struct vm_struct {
+	/*构成链表*/
 	struct vm_struct	*next;
+
+	/*该vm的起始虚地址*/
 	void			*addr;
+
+	/*该vm的大小,按字节计算*/
 	unsigned long		size;
+
+	/*表示该非连续内存区的类型*/
 	unsigned long		flags;
+
+	/*指向所映射的page数组*/
 	struct page		**pages;
+
+	/*page数组的页帧数量*/
 	unsigned int		nr_pages;
+
+	/*ioremap映射时，需要填写该字段*/
 	phys_addr_t		phys_addr;
 	const void		*caller;
 };
 
 struct vmap_area {
+	/*起点虚地址*/
 	unsigned long va_start;
+
+	/*终点虚地址*/
 	unsigned long va_end;
 	unsigned long flags;
+
+	/*链入红黑树的节点*/
 	struct rb_node rb_node;         /* address sorted rbtree */
 	struct list_head list;          /* address sorted list */
 	struct llist_node purge_list;    /* "lazy purge" list */
+	
+	/*指向配对的vm_struct*/
 	struct vm_struct *vm;
 	struct rcu_head rcu_head;
 };

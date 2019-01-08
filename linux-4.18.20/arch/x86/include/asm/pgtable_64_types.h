@@ -20,6 +20,7 @@ typedef unsigned long	pgprotval_t;
 
 typedef struct { pteval_t pte; } pte_t;
 
+/*默认没有定义CONFIG_X86_5LEVEL*/
 #ifdef CONFIG_X86_5LEVEL
 extern unsigned int __pgtable_l5_enabled;
 
@@ -37,6 +38,8 @@ static inline bool pgtable_l5_enabled(void)
 #endif /* USE_EARLY_PGTABLE_L5 */
 
 #else
+
+/*系统默认pgtable_l5_enabled宏为0*/
 #define pgtable_l5_enabled() 0
 #endif /* CONFIG_X86_5LEVEL */
 
@@ -48,6 +51,7 @@ extern unsigned int ptrs_per_p4d;
 /*默认定义的SHARED_KERNEL_PMD为0*/
 #define SHARED_KERNEL_PMD	0
 
+/*内核配置文件默认没有定义CONFIG_X86_5LEVEL宏*/
 #ifdef CONFIG_X86_5LEVEL
 
 /*
@@ -129,9 +133,16 @@ extern unsigned int ptrs_per_p4d;
 #define __VMEMMAP_BASE_L4	0xffffea0000000000UL
 #define __VMEMMAP_BASE_L5	0xffd4000000000000UL
 
+/*默认配置CONFIG_DYNAMIC_MEMORY_LAYOUT=y*/
 #ifdef CONFIG_DYNAMIC_MEMORY_LAYOUT
+
+/*vmalloc区的起始地址#define __VMALLOC_BASE_L4   0xffffc90000000000UL*/
 # define VMALLOC_START		vmalloc_base
+
+/*系统默认pgtable_l5_enabled宏为0,所以返回值为VMALLOC_SIZE_TB_L4=32TB*/
 # define VMALLOC_SIZE_TB	(pgtable_l5_enabled() ? VMALLOC_SIZE_TB_L5 : VMALLOC_SIZE_TB_L4)
+
+/*vmemmap区的起始地址#define __VMEMMAP_BASE_L4   0xffffea0000000000UL*/
 # define VMEMMAP_START		vmemmap_base
 #else
 # define VMALLOC_START		__VMALLOC_BASE_L4
@@ -139,6 +150,7 @@ extern unsigned int ptrs_per_p4d;
 # define VMEMMAP_START		__VMEMMAP_BASE_L4
 #endif /* CONFIG_DYNAMIC_MEMORY_LAYOUT */
 
+/*vmalloc区的终点*/
 #define VMALLOC_END		(VMALLOC_START + (VMALLOC_SIZE_TB << 40) - 1)
 
 #define MODULES_VADDR		(__START_KERNEL_map + KERNEL_IMAGE_SIZE)
