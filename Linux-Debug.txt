@@ -111,3 +111,8 @@ alias vlmstart='ssh -Y pek-hig2.wrs.com /folk/vlm/bin/vlmstart'
 vlmstart is aliased to `ssh -Y pek-hig2.wrs.com /folk/vlm/bin/vlmstart'
 [pek-lpd-ccm1:~]$
 
+Linux backport patches steps:
+1.先使用git am命令打patch,如果失败使用patch -p1 < ~/test.patch打patch.
+2.如果打不上patch,则手动修改.
+3.修改完成后,使用git add ~/modify.file
+4.使用git am --resolved再次应用,就能把原始patch的log打上.
