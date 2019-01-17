@@ -483,12 +483,14 @@ static inline struct page *alloc_pages_node(int nid, gfp_t gfp_mask,
 	return __alloc_pages_node(nid, gfp_mask, order);
 }
 
+/*系统默认定义了CONFIG_NUMA=y*/
 #ifdef CONFIG_NUMA
 extern struct page *alloc_pages_current(gfp_t gfp_mask, unsigned order);
 
 static inline struct page *
 alloc_pages(gfp_t gfp_mask, unsigned int order)
 {
+	/*继续调用该函数完成分配工作*/
 	return alloc_pages_current(gfp_mask, order);
 }
 extern struct page *alloc_pages_vma(gfp_t gfp_mask, int order,

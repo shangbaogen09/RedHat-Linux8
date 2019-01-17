@@ -272,6 +272,8 @@ static inline void __check_heap_object(const void *ptr, unsigned long n,
 
 /* Maximum allocatable size */
 #define KMALLOC_MAX_SIZE	(1UL << KMALLOC_SHIFT_MAX)
+
+/*kmalloc分配的最大大小为2个page*/
 /* Maximum size for which we actually use a slab cache */
 #define KMALLOC_MAX_CACHE_SIZE	(1UL << KMALLOC_SHIFT_HIGH)
 /* Maximum order allocatable via the slab allocagtor */
@@ -443,7 +445,10 @@ kmalloc_order_trace(size_t size, gfp_t flags, unsigned int order)
 
 static __always_inline void *kmalloc_large(size_t size, gfp_t flags)
 {
+	/*获取该size的order*/
 	unsigned int order = get_order(size);
+
+	/*把order作为参数调用页面分配器进行分配*/
 	return kmalloc_order_trace(size, flags, order);
 }
 
@@ -498,9 +503,13 @@ static __always_inline void *kmalloc_large(size_t size, gfp_t flags)
  * for general use, and so are not documented here. For a full list of
  * potential flags, always refer to linux/gfp.h.
  */
+/*内核kmalloc的实现,传入的参数为分配的内存大小和掩码*/
 static __always_inline void *kmalloc(size_t size, gfp_t flags)
 {
+	/*编译器gcc内置函数，用于判断一个值是否为编译时常量，如果是常数，函数返回1 ，否则返回0*/
 	if (__builtin_constant_p(size)) {
+
+		/*如果所分配的大小大于2个page,则调用kmalloc_large进行处理*/
 		if (size > KMALLOC_MAX_CACHE_SIZE)
 			return kmalloc_large(size, flags);
 #ifndef CONFIG_SLOB
@@ -515,6 +524,8 @@ static __always_inline void *kmalloc(size_t size, gfp_t flags)
 		}
 #endif
 	}
+
+	/*继续调用__kmalloc完成内存分配*/
 	return __kmalloc(size, flags);
 }
 

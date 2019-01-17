@@ -34,6 +34,7 @@
 #define __pfn_to_page(pfn)	(mem_map + ((pfn) - ARCH_PFN_OFFSET))
 #define __page_to_pfn(page)	((unsigned long)((page) - mem_map) + \
 				 ARCH_PFN_OFFSET)
+
 /*第二种不连续内存模型*/
 #elif defined(CONFIG_DISCONTIGMEM)
 
@@ -50,13 +51,14 @@
 	 __pgdat->node_start_pfn;					\
 })
 
-/*稀疏内存模型*/
+/*稀疏内存模型,内核默认定义了CONFIG_SPARSEMEM_VMEMMAP=y*/
 #elif defined(CONFIG_SPARSEMEM_VMEMMAP)
 
 /* memmap is virtually contiguous.  */
 #define __pfn_to_page(pfn)	(vmemmap + (pfn))
 #define __page_to_pfn(page)	(unsigned long)((page) - vmemmap)
 
+/*默认定义了该宏CONFIG_SPARSEMEM=y*/
 #elif defined(CONFIG_SPARSEMEM)
 /*
  * Note: section's mem_map is encoded to reflect its start_pfn.

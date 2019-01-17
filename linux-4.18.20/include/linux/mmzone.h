@@ -870,6 +870,7 @@ static inline struct pglist_data *lruvec_pgdat(struct lruvec *lruvec)
 
 extern unsigned long lruvec_lru_size(struct lruvec *lruvec, enum lru_list lru, int zone_idx);
 
+/*系统默认定义CONFIG_HAVE_MEMORY_PRESENT=y*/
 #ifdef CONFIG_HAVE_MEMORY_PRESENT
 void memory_present(int nid, unsigned long start, unsigned long end);
 #else
@@ -1138,10 +1139,14 @@ static inline unsigned long early_pfn_to_nid(unsigned long pfn)
  * PFN_SECTION_SHIFT		pfn to/from section number
  */
 #define PA_SECTION_SHIFT	(SECTION_SIZE_BITS)
+
+/*每个section包含的bit数目*/
 #define PFN_SECTION_SHIFT	(SECTION_SIZE_BITS - PAGE_SHIFT)
 
+/*定义系统能支持的section数目,2^19,在编译时，就已经将section的总数按照最大可支持的物理内存设置好*/
 #define NR_MEM_SECTIONS		(1UL << SECTIONS_SHIFT)
 
+/*系统中每个section包含多少page*/
 #define PAGES_PER_SECTION       (1UL << PFN_SECTION_SHIFT)
 #define PAGE_SECTION_MASK	(~(PAGES_PER_SECTION-1))
 
@@ -1152,10 +1157,13 @@ static inline unsigned long early_pfn_to_nid(unsigned long pfn)
 #error Allocator MAX_ORDER exceeds SECTION_SIZE
 #endif
 
+/*由pfn号计算出section的编号*/
 static inline unsigned long pfn_to_section_nr(unsigned long pfn)
 {
 	return pfn >> PFN_SECTION_SHIFT;
 }
+
+/*由section的编号计算出该section中第一个pfn的编号*/
 static inline unsigned long section_nr_to_pfn(unsigned long sec)
 {
 	return sec << PFN_SECTION_SHIFT;
@@ -1200,15 +1208,22 @@ struct mem_section {
 };
 
 #ifdef CONFIG_SPARSEMEM_EXTREME
+/*一个root中包含的section数目*/
 #define SECTIONS_PER_ROOT       (PAGE_SIZE / sizeof (struct mem_section))
 #else
 #define SECTIONS_PER_ROOT	1
 #endif
 
+/*将所有的section划分为若干个ROOT，通过section_nr/SECTIONS_PER_ROOT即可得到section_nr的ROOT*/
 #define SECTION_NR_TO_ROOT(sec)	((sec) / SECTIONS_PER_ROOT)
+
+/*系统中的section一共可以分成多少root*/
 #define NR_SECTION_ROOTS	DIV_ROUND_UP(NR_MEM_SECTIONS, SECTIONS_PER_ROOT)
+
+/*通过section_nr&SECTION_ROOT_MASK得到section_nr在ROOT中的下标，即可定位对应的mem_section结构体*/
 #define SECTION_ROOT_MASK	(SECTIONS_PER_ROOT - 1)
 
+/*内核默认配置了CONFIG_SPARSEMEM_EXTREME=y*/
 #ifdef CONFIG_SPARSEMEM_EXTREME
 extern struct mem_section **mem_section;
 #else
@@ -1223,6 +1238,8 @@ static inline struct mem_section *__nr_to_section(unsigned long nr)
 #endif
 	if (!mem_section[SECTION_NR_TO_ROOT(nr)])
 		return NULL;
+
+	/*通过section编号获取对应的section结构体*/
 	return &mem_section[SECTION_NR_TO_ROOT(nr)][nr & SECTION_ROOT_MASK];
 }
 extern int __section_nr(struct mem_section* ms);
@@ -1241,7 +1258,10 @@ extern unsigned long usemap_size(void);
  *      which results in PFN_SECTION_SHIFT equal 6.
  * To sum it up, at least 6 bits are available.
  */
+/*bit0表示该section对应的物理内存当前是否可用*/
 #define	SECTION_MARKED_PRESENT	(1UL<<0)
+
+/*bit1表示该section是否有对应的mem_map*/
 #define SECTION_HAS_MEM_MAP	(1UL<<1)
 #define SECTION_IS_ONLINE	(1UL<<2)
 #define SECTION_MAP_LAST_BIT	(1UL<<3)
@@ -1265,6 +1285,7 @@ static inline int present_section_nr(unsigned long nr)
 	return present_section(__nr_to_section(nr));
 }
 
+/*判断该section是否有对应的mem_map*/
 static inline int valid_section(struct mem_section *section)
 {
 	return (section && (section->section_mem_map & SECTION_HAS_MEM_MAP));

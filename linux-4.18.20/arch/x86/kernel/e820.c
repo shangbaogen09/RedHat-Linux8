@@ -1243,7 +1243,7 @@ void __init e820__memory_setup(void)
 	pr_info("BIOS-provided physical RAM map:\n");
 	e820__print_table(who);
 }
-
+/*把e820数组加入到memblock全局变量中*/
 void __init e820__memblock_setup(void)
 {
 	int i;
@@ -1261,12 +1261,20 @@ void __init e820__memblock_setup(void)
 	 */
 	memblock_allow_resize();
 
+	/*遍历e820表的各个表项*/
 	for (i = 0; i < e820_table->nr_entries; i++) {
+
+		/*取出e820数组的各个entry条目*/
 		struct e820_entry *entry = &e820_table->entries[i];
 
+		/*计算该条目的结束地址*/
 		end = entry->addr + entry->size;
+
+		/*如果该起始地址，则直接把该空洞区域添加到reserve区*/
 		if (addr < entry->addr)
 			memblock_reserve(addr, entry->addr - addr);
+
+		/*记录下次的起始地址*/
 		addr = end;
 		if (end != (resource_size_t)end)
 			continue;
@@ -1276,9 +1284,11 @@ void __init e820__memblock_setup(void)
 		 * into memblock.reserved to make sure that struct pages in
 		 * such regions are not left uninitialized after bootup.
 		 */
+		/*如果类型不是E820_TYPE_RAM和E820_TYPE_RESERVED_KERN,则也要添加到reserve区*/
 		if (entry->type != E820_TYPE_RAM && entry->type != E820_TYPE_RESERVED_KERN)
 			memblock_reserve(entry->addr, entry->size);
 		else
+			/*否则，添加该内存区到memory区*/
 			memblock_add(entry->addr, entry->size);
 	}
 

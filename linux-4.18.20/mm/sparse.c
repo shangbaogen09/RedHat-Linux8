@@ -63,29 +63,37 @@ static inline void set_section_nid(unsigned long section_nr, int nid)
 static noinline struct mem_section __ref *sparse_index_alloc(int nid)
 {
 	struct mem_section *section = NULL;
+
+	/*计算分配数组项的大小*/
 	unsigned long array_size = SECTIONS_PER_ROOT *
 				   sizeof(struct mem_section);
 
+	/*向系统分配对应的内存大小*/
 	if (slab_is_available())
 		section = kzalloc_node(array_size, GFP_KERNEL, nid);
 	else
 		section = memblock_virt_alloc_node(array_size, nid);
 
+	/*向上层返回分配到的数组首地址*/
 	return section;
 }
 
 static int __meminit sparse_index_init(unsigned long section_nr, int nid)
 {
+	/*通过section_nr计算出root对应的下标号*/
 	unsigned long root = SECTION_NR_TO_ROOT(section_nr);
 	struct mem_section *section;
 
+	/*如果root对应的数组项下标已经存在，则返回对应的错误码*/
 	if (mem_section[root])
 		return -EEXIST;
 
+	/*为对应的数组项分配空间*/
 	section = sparse_index_alloc(nid);
 	if (!section)
 		return -ENOMEM;
 
+	/*把分配到的内存放到对应下标的数组项位置*/
 	mem_section[root] = section;
 
 	return 0;
@@ -210,6 +218,7 @@ void __init memory_present(int nid, unsigned long start, unsigned long end)
 	if (unlikely(!mem_section)) {
 		unsigned long size, align;
 
+		/*完成mem_section数组的申请（只有超稀疏内存才有此步骤）*/
 		size = sizeof(struct mem_section*) * NR_SECTION_ROOTS;
 		align = 1 << (INTERNODE_CACHE_SHIFT);
 		mem_section = memblock_virt_alloc(size, align);
@@ -217,15 +226,28 @@ void __init memory_present(int nid, unsigned long start, unsigned long end)
 #endif
 
 	start &= PAGE_SECTION_MASK;
+
+	/*确定可用内存的最大最小pfn*/
 	mminit_validate_memmodel_limits(&start, &end);
+
+	/*以section为单位进行如下处理*/
 	for (pfn = start; pfn < end; pfn += PAGES_PER_SECTION) {
+
+		/*通过pfn计算section号*/
 		unsigned long section = pfn_to_section_nr(pfn);
 		struct mem_section *ms;
 
+	    /*对于一般的稀疏内存，sparse_index_init()为空,对于超稀疏内存：已经定义了一个全局的
+		  mem_section **mem_section指针，这里为可用物理内存对应ROOT的mem_section申请空间*/
 		sparse_index_init(section, nid);
+
+		/*建立section和node的对应关系*/
 		set_section_nid(section, nid);
 
+		/*通过section编号获取对应的section结构体*/
 		ms = __nr_to_section(section);
+
+		/*设置section的标识SECTION_MARKED_PRESENT，表示该section是存在的*/
 		if (!ms->section_mem_map) {
 			ms->section_mem_map = sparse_encode_early_nid(nid) |
 							SECTION_IS_ONLINE;
@@ -265,7 +287,10 @@ static int __meminit sparse_init_one_section(struct mem_section *ms,
 	if (!present_section(ms))
 		return -EINVAL;
 
+	/将section_mem_map成员的"地址段"清零/
 	ms->section_mem_map &= ~SECTION_MAP_MASK;
+
+	/*赋值section_mem_map成员的"地址段"*/
 	ms->section_mem_map |= sparse_encode_mem_map(mem_map, pnum) |
 							SECTION_HAS_MEM_MAP;
  	ms->pageblock_flags = pageblock_bitmap;
@@ -538,6 +563,8 @@ void __init sparse_init(void)
 	unsigned long *usemap;
 	unsigned long **usemap_map;
 	int size;
+
+/*系统默认定义CONFIG_SPARSEMEM_ALLOC_MEM_MAP_TOGETHER=y*/
 #ifdef CONFIG_SPARSEMEM_ALLOC_MEM_MAP_TOGETHER
 	int size2;
 	struct page **map_map;
@@ -560,10 +587,13 @@ void __init sparse_init(void)
 	 * powerpc need to call sparse_init_one_section right after each
 	 * sparse_early_mem_map_alloc, so allocate usemap_map at first.
 	 */
+	/*申请一个NR_MEM_SECTIONS(理论最大section数)大小的page*数组*/
 	size = sizeof(unsigned long *) * NR_MEM_SECTIONS;
 	usemap_map = memblock_virt_alloc(size, 0);
 	if (!usemap_map)
 		panic("can not allocate usemap_map\n");
+
+	/*为每个可用section分配一个page* mem_map, 并暂时用usemap_map数组来保存mem_map的地址*/
 	alloc_usemap_and_memmap(sparse_early_usemaps_alloc_node,
 							(void *)usemap_map);
 
@@ -576,25 +606,29 @@ void __init sparse_init(void)
 							(void *)map_map);
 #endif
 
+	/*遍历所有的section*/
 	for_each_present_section_nr(0, pnum) {
 		usemap = usemap_map[pnum];
 		if (!usemap)
 			continue;
 
 #ifdef CONFIG_SPARSEMEM_ALLOC_MEM_MAP_TOGETHER
+		/*在mam_map数组中取第pnum个page*作为初始化pnum号section的参数（用于其section_mem_map成员的初始化)*/
 		map = map_map[pnum];
 #else
 		map = sparse_early_mem_map_alloc(pnum);
 #endif
 		if (!map)
 			continue;
-
+		
+		/*初始化pnum号section的mem_section结构体*/
 		sparse_init_one_section(__nr_to_section(pnum), pnum, map,
 								usemap);
 	}
 
 	vmemmap_populate_print_last();
 
+	/*section和其对应的mem_map映射关系初始化完成，释放map_map数组*/
 #ifdef CONFIG_SPARSEMEM_ALLOC_MEM_MAP_TOGETHER
 	memblock_free_early(__pa(map_map), size2);
 #endif

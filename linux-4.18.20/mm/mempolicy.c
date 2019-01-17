@@ -2118,10 +2118,12 @@ struct page *alloc_pages_current(gfp_t gfp, unsigned order)
 	if (pol->mode == MPOL_INTERLEAVE)
 		page = alloc_page_interleave(gfp, order, interleave_nodes(pol));
 	else
+		/*调用该函数进行分配,该函数是伙伴系统的核心函数*/
 		page = __alloc_pages_nodemask(gfp, order,
 				policy_node(gfp, pol, numa_node_id()),
 				policy_nodemask(gfp, pol));
 
+	/*向上层调用返回分配到的page结构体*/
 	return page;
 }
 EXPORT_SYMBOL(alloc_pages_current);

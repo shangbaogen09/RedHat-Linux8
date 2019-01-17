@@ -27,6 +27,7 @@
 #ifdef CONFIG_SPARSEMEM
 #include <asm/sparsemem.h>
 
+/*section的偏移:46-27=19*/
 /* SECTION_SHIFT	#bits space required to store a section # */
 #define SECTIONS_SHIFT	(MAX_PHYSMEM_BITS - SECTION_SIZE_BITS)
 

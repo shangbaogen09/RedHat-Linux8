@@ -39,10 +39,14 @@ enum stat_item {
 	NR_SLUB_STAT_ITEMS };
 
 struct kmem_cache_cpu {
+	/*指向该working slab的第一个空闲object*/
 	void **freelist;	/* Pointer to next available object */
 	unsigned long tid;	/* Globally unique transaction id */
+
+	/*指向正在操作的,被冻结私有slab(称为working slab)*/
 	struct page *page;	/* The slab from which we are allocating */
 #ifdef CONFIG_SLUB_CPU_PARTIAL
+	/*每个cpu都会通过kmem_cache_cpu->partial链表头管理自己的部分满slab(通过slab的第一个page描述符lru成员)*/
 	struct page *partial;	/* Partially allocated frozen slabs */
 #endif
 #ifdef CONFIG_SLUB_STATS
@@ -80,29 +84,57 @@ struct kmem_cache_order_objects {
  * Slab cache management.
  */
 struct kmem_cache {
+	/*各个cpu私有的slab*/
 	struct kmem_cache_cpu __percpu *cpu_slab;
 	/* Used for retriving partial slabs etc */
 	slab_flags_t flags;
+
+	/*表示partial链中需要保持的最小的slab对象数*/
 	unsigned long min_partial;
+
+	/*slab块内一个object的总大小,包括object_size,word对齐填充字节,object对齐填充,空闲对象指针*/
 	unsigned int size;	/* The size of an object including meta data */
+
+	/*这种slab缓存object的实际大小,既能存储数据的空间大小*/
 	unsigned int object_size;/* The size of an object without meta data */
+
+	/*空闲object指针的偏移*/
 	unsigned int offset;	/* Free pointer offset. */
+
+	/*表示kmem_cache_cpu结构中partinal指针指向的冻结slab中包含的空闲object总数量的一个阈值,
+	  超过这个值后,kmem_cache_cpu->partial指针指向的冻结slab会被挂到缓存的部分满链表中*/
 #ifdef CONFIG_SLUB_CPU_PARTIAL
 	/* Number of per cpu partial objects to keep around */
 	unsigned int cpu_partial;
 #endif
+	/*分配给slab的页帧的阶数(高16位)和slab中对象数量(低16位)*/
 	struct kmem_cache_order_objects oo;
 
 	/* Allocation and freeing of slabs */
+	/*表示在向buddy系统首次尝试申请物理页帧时的阶数*/
 	struct kmem_cache_order_objects max;
+
+	/*当使用max申请失败时,便使用min指定的较小阶数申请*/
 	struct kmem_cache_order_objects min;
+
+	/*页帧分配标记*/
 	gfp_t allocflags;	/* gfp flags to use on each alloc */
+
+	/*表示该slab cache被引用的次数*/
 	int refcount;		/* Refcount for slab cache destroy */
 	void (*ctor)(void *);
+
+	/*该object的metadata偏移,也即是该object的实际大小*/
 	unsigned int inuse;		/* Offset to metadata */
+
+	/*表示对象的对齐*/
 	unsigned int align;		/* Alignment */
 	unsigned int red_left_pad;	/* Left redzone padding size */
+
+	/*用于显示的缓存名*/
 	const char *name;	/* Name (only for display!) */
+
+	/*链接到slab_cache上的连接件*/
 	struct list_head list;	/* List of slab caches */
 #ifdef CONFIG_SYSFS
 	struct kobject kobj;	/* For sysfs */
@@ -139,6 +171,7 @@ struct kmem_cache {
 	unsigned int useroffset;	/* Usercopy region offset */
 	unsigned int usersize;		/* Usercopy region size */
 
+	/*NUMA架构下每个node对应的slab信息*/
 	struct kmem_cache_node *node[MAX_NUMNODES];
 };
 

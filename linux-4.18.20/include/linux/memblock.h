@@ -28,6 +28,7 @@ enum {
 	MEMBLOCK_NOMAP		= 0x4,	/* don't add to kernel direct mapping */
 };
 
+/*提供了内存区域的基址和大小*/
 struct memblock_region {
 	phys_addr_t base;
 	phys_addr_t size;
@@ -37,17 +38,32 @@ struct memblock_region {
 #endif
 };
 
+/*提供了关于内存类型的信息*/
 struct memblock_type {
+	/*描述当前内存块中内存区域的数量*/
 	unsigned long cnt;	/* number of regions */
+
+	/*内存区域的已分配数组的尺寸*/
 	unsigned long max;	/* size of the allocated array */
+
+	/*所有内存区域的大小*/
 	phys_addr_t total_size;	/* size of all regions */
+
+	/*指向memblock_region结构体数据的指针的域,memblock_region结构体描述了一个内存区域*/
 	struct memblock_region *regions;
 	char *name;
 };
 
+/*内存块是在引导初期，泛用内核内存分配器还没有开始工作时对内存区域进行管理的方法*/
 struct memblock {
+	/*bottom_up域置为true时允许内存以自底向上模式进行分配*/
 	bool bottom_up;  /* is bottom up direction? */
+
+	/*描述了内存块的尺寸限制*/
 	phys_addr_t current_limit;
+
+	/*接下来的三个域描述了内存块的类型。内存块的类型可以是：被保留，内存和物理内存
+	  (如果CONFIG_HAVE_MEMBLOCK_PHYS_MAP编译配置选项被开启)*/
 	struct memblock_type memory;
 	struct memblock_type reserved;
 #ifdef CONFIG_HAVE_MEMBLOCK_PHYS_MAP

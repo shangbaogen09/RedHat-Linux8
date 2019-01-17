@@ -471,7 +471,10 @@ struct kmem_cache_node {
 #endif
 
 #ifdef CONFIG_SLUB
+	/*半满slab个数*/
 	unsigned long nr_partial;
+
+	/*半满slab构成的链表(通过这些slab的第一个page描述符lru成员)*/
 	struct list_head partial;
 #ifdef CONFIG_SLUB_DEBUG
 	atomic_long_t nr_slabs;

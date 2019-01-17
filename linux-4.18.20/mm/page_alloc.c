@@ -1944,18 +1944,29 @@ struct page *__rmqueue_smallest(struct zone *zone, unsigned int order,
 	struct free_area *area;
 	struct page *page;
 
+	/*从order幵始查找zone中空闲链表*/
 	/* Find a page of the appropriate size in the preferred list */
 	for (current_order = order; current_order < MAX_ORDER; ++current_order) {
 		area = &(zone->free_area[current_order]);
 		page = list_first_entry_or_null(&area->free_list[migratetype],
 							struct page, lru);
+
+		/*如果zone的当前order对应的空闲区free_area中相应migratetype类型的链表里没有空闲对象，那么就会查找下一级order*/
 		if (!page)
 			continue;
+
+		/*如果找到,则把该page脱链*/
 		list_del(&page->lru);
 		rmv_page_order(page);
+
+		/*更新该area的空闲个数*/
 		area->nr_free--;
+
+		/*把该order的内存切分成对应伙伴大小*/
 		expand(zone, page, order, current_order, area, migratetype);
 		set_pcppage_migratetype(page, migratetype);
+
+		/*向上层调用返回分配的page结构体*/
 		return page;
 	}
 
@@ -2441,6 +2452,7 @@ __rmqueue(struct zone *zone, unsigned int order, int migratetype)
 	struct page *page;
 
 retry:
+	/*调用该函数完成主要的分配工作*/
 	page = __rmqueue_smallest(zone, order, migratetype);
 	if (unlikely(!page)) {
 		if (migratetype == MIGRATE_MOVABLE)
@@ -2451,6 +2463,8 @@ retry:
 	}
 
 	trace_mm_page_alloc_zone_locked(page, order, migratetype);
+
+	/*向上层调用返回分配的page结构体*/
 	return page;
 }
 
@@ -2956,14 +2970,19 @@ static struct page *rmqueue_pcplist(struct zone *preferred_zone,
 	unsigned long flags;
 
 	local_irq_save(flags);
+	/*取出每个zone的缓存数组*/
 	pcp = &this_cpu_ptr(zone->pageset)->pcp;
 	list = &pcp->lists[migratetype];
+
+	/*从该list进行分配*/
 	page = __rmqueue_pcplist(zone,  migratetype, pcp, list);
 	if (page) {
 		__count_zid_vm_events(PGALLOC, page_zonenum(page), 1 << order);
 		zone_statistics(preferred_zone, zone);
 	}
 	local_irq_restore(flags);
+
+	/*向上层返回分配的page结构*/
 	return page;
 }
 
@@ -2979,7 +2998,9 @@ struct page *rmqueue(struct zone *preferred_zone,
 	unsigned long flags;
 	struct page *page;
 
+	/*如果传入的参数是分配一个页面,则进行如下处理*/
 	if (likely(order == 0)) {
+		/*从每个zone的缓存链表中进行分配*/
 		page = rmqueue_pcplist(preferred_zone, zone, order,
 				gfp_flags, migratetype);
 		goto out;
@@ -2999,6 +3020,7 @@ struct page *rmqueue(struct zone *preferred_zone,
 			if (page)
 				trace_mm_page_alloc_zone_locked(page, order, migratetype);
 		}
+		/*从伙伴系统中分配*/
 		if (!page)
 			page = __rmqueue(zone, order, migratetype);
 	} while (page && check_new_pages(page, order));
@@ -3014,6 +3036,8 @@ struct page *rmqueue(struct zone *preferred_zone,
 
 out:
 	VM_BUG_ON_PAGE(page && bad_range(zone, page), page);
+
+	/*向上层调用返回分配到的page结构体*/
 	return page;
 
 failed:
@@ -3258,11 +3282,13 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 	 * Scan zonelist, looking for a zone with enough free.
 	 * See also __cpuset_node_allowed() comment in kernel/cpuset.c.
 	 */
+	/*扫描内存节点中的zonelist去查找合适分配内存的zone*/
 	for_next_zone_zonelist_nodemask(zone, z, ac->zonelist, ac->high_zoneidx,
 								ac->nodemask) {
 		struct page *page;
 		unsigned long mark;
 
+		/*做一些必要的检查*/
 		if (cpusets_enabled() &&
 			(alloc_flags & ALLOC_CPUSET) &&
 			!__cpuset_zone_allowed(zone, gfp_mask))
@@ -3296,6 +3322,7 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 			}
 		}
 
+		/*下面代码用于检测当前的zone的watermark水位是否充足*/
 		mark = zone->watermark[alloc_flags & ALLOC_WMARK_MASK];
 		if (!zone_watermark_fast(zone, order, mark,
 				       ac_classzone_idx(ac), alloc_flags)) {
@@ -3320,6 +3347,7 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 			    !zone_allows_reclaim(ac->preferred_zoneref->zone, zone))
 				continue;
 
+			/*如果不充足,则进行回收*/
 			ret = node_reclaim(zone->zone_pgdat, gfp_mask, order);
 			switch (ret) {
 			case NODE_RECLAIM_NOSCAN:
@@ -3339,9 +3367,12 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 		}
 
 try_this_zone:
+		/*如果内存页面充足,则从伙伴系统中分配物理页面*/
 		page = rmqueue(ac->preferred_zoneref->zone, zone, order,
 				gfp_mask, alloc_flags, ac->migratetype);
 		if (page) {
+
+			/*对分配到的page使用前进行一些预处理*/
 			prep_new_page(page, order, gfp_mask, alloc_flags);
 
 			/*
@@ -3351,6 +3382,7 @@ try_this_zone:
 			if (unlikely(order && (alloc_flags & ALLOC_HARDER)))
 				reserve_highatomic_pageblock(page, zone, order);
 
+			/*向上层调用返回分配到的page结构体*/
 			return page;
 		} else {
 #ifdef CONFIG_DEFERRED_STRUCT_PAGE_INIT
@@ -4365,6 +4397,7 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order, int preferred_nid,
 
 	finalise_ac(gfp_mask, &ac);
 
+	/*先从缓存中分配,如果分配成功,则跳转到out标签处*/
 	/* First allocation attempt */
 	page = get_page_from_freelist(alloc_mask, order, alloc_flags, &ac);
 	if (likely(page))
@@ -4386,6 +4419,7 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order, int preferred_nid,
 	if (unlikely(ac.nodemask != nodemask))
 		ac.nodemask = nodemask;
 
+	/*如果从缓存中分配失败,则进入慢速分配*/
 	page = __alloc_pages_slowpath(alloc_mask, order, &ac);
 
 out:
@@ -4397,6 +4431,7 @@ out:
 
 	trace_mm_page_alloc(page, order, alloc_mask, ac.migratetype);
 
+	/*向上层返回分配到的page结构体*/
 	return page;
 }
 EXPORT_SYMBOL(__alloc_pages_nodemask);
@@ -5817,6 +5852,7 @@ void __init sparse_memory_present_with_active_regions(int nid)
 	unsigned long start_pfn, end_pfn;
 	int i, this_nid;
 
+	/*对内存探测得出的每个region调用memory_present()*/
 	for_each_mem_pfn_range(i, nid, &start_pfn, &end_pfn, &this_nid)
 		memory_present(this_nid, start_pfn, end_pfn);
 }

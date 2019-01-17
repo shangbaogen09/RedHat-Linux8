@@ -2,7 +2,7 @@
 #ifndef _LINUX_NUMA_H
 #define _LINUX_NUMA_H
 
-
+/*默认定义的CONFIG_NODES_SHIFT=6*/
 #ifdef CONFIG_NODES_SHIFT
 #define NODES_SHIFT     CONFIG_NODES_SHIFT
 #else

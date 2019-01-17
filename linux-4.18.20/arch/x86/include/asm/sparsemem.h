@@ -26,8 +26,13 @@
 #  define MAX_PHYSMEM_BITS	32
 # endif
 #else /* CONFIG_X86_32 */
+/*默认每个section的大小为128M*/
 # define SECTION_SIZE_BITS	27 /* matt - 128 is convenient right now */
+
+/*如果没有启用5级页表,最大的物理地址支持44位*/
 # define MAX_PHYSADDR_BITS	(pgtable_l5_enabled() ? 52 : 44)
+
+/*如果没有启用5级页表,内存模型支持的最大物理内存为46位*/
 # define MAX_PHYSMEM_BITS	(pgtable_l5_enabled() ? 52 : 46)
 #endif
 

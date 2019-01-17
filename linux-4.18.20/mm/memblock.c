@@ -33,10 +33,11 @@ static struct memblock_region memblock_reserved_init_regions[INIT_MEMBLOCK_REGIO
 static struct memblock_region memblock_physmem_init_regions[INIT_PHYSMEM_REGIONS] __initdata_memblock;
 #endif
 
+/*memblock结构体的初始化*/
 struct memblock memblock __initdata_memblock = {
 	.memory.regions		= memblock_memory_init_regions,
 	.memory.cnt		= 1,	/* empty dummy entry */
-	.memory.max		= INIT_MEMBLOCK_REGIONS,
+	.memory.max		= INIT_MEMBLOCK_REGIONS, /*该值定义为128*/
 	.memory.name		= "memory",
 
 	.reserved.regions	= memblock_reserved_init_regions,
@@ -44,6 +45,7 @@ struct memblock memblock __initdata_memblock = {
 	.reserved.max		= INIT_MEMBLOCK_REGIONS,
 	.reserved.name		= "reserved",
 
+/*系统默认没有定义该宏*/
 #ifdef CONFIG_HAVE_MEMBLOCK_PHYS_MAP
 	.physmem.regions	= memblock_physmem_init_regions,
 	.physmem.cnt		= 1,	/* empty dummy entry */
@@ -51,6 +53,7 @@ struct memblock memblock __initdata_memblock = {
 	.physmem.name		= "physmem",
 #endif
 
+	/*描述了bottom_up分配是否被开启以及当前内存块的限制*/
 	.bottom_up		= false,
 	.current_limit		= MEMBLOCK_ALLOC_ANYWHERE,
 };
@@ -510,6 +513,8 @@ int __init_memblock memblock_add_range(struct memblock_type *type,
 {
 	bool insert = false;
 	phys_addr_t obase = base;
+
+	/*计算出结束地址*/
 	phys_addr_t end = base + memblock_cap_size(base, &size);
 	int idx, nr_new;
 	struct memblock_region *rgn;
@@ -517,6 +522,7 @@ int __init_memblock memblock_add_range(struct memblock_type *type,
 	if (!size)
 		return 0;
 
+	/*如果第一个regions的值为0,则使用传入的参数设置该regions*/
 	/* special case for empty array */
 	if (type->regions[0].size == 0) {
 		WARN_ON(type->cnt != 1 || type->total_size);
@@ -536,10 +542,13 @@ repeat:
 	base = obase;
 	nr_new = 0;
 
+	/*检查与已加入内存区域是否重叠以及能否合并*/
 	for_each_memblock_type(idx, type, rgn) {
+		/*取出reserve数组中要循环的区域开始和结束地址*/
 		phys_addr_t rbase = rgn->base;
 		phys_addr_t rend = rbase + rgn->size;
 
+		/*如果是rbase >= end,则表示该区域不重叠,跳出该循环*/
 		if (rbase >= end)
 			break;
 		if (rend <= base)
@@ -548,12 +557,15 @@ repeat:
 		 * @rgn overlaps.  If it separates the lower part of new
 		 * area, insert that portion.
 		 */
+
+		/*如果end>rbase>base,则表示有重贴需要合并 */
 		if (rbase > base) {
 #ifdef CONFIG_HAVE_MEMBLOCK_NODE_MAP
 			WARN_ON(nid != memblock_get_region_node(rgn));
 #endif
 			WARN_ON(flags != rgn->flags);
 			nr_new++;
+
 			if (insert)
 				memblock_insert_region(type, idx++, base,
 						       rbase - base, nid,
@@ -566,6 +578,7 @@ repeat:
 	/* insert the remaining portion */
 	if (base < end) {
 		nr_new++;
+		/*将当前内存区域插入内存块*/
 		if (insert)
 			memblock_insert_region(type, idx, base, end - base,
 					       nid, flags);
@@ -580,9 +593,13 @@ repeat:
 	 */
 	if (!insert) {
 		while (type->cnt + nr_new > type->max)
+			/*该函数会将提供的区域数组长度加倍*/
 			if (memblock_double_array(type, obase, size) < 0)
 				return -ENOMEM;
+		/*将insert置为true*/
 		insert = true;
+
+		/*跳转到repeat标签*/
 		goto repeat;
 	} else {
 		memblock_merge_regions(type);
@@ -719,13 +736,16 @@ int __init_memblock memblock_free(phys_addr_t base, phys_addr_t size)
 	return memblock_remove_range(&memblock.reserved, base, size);
 }
 
+/*传入的参数为基地址和大小*/
 int __init_memblock memblock_reserve(phys_addr_t base, phys_addr_t size)
 {
+	/*计算该区域的end地址*/
 	phys_addr_t end = base + size - 1;
 
 	memblock_dbg("memblock_reserve: [%pa-%pa] %pF\n",
 		     &base, &end, (void *)_RET_IP_);
 
+	/*主要工作委托给该函数完成*/
 	return memblock_add_range(&memblock.reserved, base, size, MAX_NUMNODES, 0);
 }
 

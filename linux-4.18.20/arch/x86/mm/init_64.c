@@ -746,9 +746,13 @@ void __init initmem_init(void)
 }
 #endif
 
+/*初始化sparse物理内存模型*/
 void __init paging_init(void)
 {
+	/*系统默认定义的MAX_NUMNODES=64*/
 	sparse_memory_present_with_active_regions(MAX_NUMNODES);
+
+	/*sparse模型的初始化*/
 	sparse_init();
 
 	/*

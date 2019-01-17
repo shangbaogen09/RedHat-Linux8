@@ -827,6 +827,7 @@ void __init setup_arch(char **cmdline_p)
 	 * Make sure page 0 is always reserved because on systems with
 	 * L1TF its contents can be leaked to user processes.
 	 */
+	/*把page0作为reserve区写入管理区*/
 	memblock_reserve(0, PAGE_SIZE);
 
 	early_reserve_initrd();
