@@ -215,6 +215,7 @@ void __init memory_present(int nid, unsigned long start, unsigned long end)
 	unsigned long pfn;
 
 #ifdef CONFIG_SPARSEMEM_EXTREME
+	/*默认该数组指针为空，没有分配空间*/
 	if (unlikely(!mem_section)) {
 		unsigned long size, align;
 
@@ -227,7 +228,7 @@ void __init memory_present(int nid, unsigned long start, unsigned long end)
 
 	start &= PAGE_SECTION_MASK;
 
-	/*确定可用内存的最大最小pfn*/
+	/*对传入的参数进行边界限制处理*/
 	mminit_validate_memmodel_limits(&start, &end);
 
 	/*以section为单位进行如下处理*/
@@ -406,6 +407,7 @@ static void __init sparse_early_usemaps_alloc_node(void *data,
 	unsigned long **usemap_map = (unsigned long **)data;
 	int size = usemap_size();
 
+	/*为每一个section分配mem_map数组空间*/
 	usemap = sparse_early_usemaps_alloc_pgdat_section(NODE_DATA(nodeid),
 							  size * usemap_count);
 	if (!usemap) {
@@ -413,6 +415,7 @@ static void __init sparse_early_usemaps_alloc_node(void *data,
 		return;
 	}
 
+	/*使用分配的空间初始化每一个section*/
 	for (pnum = pnum_begin; pnum < pnum_end; pnum++) {
 		if (!present_section_nr(pnum))
 			continue;
@@ -442,19 +445,27 @@ void __init sparse_mem_maps_populate_node(struct page **map_map,
 {
 	void *map;
 	unsigned long pnum;
+
+	/*计算每个section需要分配多大的内存来容纳page结构体*/
 	unsigned long size = sizeof(struct page) * PAGES_PER_SECTION;
 
+	/*对齐处理并分配对应的结构体内存大小(所有的section对应的内存大小)*/
 	size = PAGE_ALIGN(size);
 	map = memblock_virt_alloc_try_nid_raw(size * map_count,
 					      PAGE_SIZE, __pa(MAX_DMA_ADDRESS),
 					      BOOTMEM_ALLOC_ACCESSIBLE, nodeid);
 	if (map) {
+		/*初始化每个section的mem_map*/
 		for (pnum = pnum_begin; pnum < pnum_end; pnum++) {
 			if (!present_section_nr(pnum))
 				continue;
 			map_map[pnum] = map;
+
+			/*跳到下一个section的首地址*/
 			map += size;
 		}
+
+		/*成功后，从该处返回到上层调用*/
 		return;
 	}
 
@@ -482,6 +493,8 @@ static void __init sparse_early_mem_maps_alloc_node(void *data,
 				 unsigned long map_count, int nodeid)
 {
 	struct page **map_map = (struct page **)data;
+
+	/*为每一个页物理内存分配page结构体*/
 	sparse_mem_maps_populate_node(map_map, pnum_begin, pnum_end,
 					 map_count, nodeid);
 }
@@ -520,9 +533,11 @@ static void __init alloc_usemap_and_memmap(void (*alloc_func)
 	int nodeid_begin = 0;
 	unsigned long pnum_begin = 0;
 
+	/*pnum为当前要遍历的section number*/
 	for_each_present_section_nr(0, pnum) {
 		struct mem_section *ms;
 
+		/*通过section number取出当前的section结构体*/
 		ms = __nr_to_section(pnum);
 		nodeid_begin = sparse_early_nid(ms);
 		pnum_begin = pnum;
@@ -587,21 +602,22 @@ void __init sparse_init(void)
 	 * powerpc need to call sparse_init_one_section right after each
 	 * sparse_early_mem_map_alloc, so allocate usemap_map at first.
 	 */
-	/*申请一个NR_MEM_SECTIONS(理论最大section数)大小的page*数组*/
 	size = sizeof(unsigned long *) * NR_MEM_SECTIONS;
 	usemap_map = memblock_virt_alloc(size, 0);
 	if (!usemap_map)
 		panic("can not allocate usemap_map\n");
 
-	/*为每个可用section分配一个page* mem_map, 并暂时用usemap_map数组来保存mem_map的地址*/
 	alloc_usemap_and_memmap(sparse_early_usemaps_alloc_node,
 							(void *)usemap_map);
 
 #ifdef CONFIG_SPARSEMEM_ALLOC_MEM_MAP_TOGETHER
+	/*申请一个NR_MEM_SECTIONS(理论最大section数)大小的page*数组*/
 	size2 = sizeof(struct page *) * NR_MEM_SECTIONS;
 	map_map = memblock_virt_alloc(size2, 0);
 	if (!map_map)
 		panic("can not allocate map_map\n");
+	
+	/*为每个可用section分配一个page* mem_map, 并暂时用map_map数组来保存mem_map的地址*/
 	alloc_usemap_and_memmap(sparse_early_mem_maps_alloc_node,
 							(void *)map_map);
 #endif
@@ -621,7 +637,7 @@ void __init sparse_init(void)
 		if (!map)
 			continue;
 		
-		/*初始化pnum号section的mem_section结构体*/
+		/*使用map参数初始化pnum号section的mem_section结构体成员section_mem_map*/
 		sparse_init_one_section(__nr_to_section(pnum), pnum, map,
 								usemap);
 	}

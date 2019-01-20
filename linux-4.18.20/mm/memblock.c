@@ -1105,14 +1105,18 @@ void __init_memblock __next_mem_pfn_range(int *idx, int nid,
 				unsigned long *out_start_pfn,
 				unsigned long *out_end_pfn, int *out_nid)
 {
+	/*系统中所有的内存信息都存储在全局变量中memblock中*/
 	struct memblock_type *type = &memblock.memory;
 	struct memblock_region *r;
 
+	/*遍历所有的内存区*/
 	while (++*idx < type->cnt) {
 		r = &type->regions[*idx];
 
 		if (PFN_UP(r->base) >= PFN_DOWN(r->base + r->size))
 			continue;
+
+		/*由于传入的参数nid=MAX_NUMNODES,所以跳出该循环*/
 		if (nid == MAX_NUMNODES || nid == r->nid)
 			break;
 	}
@@ -1121,6 +1125,7 @@ void __init_memblock __next_mem_pfn_range(int *idx, int nid,
 		return;
 	}
 
+	/*取出该内存区域的开始和结束地址，并用传入的参数传出去*/
 	if (out_start_pfn)
 		*out_start_pfn = PFN_UP(r->base);
 	if (out_end_pfn)
