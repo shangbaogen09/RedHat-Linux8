@@ -564,6 +564,7 @@ asmlinkage __visible void __init start_kernel(void)
 	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
 	boot_cpu_hotplug_init();
 
+	/*为当前系统中的每个节点填充备用内存域数组*/
 	build_all_zonelists(NULL);
 	page_alloc_init();
 

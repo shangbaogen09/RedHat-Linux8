@@ -765,12 +765,14 @@ void __init paging_init(void)
 	if (N_MEMORY != N_NORMAL_MEMORY)
 		node_clear_state(0, N_NORMAL_MEMORY);
 
+	/*初始化内存zone每个区最大页帧号*/
 	zone_sizes_init();
 }
 
 /*
  * Memory hotplug specific functions
  */
+/*该特性默认没有打开CONFIG_MEMORY_HOTPLUG*/
 #ifdef CONFIG_MEMORY_HOTPLUG
 /*
  * After memory hotplug the variables max_pfn, max_low_pfn and high_memory need

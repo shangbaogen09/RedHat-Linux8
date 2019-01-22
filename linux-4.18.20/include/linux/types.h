@@ -159,6 +159,7 @@ typedef unsigned __bitwise gfp_t;
 typedef unsigned __bitwise slab_flags_t;
 typedef unsigned __bitwise fmode_t;
 
+/*内核配置CONFIG_PHYS_ADDR_T_64BIT=y*/
 #ifdef CONFIG_PHYS_ADDR_T_64BIT
 typedef u64 phys_addr_t;
 #else

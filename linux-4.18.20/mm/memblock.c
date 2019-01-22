@@ -27,8 +27,11 @@
 
 #include "internal.h"
 
+/*静态定义一个大小为128的数组*/
 static struct memblock_region memblock_memory_init_regions[INIT_MEMBLOCK_REGIONS] __initdata_memblock;
 static struct memblock_region memblock_reserved_init_regions[INIT_MEMBLOCK_REGIONS] __initdata_memblock;
+
+/*默认x64没有打开该宏*/
 #ifdef CONFIG_HAVE_MEMBLOCK_PHYS_MAP
 static struct memblock_region memblock_physmem_init_regions[INIT_PHYSMEM_REGIONS] __initdata_memblock;
 #endif
@@ -152,16 +155,21 @@ __memblock_find_range_top_down(phys_addr_t start, phys_addr_t end,
 	phys_addr_t this_start, this_end, cand;
 	u64 i;
 
+	/*以逆序遍历memblock的free（memory &&！reserved）区域,并检查找到的区域是否合格*/
 	for_each_free_mem_range_reverse(i, nid, flags, &this_start, &this_end,
 					NULL) {
+		/*通过严格的类型检查返回一个限定在给定范围内的值*/
 		this_start = clamp(this_start, start, end);
 		this_end = clamp(this_end, start, end);
 
+		/*如果end的结束值比size还小，则继续遍历下一个*/
 		if (this_end < size)
 			continue;
 
+		/*如果this_end - size,大于找到区域的起始地址，则表示找到了对应的区域*/
 		cand = round_down(this_end - size, align);
 		if (cand >= this_start)
+			/*向上层调用返回该区域的起始地址*/
 			return cand;
 	}
 
@@ -196,19 +204,25 @@ phys_addr_t __init_memblock memblock_find_in_range_node(phys_addr_t size,
 {
 	phys_addr_t kernel_end, ret;
 
+	/*如果传入的参数end为0，则把end设置为系统中memblock的最大值*/
 	/* pump up @end */
 	if (end == MEMBLOCK_ALLOC_ACCESSIBLE)
 		end = memblock.current_limit;
 
+	/*确定要分配区域的起始地址,保证起始地址跳过第一个page*/
 	/* avoid allocating the first page */
 	start = max_t(phys_addr_t, start, PAGE_SIZE);
+
+	/*确定要分配区域的结束地址*/
 	end = max(start, end);
+
 	kernel_end = __pa_symbol(_end);
 
 	/*
 	 * try bottom-up allocation only when bottom-up mode
 	 * is set and @end is above the kernel image.
 	 */
+	/*系统默认.bottom_up = false,所以不走该分支*/
 	if (memblock_bottom_up() && end > kernel_end) {
 		phys_addr_t bottom_up_start;
 
@@ -235,6 +249,7 @@ phys_addr_t __init_memblock memblock_find_in_range_node(phys_addr_t size,
 			  "memblock: bottom-up allocation failed, memory hotremove may be affected\n");
 	}
 
+	/*从内存的顶端开始在参数start-end表示的区域内分配size大小的内存区域*/
 	return __memblock_find_range_top_down(start, end, size, align, nid,
 					      flags);
 }
@@ -507,6 +522,58 @@ static void __init_memblock memblock_insert_region(struct memblock_type *type,
  * RETURNS:
  * 0 on success, -errno on failure.
  */
+/*
+这个函数用来添加一个区域到membloc中,比如添加一个硬件的内存区域到memblock.memroy.
+实现的方法比较简单,添加再合并.总的来说一共有四种情况.
+total covered
+no overlap
+partial overlapped– beginning
+partial overlapped– end
+让我们来挨个儿解释.
+图例:
+(base, end)表示要添加的新的内存区域. 
+[rbase, rend]表示已有的内存区域.
+total coverd
+---------------------------------
+     (base,     end)
+[rbase,             rend]
+---------------------------------
+在这种情况下,除了检查区域的属性,其他不会做.
+
+no overlap
+------------------------------------------
+(base,     end)
+                  [rbase,             rend]
+这种情况也简单,直接添加就好.
+
+partial overlapped – beginning
+------------------------------------------
+(base,                  end)
+            [rbase,             rend]
+
+After insert the lower part.
+           ||
+           ||
+           vv
+ (base, end'）          (end)
+           [rbase,             rend]
+在这种情况下,(base, rbase-1)将会被添加到区域中.此后base被设置为end.
+这样就回到了第一个total cover的情况.
+
+partial overlapped – end
+------------------------------------------
+                (base,          end)
+[rbase,             rend]
+
+After truncate the lower part.
+            ||
+            ||
+            vv
+                         (base', end)
+[rbase,             rend]
+这种情况下(base, rend)部分将会被忽略,而base会直接赋值为rend.
+这样也就回到了第二种情况no overlap.
+*/
 int __init_memblock memblock_add_range(struct memblock_type *type,
 				phys_addr_t base, phys_addr_t size,
 				int nid, unsigned long flags)
@@ -514,7 +581,6 @@ int __init_memblock memblock_add_range(struct memblock_type *type,
 	bool insert = false;
 	phys_addr_t obase = base;
 
-	/*计算出结束地址*/
 	phys_addr_t end = base + memblock_cap_size(base, &size);
 	int idx, nr_new;
 	struct memblock_region *rgn;
@@ -522,7 +588,6 @@ int __init_memblock memblock_add_range(struct memblock_type *type,
 	if (!size)
 		return 0;
 
-	/*如果第一个regions的值为0,则使用传入的参数设置该regions*/
 	/* special case for empty array */
 	if (type->regions[0].size == 0) {
 		WARN_ON(type->cnt != 1 || type->total_size);
@@ -542,9 +607,7 @@ repeat:
 	base = obase;
 	nr_new = 0;
 
-	/*检查与已加入内存区域是否重叠以及能否合并*/
 	for_each_memblock_type(idx, type, rgn) {
-		/*取出reserve数组中要循环的区域开始和结束地址*/
 		phys_addr_t rbase = rgn->base;
 		phys_addr_t rend = rbase + rgn->size;
 
@@ -558,7 +621,6 @@ repeat:
 		 * area, insert that portion.
 		 */
 
-		/*如果end>rbase>base,则表示有重贴需要合并 */
 		if (rbase > base) {
 #ifdef CONFIG_HAVE_MEMBLOCK_NODE_MAP
 			WARN_ON(nid != memblock_get_region_node(rgn));
@@ -578,7 +640,6 @@ repeat:
 	/* insert the remaining portion */
 	if (base < end) {
 		nr_new++;
-		/*将当前内存区域插入内存块*/
 		if (insert)
 			memblock_insert_region(type, idx, base, end - base,
 					       nid, flags);
@@ -593,13 +654,10 @@ repeat:
 	 */
 	if (!insert) {
 		while (type->cnt + nr_new > type->max)
-			/*该函数会将提供的区域数组长度加倍*/
 			if (memblock_double_array(type, obase, size) < 0)
 				return -ENOMEM;
-		/*将insert置为true*/
 		insert = true;
 
-		/*跳转到repeat标签*/
 		goto repeat;
 	} else {
 		memblock_merge_regions(type);
@@ -613,6 +671,7 @@ int __init_memblock memblock_add_node(phys_addr_t base, phys_addr_t size,
 	return memblock_add_range(&memblock.memory, base, size, nid, 0);
 }
 
+/*把该内存区域加入到memblock.memory全局数组中*/
 int __init_memblock memblock_add(phys_addr_t base, phys_addr_t size)
 {
 	phys_addr_t end = base + size - 1;
@@ -639,6 +698,27 @@ int __init_memblock memblock_add(phys_addr_t base, phys_addr_t size)
  * RETURNS:
  * 0 on success, -errno on failure.
  */
+/*
+这个函数在多个地方使用到,比如memblock_remove_range()和memblock_set_node().
+这个函数的目的就是按照要求将memblock中的区域划分开.
+--------------------------------------------------------------------
+                   (base,                         end) 
+[rbase1,                   rend1]    [rbase2,                  rend2]
+---------------------------------------------------------------------
+                        After split
+                             ||   
+                             ||   
+                             vv   
+---------------------------------------------------------------------
+                   (base,                         end) 
+[rbase1,    rend1'][rbase1',rend1]   [rbase2,   rend2'][rbas2', rend2]
+                   start_rgn         end_rgn
+---------------------------------------------------------------------
+该函数一共有五个参数:
+type 指定是memblock.memory或memblock.reserved
+base/size 指定划分的那段区域的范围 
+start_rgn/end_rgn 返回划分完后这段区域对应的编号 
+*/
 static int __init_memblock memblock_isolate_range(struct memblock_type *type,
 					phys_addr_t base, phys_addr_t size,
 					int *start_rgn, int *end_rgn)
@@ -745,7 +825,7 @@ int __init_memblock memblock_reserve(phys_addr_t base, phys_addr_t size)
 	memblock_dbg("memblock_reserve: [%pa-%pa] %pF\n",
 		     &base, &end, (void *)_RET_IP_);
 
-	/*主要工作委托给该函数完成*/
+	/*把base为基地址并且大小为size的区域加入到memblock.reserved管理区域*/
 	return memblock_add_range(&memblock.reserved, base, size, MAX_NUMNODES, 0);
 }
 
@@ -1174,14 +1254,19 @@ static phys_addr_t __init memblock_alloc_range_nid(phys_addr_t size,
 	if (!align)
 		align = SMP_CACHE_BYTES;
 
+	/*memblock分配时的参数start,end都为0,调用该函数进行真正的分配*/
 	found = memblock_find_in_range_node(size, align, start, end, nid,
 					    flags);
+
+	/*如果分配内存成功,则把该分配的内存加入到reserve区域*/
 	if (found && !memblock_reserve(found, size)) {
 		/*
 		 * The min_count is set to 0 so that memblock allocations are
 		 * never reported as leaks.
 		 */
 		kmemleak_alloc_phys(found, size, 0, 0);
+
+		/*向上层调用返回分配到的内存块起始地址*/
 		return found;
 	}
 	return 0;
@@ -1199,6 +1284,7 @@ phys_addr_t __init memblock_alloc_base_nid(phys_addr_t size,
 					phys_addr_t align, phys_addr_t max_addr,
 					int nid, ulong flags)
 {
+	/*继续封装一些参数完成分配工作*/
 	return memblock_alloc_range_nid(size, align, 0, max_addr, nid, flags);
 }
 
@@ -1220,6 +1306,7 @@ again:
 
 phys_addr_t __init __memblock_alloc_base(phys_addr_t size, phys_addr_t align, phys_addr_t max_addr)
 {
+	/*继续调用该封装函数完成分配*/
 	return memblock_alloc_base_nid(size, align, max_addr, NUMA_NO_NODE,
 				       MEMBLOCK_NONE);
 }
@@ -1228,17 +1315,21 @@ phys_addr_t __init memblock_alloc_base(phys_addr_t size, phys_addr_t align, phys
 {
 	phys_addr_t alloc;
 
+	/*使用该函数进行实际的分配*/
 	alloc = __memblock_alloc_base(size, align, max_addr);
 
 	if (alloc == 0)
 		panic("ERROR: Failed to allocate %pa bytes below %pa.\n",
 		      &size, &max_addr);
 
+	/*向上层返回分配到的内存块地址*/
 	return alloc;
 }
 
+/*从初始内存管理器中分配一块内存大小为size,并且以align对齐*/
 phys_addr_t __init memblock_alloc(phys_addr_t size, phys_addr_t align)
 {
+	/*具体的分配工作由该函数来完成,第三个参数定义的宏为0*/
 	return memblock_alloc_base(size, align, MEMBLOCK_ALLOC_ACCESSIBLE);
 }
 

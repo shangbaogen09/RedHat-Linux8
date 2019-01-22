@@ -42,7 +42,7 @@ obj-y			:= filemap.o mempool.o oom_kill.o \
 			   debug.o $(mmu-y)
 
 obj-y += init-mm.o
-
+#系统默认配置CONFIG_NO_BOOTMEM=y
 ifdef CONFIG_NO_BOOTMEM
 	obj-y		+= nobootmem.o
 else

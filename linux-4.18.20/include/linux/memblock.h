@@ -40,13 +40,13 @@ struct memblock_region {
 
 /*提供了关于内存类型的信息*/
 struct memblock_type {
-	/*描述当前内存块中内存区域的数量*/
+	/*内存块中regions的数量*/
 	unsigned long cnt;	/* number of regions */
 
-	/*内存区域的已分配数组的尺寸*/
+	/*内存块的最大regions数目*/
 	unsigned long max;	/* size of the allocated array */
 
-	/*所有内存区域的大小*/
+	/*regions总尺寸*/
 	phys_addr_t total_size;	/* size of all regions */
 
 	/*指向memblock_region结构体数据的指针的域,memblock_region结构体描述了一个内存区域*/
@@ -59,12 +59,13 @@ struct memblock {
 	/*bottom_up域置为true时允许内存以自底向上模式进行分配*/
 	bool bottom_up;  /* is bottom up direction? */
 
-	/*描述了内存块的尺寸限制*/
+	/*memblock分配内存时的上限*/
 	phys_addr_t current_limit;
 
-	/*接下来的三个域描述了内存块的类型。内存块的类型可以是：被保留，内存和物理内存
-	  (如果CONFIG_HAVE_MEMBLOCK_PHYS_MAP编译配置选项被开启)*/
+	/*用来描述memblock全部内存region(不区分分配和未分配)*/
 	struct memblock_type memory;
+
+	/*用来描述memblock中已经分配的内存region*/
 	struct memblock_type reserved;
 #ifdef CONFIG_HAVE_MEMBLOCK_PHYS_MAP
 	struct memblock_type physmem;
@@ -247,6 +248,7 @@ void __next_mem_pfn_range(int *idx, int nid, unsigned long *out_start_pfn,
  * Walks over free (memory && !reserved) areas of memblock in reverse
  * order.  Available as soon as memblock is initialized.
  */
+/*以逆序遍历memblock的free（memory &&！reserved）区域*/
 #define for_each_free_mem_range_reverse(i, nid, flags, p_start, p_end,	\
 					p_nid)				\
 	for_each_mem_range_rev(i, &memblock.memory, &memblock.reserved,	\

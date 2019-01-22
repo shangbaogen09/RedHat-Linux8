@@ -1243,7 +1243,7 @@ void __init e820__memory_setup(void)
 	pr_info("BIOS-provided physical RAM map:\n");
 	e820__print_table(who);
 }
-/*把e820数组加入到memblock全局变量中*/
+/*把e820数组中的内存信息加入到memblock全局变量中*/
 void __init e820__memblock_setup(void)
 {
 	int i;
@@ -1270,7 +1270,7 @@ void __init e820__memblock_setup(void)
 		/*计算该条目的结束地址*/
 		end = entry->addr + entry->size;
 
-		/*如果该起始地址，则直接把该空洞区域添加到reserve区*/
+		/*如果该起始地址大于上次的结束地址，则直接把该区域作为空洞添加到reserve区*/
 		if (addr < entry->addr)
 			memblock_reserve(addr, entry->addr - addr);
 

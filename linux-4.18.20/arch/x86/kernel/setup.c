@@ -287,22 +287,27 @@ static void __init reserve_brk(void)
 
 u64 relocated_ramdisk;
 
+/*内核默认开始了该配置CONFIG_BLK_DEV_INITRD=y*/
 #ifdef CONFIG_BLK_DEV_INITRD
 
 static u64 __init get_ramdisk_image(void)
 {
+	/*从内核启动参数中获取ramdisk镜像在内存中的起始地址*/
 	u64 ramdisk_image = boot_params.hdr.ramdisk_image;
 
 	ramdisk_image |= (u64)boot_params.ext_ramdisk_image << 32;
 
+	/*向上层调用返回该起始地址*/
 	return ramdisk_image;
 }
 static u64 __init get_ramdisk_size(void)
 {
+	/*从内核启动参数中获取ramdisk镜像的大小*/
 	u64 ramdisk_size = boot_params.hdr.ramdisk_size;
 
 	ramdisk_size |= (u64)boot_params.ext_ramdisk_size << 32;
 
+	/*向上层调用返回该镜像大小*/
 	return ramdisk_size;
 }
 
@@ -339,6 +344,7 @@ static void __init relocate_initrd(void)
 
 static void __init early_reserve_initrd(void)
 {
+	/*获取ramdisk的起始结束地址并做对齐处理*/
 	/* Assume only end is not page aligned */
 	u64 ramdisk_image = get_ramdisk_image();
 	u64 ramdisk_size  = get_ramdisk_size();
@@ -348,6 +354,7 @@ static void __init early_reserve_initrd(void)
 	    !ramdisk_image || !ramdisk_size)
 		return;		/* No initrd provided by bootloader */
 
+	/*把ramdisk区域加入reserve区*/
 	memblock_reserve(ramdisk_image, ramdisk_end - ramdisk_image);
 }
 static void __init reserve_initrd(void)
@@ -820,6 +827,7 @@ dump_kernel_offset(struct notifier_block *self, unsigned long v, void *p)
 
 void __init setup_arch(char **cmdline_p)
 {
+	/*把内核的代码段添加到reserve区*/
 	memblock_reserve(__pa_symbol(_text),
 			 (unsigned long)__bss_stop - (unsigned long)_text);
 
@@ -830,6 +838,7 @@ void __init setup_arch(char **cmdline_p)
 	/*把page0作为reserve区写入管理区*/
 	memblock_reserve(0, PAGE_SIZE);
 
+	/*把initrd所占用的内存也加入reserve区*/
 	early_reserve_initrd();
 
 	/*
@@ -861,6 +870,7 @@ void __init setup_arch(char **cmdline_p)
 	 */
 	__flush_tlb_all();
 #else
+	/*打印命令行参数*/
 	printk(KERN_INFO "Command line: %s\n", boot_command_line);
 	boot_cpu_data.x86_phys_bits = MAX_PHYSMEM_BITS;
 #endif
@@ -962,6 +972,8 @@ void __init setup_arch(char **cmdline_p)
 
 	if (efi_enabled(EFI_BOOT))
 		efi_memblock_x86_reserve_range();
+
+/*内核默认CONFIG_MEMORY_HOTPLUG is not set*/
 #ifdef CONFIG_MEMORY_HOTPLUG
 	/*
 	 * Memory used by the kernel cannot be hot-removed because Linux
@@ -1101,6 +1113,8 @@ void __init setup_arch(char **cmdline_p)
 	cleanup_highmap();
 
 	memblock_set_current_limit(ISA_END_ADDRESS);
+
+	/*把探测到的e820的信息添加到启动内存管理器中*/
 	e820__memblock_setup();
 
 	reserve_bios_regions();
