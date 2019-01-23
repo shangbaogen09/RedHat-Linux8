@@ -1056,6 +1056,7 @@ void __init setup_arch(char **cmdline_p)
 	 * partially used pages are not usable - thus
 	 * we are rounding upwards:
 	 */
+	/*获取系统中内存的最大pfn号*/
 	max_pfn = e820__end_of_ram_pfn();
 
 	/* update e820 for memory not covered by WB MTRRs */
@@ -1086,10 +1087,11 @@ void __init setup_arch(char **cmdline_p)
 
 	/* How many end-of-memory variables you have, grandma! */
 	/* need this before calling reserve_initrd */
+	/*如果内存大于4G,则计算不高于4G的页帧号*/
 	if (max_pfn > (1UL<<(32 - PAGE_SHIFT)))
 		max_low_pfn = e820__end_of_low_ram_pfn();
 	else
-		max_low_pfn = max_pfn;
+		max_low_pfn = max_pfn;/*如果内存本身小于4G，则直接赋值为最大的页帧号*/
 
 	high_memory = (void *)__va(max_pfn * PAGE_SIZE - 1) + 1;
 #endif

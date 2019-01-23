@@ -459,7 +459,7 @@ struct zone {
 	 * adjust_managed_page_count() should be used instead of directly
 	 * touching zone->managed_pages and totalram_pages.
 	 */
-	/*除掉启动内存管理器占用的页帧外*/
+	/*除掉启动内存管理器占用的页帧外,真正可用的size*/
 	unsigned long		managed_pages;
 
 	/*页帧号的跨度*/

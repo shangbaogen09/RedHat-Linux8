@@ -885,15 +885,17 @@ void __init zone_sizes_init(void)
 
 	memset(max_zone_pfns, 0, sizeof(max_zone_pfns));
 
-	/*默认配置CONFIG_ZONE_DMA=y*/
+	/*默认配置CONFIG_ZONE_DMA=y,MAX_DMA_PFN=16M*/
 #ifdef CONFIG_ZONE_DMA
 	max_zone_pfns[ZONE_DMA]		= min(MAX_DMA_PFN, max_low_pfn);
 #endif
 
-	/*默认配置CONFIG_ZONE_DMA32=y*/
+	/*默认配置CONFIG_ZONE_DMA32=y,MAX_DMA32_PFN=4G*/
 #ifdef CONFIG_ZONE_DMA32
 	max_zone_pfns[ZONE_DMA32]	= min(MAX_DMA32_PFN, max_low_pfn);
 #endif
+
+	/*normal区的最大页帧号*/
 	max_zone_pfns[ZONE_NORMAL]	= max_low_pfn;
 
 	/*内核默认没有配置CONFIG_HIGHMEM*/
@@ -901,6 +903,7 @@ void __init zone_sizes_init(void)
 	max_zone_pfns[ZONE_HIGHMEM]	= max_pfn;
 #endif
 
+    /*初始化所有pg_data_t和zone, page的数据结构*/
 	free_area_init_nodes(max_zone_pfns);
 }
 

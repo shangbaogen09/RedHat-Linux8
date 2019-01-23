@@ -796,6 +796,8 @@ u64 __init e820__memblock_alloc_reserved(u64 size, u64 align)
 #  define MAX_ARCH_PFN		(1ULL<<(32-PAGE_SHIFT))
 # endif
 #else /* CONFIG_X86_32 */
+
+/*x64系统支持的最大内存为2^46>>12页帧数*/
 # define MAX_ARCH_PFN MAXMEM>>PAGE_SHIFT
 #endif
 
@@ -808,6 +810,7 @@ static unsigned long __init e820_end_pfn(unsigned long limit_pfn, enum e820_type
 	unsigned long last_pfn = 0;
 	unsigned long max_arch_pfn = MAX_ARCH_PFN;
 
+	/*循环遍历e820表的各个entry,找到系统中最大的pfn*/
 	for (i = 0; i < e820_table->nr_entries; i++) {
 		struct e820_entry *entry = &e820_table->entries[i];
 		unsigned long start_pfn;
@@ -829,21 +832,27 @@ static unsigned long __init e820_end_pfn(unsigned long limit_pfn, enum e820_type
 			last_pfn = end_pfn;
 	}
 
+	/*如果系统最大的pfn号，大于系统的最大值，则赋值为最大值*/
 	if (last_pfn > max_arch_pfn)
 		last_pfn = max_arch_pfn;
 
+	/*打印系统中的实际内存最大pfn号和系统理论支持的最大pfn号*/
 	pr_info("last_pfn = %#lx max_arch_pfn = %#lx\n",
 		last_pfn, max_arch_pfn);
+
+	/*返回系统支持的最大pfn号*/
 	return last_pfn;
 }
 
 unsigned long __init e820__end_of_ram_pfn(void)
 {
+	/*找到内存类型为E820_TYPE_RAM的最大pfn号*/
 	return e820_end_pfn(MAX_ARCH_PFN, E820_TYPE_RAM);
 }
 
 unsigned long __init e820__end_of_low_ram_pfn(void)
 {
+	/*获取不高于4G的最大页帧号*/
 	return e820_end_pfn(1UL << (32 - PAGE_SHIFT), E820_TYPE_RAM);
 }
 
