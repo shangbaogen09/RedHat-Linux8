@@ -245,12 +245,15 @@ static inline void __check_heap_object(const void *ptr, unsigned long n,
 #endif
 #endif
 
+/*内核默认使用的slub分配算法*/
 #ifdef CONFIG_SLUB
 /*
  * SLUB directly allocates requests fitting in to an order-1 page
  * (PAGE_SIZE*2).  Larger requests are passed to the page allocator.
  */
+/*该宏的值为13*/
 #define KMALLOC_SHIFT_HIGH	(PAGE_SHIFT + 1)
+/*该宏的值为22*/
 #define KMALLOC_SHIFT_MAX	(MAX_ORDER + PAGE_SHIFT - 1)
 #ifndef KMALLOC_SHIFT_LOW
 #define KMALLOC_SHIFT_LOW	3
@@ -273,7 +276,7 @@ static inline void __check_heap_object(const void *ptr, unsigned long n,
 /* Maximum allocatable size */
 #define KMALLOC_MAX_SIZE	(1UL << KMALLOC_SHIFT_MAX)
 
-/*kmalloc分配的最大大小为2个page*/
+/*kmalloc分配的最大大小为左移动13位,也即是2个page的大小*/
 /* Maximum size for which we actually use a slab cache */
 #define KMALLOC_MAX_CACHE_SIZE	(1UL << KMALLOC_SHIFT_HIGH)
 /* Maximum order allocatable via the slab allocagtor */
@@ -509,11 +512,16 @@ static __always_inline void *kmalloc(size_t size, gfp_t flags)
 	/*编译器gcc内置函数，用于判断一个值是否为编译时常量，如果是常数，函数返回1 ，否则返回0*/
 	if (__builtin_constant_p(size)) {
 
-		/*如果所分配的大小大于2个page,则调用kmalloc_large进行处理*/
+		/*如果所分配的大小大于kmalloc所能分配的最大值2个page,则调用kmalloc_large进行处理*/
 		if (size > KMALLOC_MAX_CACHE_SIZE)
+			/*最终会调用页分配器去分配内存，而不是使用slab分配器*/
 			return kmalloc_large(size, flags);
+
+/*在没有定义slob的前提下*/
 #ifndef CONFIG_SLOB
+		/*如果分配的内存不带dma标志*/
 		if (!(flags & GFP_DMA)) {
+			/*根据分配的不同大小返回不同的index*/
 			unsigned int index = kmalloc_index(size);
 
 			if (!index)
@@ -525,7 +533,7 @@ static __always_inline void *kmalloc(size_t size, gfp_t flags)
 #endif
 	}
 
-	/*继续调用__kmalloc完成内存分配*/
+	/*如果是一个变量，那么会调用__kmalloc来进行分配*/
 	return __kmalloc(size, flags);
 }
 

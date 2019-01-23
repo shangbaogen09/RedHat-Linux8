@@ -518,6 +518,8 @@ static void __init mm_init(void)
 	 */
 	page_ext_init_flatmem();
 	mem_init();
+
+	/*slab分配器的初始化*/
 	kmem_cache_init();
 	pgtable_init();
 	vmalloc_init();

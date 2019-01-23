@@ -20,6 +20,7 @@
 #include <linux/atomic.h>
 #include <asm/page.h>
 
+/*系统默认没有定义该特性CONFIG_FORCE_MAX_ZONEORDER*/
 /* Free memory management - zoned buddy allocator.  */
 #ifndef CONFIG_FORCE_MAX_ZONEORDER
 #define MAX_ORDER 11

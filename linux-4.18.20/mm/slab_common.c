@@ -940,20 +940,27 @@ void __init create_boot_cache(struct kmem_cache *s, const char *name,
 {
 	int err;
 
+	/*使用传入的参数初始化kmem_cache*/
 	s->name = name;
+
+	/*设置object size*/
 	s->size = s->object_size = size;
+
+	/* 计算按多少字节对齐*/
 	s->align = calculate_alignment(flags, ARCH_KMALLOC_MINALIGN, size);
 	s->useroffset = useroffset;
 	s->usersize = usersize;
 
 	slab_init_memcg_params(s);
 
+	/*继续跟踪调用链初始化结构体struct kmem_cache s*/
 	err = __kmem_cache_create(s, flags);
 
 	if (err)
 		panic("Creation of kmalloc slab %s size=%u failed. Reason %d\n",
 					name, size, err);
 
+	/*把该struct kmem_cache的引用设置为1*/
 	s->refcount = -1;	/* Exempt from merging for now */
 }
 
@@ -1027,15 +1034,17 @@ struct kmem_cache *kmalloc_slab(size_t size, gfp_t flags)
 {
 	unsigned int index;
 
+	/*如果分配的内存大于4M,则警告一次*/
 	if (unlikely(size > KMALLOC_MAX_SIZE)) {
 		WARN_ON_ONCE(!(flags & __GFP_NOWARN));
 		return NULL;
 	}
 
+	/*如果分配的size小于192字节*/
 	if (size <= 192) {
 		if (!size)
 			return ZERO_SIZE_PTR;
-
+		/*根据分配的字节数计算出对应分配数组的index下标*/
 		index = size_index[size_index_elem(size)];
 	} else
 		index = fls(size - 1);
@@ -1045,6 +1054,8 @@ struct kmem_cache *kmalloc_slab(size_t size, gfp_t flags)
 		return kmalloc_dma_caches[index];
 
 #endif
+
+	/*根据index返回对应的数组项*/
 	return kmalloc_caches[index];
 }
 
@@ -1183,9 +1194,13 @@ void *kmalloc_order(size_t size, gfp_t flags, unsigned int order)
 
 	/*调用页面分配器函数*/
 	page = alloc_pages(flags, order);
+
+	/*如果分配到的page不为空,则取出该page的虚拟地址*/
 	ret = page ? page_address(page) : NULL;
 	kmemleak_alloc(ret, size, 1, flags);
 	kasan_kmalloc_large(ret, size, flags);
+
+	/*向上层调用返回获取的page的虚拟地址*/
 	return ret;
 }
 EXPORT_SYMBOL(kmalloc_order);
