@@ -30,6 +30,8 @@
 enum slab_state slab_state;
 LIST_HEAD(slab_caches);
 DEFINE_MUTEX(slab_mutex);
+
+/*定义一个全局的专用slab缓存指针kmem_cache*/
 struct kmem_cache *kmem_cache;
 
 #ifdef CONFIG_HARDENED_USERCOPY
@@ -940,13 +942,13 @@ void __init create_boot_cache(struct kmem_cache *s, const char *name,
 {
 	int err;
 
-	/*使用传入的参数初始化kmem_cache*/
+	/*使用传入的参数初始化该slab缓存的名称*/
 	s->name = name;
 
-	/*设置object size*/
+	/*设置object实际大小object size,以及包含meta date的size的大小(临时设置)*/
 	s->size = s->object_size = size;
 
-	/* 计算按多少字节对齐*/
+	/*计算按多少字节对齐*/
 	s->align = calculate_alignment(flags, ARCH_KMALLOC_MINALIGN, size);
 	s->useroffset = useroffset;
 	s->usersize = usersize;
@@ -960,7 +962,7 @@ void __init create_boot_cache(struct kmem_cache *s, const char *name,
 		panic("Creation of kmalloc slab %s size=%u failed. Reason %d\n",
 					name, size, err);
 
-	/*把该struct kmem_cache的引用设置为1*/
+	/*把该struct kmem_cache的引用设置为-1,标记该slab不可复用*/
 	s->refcount = -1;	/* Exempt from merging for now */
 }
 
@@ -968,18 +970,25 @@ struct kmem_cache *__init create_kmalloc_cache(const char *name,
 		unsigned int size, slab_flags_t flags,
 		unsigned int useroffset, unsigned int usersize)
 {
+	/*从对应的slab缓冲器中分配一个kmem_cache结构体*/
 	struct kmem_cache *s = kmem_cache_zalloc(kmem_cache, GFP_NOWAIT);
 
 	if (!s)
 		panic("Out of memory when creating slab %s\n", name);
 
+	/*使用传入的参数初始化该cache*/
 	create_boot_cache(s, name, size, flags, useroffset, usersize);
+
+	/*把该slab加入到全局的slab_caches链表中*/
 	list_add(&s->list, &slab_caches);
 	memcg_link_cache(s);
 	s->refcount = 1;
+
+	/*向上层调用返回分配到的slab缓存*/
 	return s;
 }
 
+/*定义一个全局的供kmalloc使用的slab缓存,该数组的大小为14*/
 struct kmem_cache *kmalloc_caches[KMALLOC_SHIFT_HIGH + 1] __ro_after_init;
 EXPORT_SYMBOL(kmalloc_caches);
 
@@ -1130,6 +1139,7 @@ void __init setup_kmalloc_cache_index_table(void)
 
 static void __init new_kmalloc_cache(int idx, slab_flags_t flags)
 {
+	/*从kmalloc_cache slab缓存器中分配kmalloc_cache结构体*/
 	kmalloc_caches[idx] = create_kmalloc_cache(kmalloc_info[idx].name,
 					kmalloc_info[idx].size, flags, 0,
 					kmalloc_info[idx].size);
@@ -1144,7 +1154,10 @@ void __init create_kmalloc_caches(slab_flags_t flags)
 {
 	int i;
 
+	/*循环遍历,最小为3,最大为13*/
 	for (i = KMALLOC_SHIFT_LOW; i <= KMALLOC_SHIFT_HIGH; i++) {
+
+		/*如果kmalloc_caches对应的项为空,则初始化对应的项*/
 		if (!kmalloc_caches[i])
 			new_kmalloc_cache(i, flags);
 
@@ -1159,6 +1172,7 @@ void __init create_kmalloc_caches(slab_flags_t flags)
 			new_kmalloc_cache(2, flags);
 	}
 
+	/*设置slab的状态为UP,表示kmalloc机制可以使用*/
 	/* Kmalloc array is now usable */
 	slab_state = UP;
 

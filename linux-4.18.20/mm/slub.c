@@ -1526,17 +1526,21 @@ static bool shuffle_freelist(struct kmem_cache *s, struct page *page)
 	if (page->objects < 2 || !s->random_seq)
 		return false;
 
+	/*计算插入的位置*/
 	freelist_count = oo_objects(s->oo);
 	pos = get_random_int() % freelist_count;
 
+	/*计算该slab中使用的内存大小，以及该页的起始地址*/
 	page_limit = page->objects * s->size;
 	start = fixup_red_left(s, page_address(page));
 
+	/*计算一个随机的kmem_cache_node object地址作为kmem_cache->node成员结构体*/
 	/* First entry is used as the base of the freelist */
 	cur = next_freelist_entry(s, page, &pos, start, page_limit,
 				freelist_count);
 	page->freelist = cur;
 
+	/*把余下的所有的objects使用next指针串起来*/
 	for (idx = 1; idx < page->objects; idx++) {
 		setup_object(s, page, cur);
 		next = next_freelist_entry(s, page, &pos, start, page_limit,
@@ -1545,8 +1549,11 @@ static bool shuffle_freelist(struct kmem_cache *s, struct page *page)
 		cur = next;
 	}
 	setup_object(s, page, cur);
+	
+	/*设置链表结尾为NULL*/
 	set_freepointer(s, cur, NULL);
 
+	/*向上层调用返回true*/
 	return true;
 }
 #else
@@ -1575,6 +1582,7 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
 	if (gfpflags_allow_blocking(flags))
 		local_irq_enable();
 
+	/*分配内存的flag标记*/
 	flags |= s->allocflags;
 
 	/*
@@ -1603,6 +1611,7 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
 		stat(s, ORDER_FALLBACK);
 	}
 
+	/*该slab缓存中承载的object的数目*/
 	page->objects = oo_objects(oo);
 
 	order = compound_order(page);
@@ -1622,10 +1631,11 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
 
 	kasan_poison_slab(page);
 
+	/*初始化对象中的next指针,使一个slab中的所有对象串连起来*/
 	shuffle = shuffle_freelist(s, page);
 
+	/*该流程正常情况下不会走到*/
 	if (!shuffle) {
-		/*初始化对象中的next指针,使一个slab中的所有对象串连起来*/
 		for_each_object_idx(p, idx, s, start, page->objects) {
 			setup_object(s, page, p);
 			if (likely(idx < page->objects))
@@ -1633,7 +1643,6 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
 			else
 				set_freepointer(s, p, NULL);
 		}
-		/*由于刚分配的slab为空,所以freelist设置为页的起始地址*/
 		page->freelist = fixup_red_left(s, start);
 	}
 
@@ -2663,6 +2672,7 @@ redo:
 	 */
 	do {
 		tid = this_cpu_read(s->cpu_slab->tid);
+		/*取出当前kmem_cache的cpu_slab成员*/
 		c = raw_cpu_ptr(s->cpu_slab);
 	} while (IS_ENABLED(CONFIG_PREEMPT) &&
 		 unlikely(tid != READ_ONCE(c->tid)));
@@ -2684,12 +2694,14 @@ redo:
 	 * linked list in between.
 	 */
 
+	/*取出该kmem_cache_cpu的空闲object链表*/
 	object = c->freelist;
 	page = c->page;
 	if (unlikely(!object || !node_match(page, node))) {
 		object = __slab_alloc(s, gfpflags, node, addr, c);
 		stat(s, ALLOC_SLOWPATH);
 	} else {
+		/*返回链表中下一个空闲object的起始地址*/
 		void *next_object = get_freepointer_safe(s, object);
 
 		/*
@@ -2706,6 +2718,7 @@ redo:
 		 * against code executing on this cpu *not* from access by
 		 * other cpus.
 		 */
+		/*更新s->cpu_slab->freelist链表*/
 		if (unlikely(!this_cpu_cmpxchg_double(
 				s->cpu_slab->freelist, s->cpu_slab->tid,
 				object, tid,
@@ -2723,17 +2736,20 @@ redo:
 
 	slab_post_alloc_hook(s, gfpflags, 1, &object);
 
+	/*向上层调用返回分配到的object*/
 	return object;
 }
 
 static __always_inline void *slab_alloc(struct kmem_cache *s,
 		gfp_t gfpflags, unsigned long addr)
 {
+	/*跟踪调用链分配对应的object*/
 	return slab_alloc_node(s, gfpflags, NUMA_NO_NODE, addr);
 }
 
 void *kmem_cache_alloc(struct kmem_cache *s, gfp_t gfpflags)
 {
+	/*分配一个slab缓存中的object*/
 	void *ret = slab_alloc(s, gfpflags, _RET_IP_);
 
 	trace_kmem_cache_alloc(_RET_IP_, ret, s->object_size,
@@ -3314,12 +3330,14 @@ static inline int alloc_kmem_cache_cpus(struct kmem_cache *s)
 	if (!s->cpu_slab)
 		return 0;
 
-	/*初始化该结构体的部分成员*/
+	/*初始化kmem_cache_cpu结构体的部分成员*/
 	init_kmem_cache_cpus(s);
 
+	/*分配成功后向上层调用返回1*/
 	return 1;
 }
 
+/*定义一个全局变量指针kmem_cache_node,指向结构体struct kmem_cache*/
 static struct kmem_cache *kmem_cache_node;
 
 /*
@@ -3338,7 +3356,7 @@ static void early_kmem_cache_node_alloc(int node)
 
 	BUG_ON(kmem_cache_node->size < sizeof(struct kmem_cache_node));
 
-	/*为buddy系统申请一块连续的物理内存*/
+	/*从buddy系统申请一块连续的物理内存,并初始化slab缓存数据结构*/
 	page = new_slab(kmem_cache_node, GFP_NOWAIT, node);
 
 	BUG_ON(!page);
@@ -3347,12 +3365,14 @@ static void early_kmem_cache_node_alloc(int node)
 		pr_err("SLUB: Allocating a useless per node structure in order to be able to continue\n");
 	}
 
-	/*设置该page结构体的freelist,inuse,frozen等成员*/
 	n = page->freelist;
 	BUG_ON(!n);
+	/*设置该page结构体的freelist,inuse,frozen等成员*/
 	page->freelist = get_freepointer(kmem_cache_node, n);
 	page->inuse = 1;
 	page->frozen = 0;
+
+	/*把该kmem_cache_node结构体关联到kmem_cache上*/
 	kmem_cache_node->node[node] = n;
 #ifdef CONFIG_SLUB_DEBUG
 	init_object(kmem_cache_node, n, SLUB_RED_ACTIVE);
@@ -3360,6 +3380,8 @@ static void early_kmem_cache_node_alloc(int node)
 #endif
 	kasan_kmalloc(kmem_cache_node, n, sizeof(struct kmem_cache_node),
 		      GFP_KERNEL);
+
+	/*初始化kmem_cache_node剩余的结构体成员*/
 	init_kmem_cache_node(n);
 	inc_slabs_node(kmem_cache_node, node, page->objects);
 
@@ -3412,12 +3434,14 @@ static int init_kmem_cache_nodes(struct kmem_cache *s)
 			return 0;
 		}
 
-		/*初始化申请到的cache node结构体*/
+		/*初始化申请到的kmem_cache_node结构体成员*/
 		init_kmem_cache_node(n);
 
 		/*关联kmem_cache和kmem_cache_node结构体*/
 		s->node[node] = n;
 	}
+
+	/*向上层调用返回1*/
 	return 1;
 }
 
@@ -3479,6 +3503,7 @@ static int calculate_sizes(struct kmem_cache *s, int forced_order)
 	 * place the free pointer at word boundaries and this determines
 	 * the possible location of the free pointer.
 	 */
+	/*把不包含metadata的object大小做指针对齐处理*/
 	size = ALIGN(size, sizeof(void *));
 
 #ifdef CONFIG_SLUB_DEBUG
@@ -3507,6 +3532,7 @@ static int calculate_sizes(struct kmem_cache *s, int forced_order)
 	 * With that we have determined the number of bytes in actual use
 	 * by the object. This is the potential offset to the free pointer.
 	 */
+	/*赋值对齐后的object大小*/
 	s->inuse = size;
 
 	if (((flags & (SLAB_TYPESAFE_BY_RCU | SLAB_POISON)) ||
@@ -3532,6 +3558,7 @@ static int calculate_sizes(struct kmem_cache *s, int forced_order)
 		size += 2 * sizeof(struct track);
 #endif
 
+	/*系统默认没有配置CONFIG_KASAN，该函数为空*/
 	kasan_cache_create(s, &size, &s->flags);
 #ifdef CONFIG_SLUB_DEBUG
 	if (flags & SLAB_RED_ZONE) {
@@ -3555,8 +3582,13 @@ static int calculate_sizes(struct kmem_cache *s, int forced_order)
 	 * offset 0. In order to align the objects we have to simply size
 	 * each object to conform to the alignment.
 	 */
+	/*把size按照align对齐处理，得到object和metadata的对齐后大小*/
 	size = ALIGN(size, s->align);
+
+	/*重新赋值slab缓存的size成员*/
 	s->size = size;
+
+	/*由于传入的参数forced_order=-1，所以调用calculate_order计算要分配的order大小*/
 	if (forced_order >= 0)
 		order = forced_order;
 	else
@@ -3565,6 +3597,7 @@ static int calculate_sizes(struct kmem_cache *s, int forced_order)
 	if ((int)order < 0)
 		return 0;
 
+	/*为分配页帧设置分配标记*/
 	s->allocflags = 0;
 	if (order)
 		s->allocflags |= __GFP_COMP;
@@ -3578,16 +3611,23 @@ static int calculate_sizes(struct kmem_cache *s, int forced_order)
 	/*
 	 * Determine the number of objects per slab
 	 */
+	/*把该slab中承载的object个数和order合成一个变量的高16位和低16位*/
 	s->oo = oo_make(order, size);
+
+	/*计算向slab分配器中分配页面使用的order最小值*/
 	s->min = oo_make(get_order(size), size);
+
+	/*计算向slab分配器中分配页面使用的order最大值*/
 	if (oo_objects(s->oo) > oo_objects(s->max))
 		s->max = s->oo;
 
+	/*向上层调用返回计算的order是否为0*/
 	return !!oo_objects(s->oo);
 }
 
 static int kmem_cache_open(struct kmem_cache *s, slab_flags_t flags)
 {
+	/*把传入的flag赋值给slab缓存的flags成员*/
 	s->flags = kmem_cache_flags(s->size, flags, s->name, s->ctor);
 #ifdef CONFIG_SLAB_FREELIST_HARDENED
 	s->random = get_random_long();
@@ -3623,6 +3663,7 @@ static int kmem_cache_open(struct kmem_cache *s, slab_flags_t flags)
 	/*根据slab对象的大小计算partial slab链表中的slab的最小数目并设置min_partial成员*/
 	set_min_partial(s, ilog2(s->size) / 2);
 
+	/*设置slab缓存中的冻结slab的object的阈值*/
 	set_cpu_partial(s);
 
 #ifdef CONFIG_NUMA
@@ -4187,9 +4228,12 @@ static struct notifier_block slab_memory_callback_nb = {
 static struct kmem_cache * __init bootstrap(struct kmem_cache *static_cache)
 {
 	int node;
+
+	/*使用建立好的slab分配器分配一个kmem_cache结构体*/
 	struct kmem_cache *s = kmem_cache_zalloc(kmem_cache, GFP_NOWAIT);
 	struct kmem_cache_node *n;
 
+	/*把前面静态定义的struct kmem_cache拷贝到新分配的object中*/
 	memcpy(s, static_cache, kmem_cache->object_size);
 
 	/*
@@ -4210,11 +4254,16 @@ static struct kmem_cache * __init bootstrap(struct kmem_cache *static_cache)
 #endif
 	}
 	slab_init_memcg_params(s);
+
+	/*把该kmem_cache加到全局链表中*/
 	list_add(&s->list, &slab_caches);
 	memcg_link_cache(s);
+
+	/*向上层调用返回迁移后的kmem_cache*/
 	return s;
 }
 
+/*slab分配器的初始化函数*/
 void __init kmem_cache_init(void)
 {
 	static __initdata struct kmem_cache boot_kmem_cache,
@@ -4223,10 +4272,11 @@ void __init kmem_cache_init(void)
 	if (debug_guardpage_minorder())
 		slub_max_order = 0;
 
+	/*定义两个静态变量,并使用全局变量指针指向该变量*/
 	kmem_cache_node = &boot_kmem_cache_node;
 	kmem_cache = &boot_kmem_cache;
 
-	/*初始化静态定义的struct kmem_cache_node实例*/
+	/*初始化静态定义的struct kmem_cache_node实例boot_kmem_cache_node*/
 	create_boot_cache(kmem_cache_node, "kmem_cache_node",
 		sizeof(struct kmem_cache_node), SLAB_HWCACHE_ALIGN, 0, 0);
 
@@ -4235,17 +4285,21 @@ void __init kmem_cache_init(void)
 	/* Able to allocate the per node structures */
 	slab_state = PARTIAL;
 
-	/*初始化静态定义的struct kmem_cache实例*/
+	/*初始化静态定义的struct kmem_cache实例boot_kmem_cache*/
 	create_boot_cache(kmem_cache, "kmem_cache",
 			offsetof(struct kmem_cache, node) +
 				nr_node_ids * sizeof(struct kmem_cache_node *),
 		       SLAB_HWCACHE_ALIGN, 0, 0);
 
+	/*从初始化好的slab缓存中分配对应的object对象，代替静态变量*/
 	kmem_cache = bootstrap(&boot_kmem_cache);
 	kmem_cache_node = bootstrap(&boot_kmem_cache_node);
 
 	/* Now we can use the kmem_cache to allocate kmalloc slabs */
+	/*初始化数组size_index[]，该数组保存小于192大小slub缓存在kmalloc_caches[idx]中的索引*/
 	setup_kmalloc_cache_index_table();
+
+	/*创建通用缓存最大KMALLOC_SHIFT_HIGH  (PAGE_SHIFT + 1)两页,并且设置slab_state = UP*/
 	create_kmalloc_caches(0);
 
 	/* Setup random freelists for each cache */
@@ -4254,6 +4308,7 @@ void __init kmem_cache_init(void)
 	cpuhp_setup_state_nocalls(CPUHP_SLUB_DEAD, "slub:dead", NULL,
 				  slub_cpu_dead);
 
+	/*打印slub分配器的信息*/
 	pr_info("SLUB: HWalign=%d, Order=%u-%u, MinObjects=%u, CPUs=%u, Nodes=%d\n",
 		cache_line_size(),
 		slub_min_order, slub_max_order, slub_min_objects,

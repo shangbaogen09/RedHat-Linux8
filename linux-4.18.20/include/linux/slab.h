@@ -28,6 +28,8 @@
 #define SLAB_RED_ZONE		((slab_flags_t __force)0x00000400U)
 /* DEBUG: Poison objects */
 #define SLAB_POISON		((slab_flags_t __force)0x00000800U)
+
+/*要求硬件cache lines中缓存对齐*/
 /* Align objs on cache lines */
 #define SLAB_HWCACHE_ALIGN	((slab_flags_t __force)0x00002000U)
 /* Use GFP_DMA memory */
@@ -713,6 +715,7 @@ extern void *__kmalloc_node_track_caller(size_t, gfp_t, int, unsigned long);
  */
 static inline void *kmem_cache_zalloc(struct kmem_cache *k, gfp_t flags)
 {
+	/*封装分配的flag标记,继续向下调用*/
 	return kmem_cache_alloc(k, flags | __GFP_ZERO);
 }
 

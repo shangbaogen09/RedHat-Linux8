@@ -134,7 +134,7 @@ struct kmem_cache {
 	/*用于显示的缓存名*/
 	const char *name;	/* Name (only for display!) */
 
-	/*链接到slab_cache上的连接件*/
+	/*链接到slab_caches上的连接件*/
 	struct list_head list;	/* List of slab caches */
 #ifdef CONFIG_SYSFS
 	struct kobject kobj;	/* For sysfs */
@@ -164,6 +164,7 @@ struct kmem_cache {
 	unsigned int *random_seq;
 #endif
 
+/*默认没有启用该功能*/
 #ifdef CONFIG_KASAN
 	struct kasan_cache kasan_info;
 #endif
