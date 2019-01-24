@@ -2441,6 +2441,7 @@ static inline void *new_slab_objects(struct kmem_cache *s, gfp_t flags,
 	if (freelist)
 		return freelist;
 
+	/*分配一个新的slab缓存*/
 	page = new_slab(s, flags, node);
 	if (page) {
 		c = raw_cpu_ptr(s->cpu_slab);
@@ -2460,6 +2461,7 @@ static inline void *new_slab_objects(struct kmem_cache *s, gfp_t flags,
 	} else
 		freelist = NULL;
 
+	/*向上层调用返回对应的freelist链表*/
 	return freelist;
 }
 
@@ -2558,16 +2560,20 @@ redo:
 		goto new_slab;
 	}
 
+	/*再次检查是否空闲链表上有可分配的object*/
 	/* must check again c->freelist in case of cpu migration or IRQ */
 	freelist = c->freelist;
 	if (freelist)
 		goto load_freelist;
 
+	/*使用partial链表替换working slab后重新获取freelist*/
 	freelist = get_freelist(s, page);
 
 	if (!freelist) {
 		c->page = NULL;
 		stat(s, DEACTIVATE_BYPASS);
+
+		/*如果还是没有,则直接跳转到new_slab标签处*/
 		goto new_slab;
 	}
 
@@ -2582,17 +2588,25 @@ load_freelist:
 	VM_BUG_ON(!c->page->frozen);
 	c->freelist = get_freepointer(s, freelist);
 	c->tid = next_tid(c->tid);
+
+	/*如果不为空，则直接返回*/
 	return freelist;
 
 new_slab:
 
+	/*如果该kmem_cache_cpu的partial链不为空*/
 	if (slub_percpu_partial(c)) {
 		page = c->page = slub_percpu_partial(c);
+
+		/*更新partial链表*/
 		slub_set_percpu_partial(c, page);
 		stat(s, CPU_PARTIAL_ALLOC);
+
+		/*跳到redo标签重新检查*/
 		goto redo;
 	}
 
+	/*如果部分满链表也没有可用slab，则需要向buddy系统申请一个新的slab*/
 	freelist = new_slab_objects(s, gfpflags, node, &c);
 
 	if (unlikely(!freelist)) {
@@ -2610,6 +2624,8 @@ new_slab:
 		goto new_slab;	/* Slab failed checks. Next slab needed */
 
 	deactivate_slab(s, page, get_freepointer(s, freelist), c);
+
+	/*向上层调用返回分配的空闲链表头*/
 	return freelist;
 }
 
@@ -2630,9 +2646,11 @@ static void *__slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
 	 * cpu before disabling interrupts. Need to reload cpu area
 	 * pointer.
 	 */
+	/*取出当前cpu的slab缓存的kmem_cache_cpu成员*/
 	c = this_cpu_ptr(s->cpu_slab);
 #endif
 
+	/*继续调用该函数进行分配*/
 	p = ___slab_alloc(s, gfpflags, node, addr, c);
 	local_irq_restore(flags);
 	return p;
@@ -2697,7 +2715,10 @@ redo:
 	/*取出该kmem_cache_cpu的空闲object链表*/
 	object = c->freelist;
 	page = c->page;
+
+	/*如果freelist链表上没有空闲的object,或者是内存申请者指定的node与working slab所属的node不符*/
 	if (unlikely(!object || !node_match(page, node))) {
+		/*通过慢速路径进行分配*/
 		object = __slab_alloc(s, gfpflags, node, addr, c);
 		stat(s, ALLOC_SLOWPATH);
 	} else {
@@ -2747,6 +2768,7 @@ static __always_inline void *slab_alloc(struct kmem_cache *s,
 	return slab_alloc_node(s, gfpflags, NUMA_NO_NODE, addr);
 }
 
+/*从对应的slab缓存中分配对象*/
 void *kmem_cache_alloc(struct kmem_cache *s, gfp_t gfpflags)
 {
 	/*分配一个slab缓存中的object*/
@@ -2755,6 +2777,7 @@ void *kmem_cache_alloc(struct kmem_cache *s, gfp_t gfpflags)
 	trace_kmem_cache_alloc(_RET_IP_, ret, s->object_size,
 				s->size, gfpflags);
 
+	/*向上层调用返回分配到的对象结构体*/
 	return ret;
 }
 EXPORT_SYMBOL(kmem_cache_alloc);
@@ -4325,14 +4348,17 @@ __kmem_cache_alias(const char *name, unsigned int size, unsigned int align,
 {
 	struct kmem_cache *s, *c;
 
+	/*检查slab_caches链表上的每个缓存是否符合复用标准*/
 	s = find_mergeable(size, align, flags, name, ctor);
 	if (s) {
+		/*找到了可以复用的slab缓存，则仅仅是增加引用*/
 		s->refcount++;
 
 		/*
 		 * Adjust the object sizes so that we clear
 		 * the complete object on kzalloc.
 		 */
+		/*调整一些内部成员变量*/
 		s->object_size = max(s->object_size, size);
 		s->inuse = max(s->inuse, ALIGN(size, sizeof(void *)));
 
@@ -4347,6 +4373,7 @@ __kmem_cache_alias(const char *name, unsigned int size, unsigned int align,
 		}
 	}
 
+	/*向上层调用返回slab缓存或者是NULL*/
 	return s;
 }
 

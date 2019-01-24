@@ -54,6 +54,7 @@ struct kmem_cache_cpu {
 #endif
 };
 
+/*系统默认定义了该宏*/
 #ifdef CONFIG_SLUB_CPU_PARTIAL
 #define slub_percpu_partial(c)		((c)->partial)
 

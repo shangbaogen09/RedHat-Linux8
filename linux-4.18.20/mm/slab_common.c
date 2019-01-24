@@ -334,6 +334,7 @@ struct kmem_cache *find_mergeable(unsigned int size, unsigned int align,
 	if (flags & SLAB_NEVER_MERGE)
 		return NULL;
 
+	/*遍历所有的slab缓存检查是否兼容*/
 	list_for_each_entry_reverse(s, &slab_root_caches, root_caches_node) {
 		if (slab_unmergeable(s))
 			continue;
@@ -357,8 +358,11 @@ struct kmem_cache *find_mergeable(unsigned int size, unsigned int align,
 			(align > s->align || s->align % align))
 			continue;
 
+		/*返回找到的兼容slab缓存*/
 		return s;
 	}
+
+	/*如果没有找到,则向上层调用返回NULL*/
 	return NULL;
 }
 
@@ -375,10 +379,12 @@ static struct kmem_cache *create_cache(const char *name,
 		useroffset = usersize = 0;
 
 	err = -ENOMEM;
+	/*从kmem_cache的slab中分配一个kmem_cache object*/
 	s = kmem_cache_zalloc(kmem_cache, GFP_KERNEL);
 	if (!s)
 		goto out;
 
+	/*初始化该object的成员*/
 	s->name = name;
 	s->size = s->object_size = object_size;
 	s->align = align;
@@ -390,11 +396,14 @@ static struct kmem_cache *create_cache(const char *name,
 	if (err)
 		goto out_free_cache;
 
+	/*初始化该slab结构体的node和cpu_slab结构体*/
 	err = __kmem_cache_create(s, flags);
 	if (err)
 		goto out_free_cache;
 
 	s->refcount = 1;
+
+	/*添加到全局链表slab_caches中*/
 	list_add(&s->list, &slab_caches);
 	memcg_link_cache(s);
 out:
@@ -451,6 +460,7 @@ kmem_cache_create_usercopy(const char *name,
 
 	mutex_lock(&slab_mutex);
 
+	/*如果没有打开调试的话，该函数为空*/
 	err = kmem_cache_sanity_check(name, size);
 	if (err) {
 		goto out_unlock;
@@ -475,17 +485,22 @@ kmem_cache_create_usercopy(const char *name,
 	    WARN_ON(size < usersize || size - usersize < useroffset))
 		usersize = useroffset = 0;
 
+	/*由于传入的参数usersize为0*/
 	if (!usersize)
+		/*检查是否能复用已有缓存*/
 		s = __kmem_cache_alias(name, size, align, flags, ctor);
 	if (s)
+		/*找到可复用的,则直接跳转*/
 		goto out_unlock;
 
+	/*把该slab的名字转存到cache_name指向的内存中*/
 	cache_name = kstrdup_const(name, GFP_KERNEL);
 	if (!cache_name) {
 		err = -ENOMEM;
 		goto out_unlock;
 	}
 
+	/*如果找不到可复用的,则新创建一个*/
 	s = create_cache(cache_name, size,
 			 calculate_alignment(flags, align, size),
 			 flags, useroffset, usersize, ctor, NULL, NULL);
@@ -512,14 +527,18 @@ out_unlock:
 		}
 		return NULL;
 	}
+
+	/*向上层调用返回分配的slab缓存*/
 	return s;
 }
 EXPORT_SYMBOL(kmem_cache_create_usercopy);
 
+/*分配slab缓存*/
 struct kmem_cache *
 kmem_cache_create(const char *name, unsigned int size, unsigned int align,
 		slab_flags_t flags, void (*ctor)(void *))
 {
+	/*封装参数继续调用如下函数完成分配*/
 	return kmem_cache_create_usercopy(name, size, align, flags, 0, 0,
 					  ctor);
 }
