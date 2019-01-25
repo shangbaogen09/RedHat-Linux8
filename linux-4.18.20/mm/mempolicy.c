@@ -129,6 +129,7 @@ static struct mempolicy preferred_node_policy[MAX_NUMNODES];
 
 struct mempolicy *get_task_policy(struct task_struct *p)
 {
+	
 	struct mempolicy *pol = p->mempolicy;
 	int node;
 
@@ -2105,9 +2106,11 @@ out:
  */
 struct page *alloc_pages_current(gfp_t gfp, unsigned order)
 {
+	/*使用默认的分配策略*/
 	struct mempolicy *pol = &default_policy;
 	struct page *page;
 
+	/*从当前的任务的task_struct取出分配策略*/
 	if (!in_interrupt() && !(gfp & __GFP_THISNODE))
 		pol = get_task_policy(current);
 

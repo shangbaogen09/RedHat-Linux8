@@ -1193,6 +1193,7 @@ void __init mem_init(void)
 
 	/* clear_bss() already clear the empty_zero_page */
 
+	/*伙伴系统的初始化,把所有的内存都挂到伙伴系统的freelist上*/
 	/* this will put all memory onto the freelists */
 	free_all_bootmem();
 	after_bootmem = 1;

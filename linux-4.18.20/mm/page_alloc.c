@@ -1164,6 +1164,7 @@ static void free_one_page(struct zone *zone,
 		is_migrate_isolate(migratetype))) {
 		migratetype = get_pfnblock_migratetype(page, pfn);
 	}
+	/*释放对应type的页面到伙伴系统*/
 	__free_one_page(page, pfn, zone, order, migratetype);
 	spin_unlock(&zone->lock);
 }
@@ -1194,6 +1195,7 @@ static void __meminit __init_single_page(struct page *page, unsigned long pfn,
 #endif
 }
 
+/*内核默认配置#CONFIG_DEFERRED_STRUCT_PAGE_INIT is not set*/
 #ifdef CONFIG_DEFERRED_STRUCT_PAGE_INIT
 static void __meminit init_reserved_page(unsigned long pfn)
 {
@@ -1231,15 +1233,21 @@ void __meminit reserve_bootmem_region(phys_addr_t start, phys_addr_t end)
 	unsigned long start_pfn = PFN_DOWN(start);
 	unsigned long end_pfn = PFN_UP(end);
 
+	/*循环遍历当前区域的所有页帧*/
 	for (; start_pfn < end_pfn; start_pfn++) {
+		/*检测该页帧号是否有效*/
 		if (pfn_valid(start_pfn)) {
+			/*由页帧获取对应的page结构体*/
 			struct page *page = pfn_to_page(start_pfn);
 
+			/*默认该函数为空*/
 			init_reserved_page(start_pfn);
 
 			/* Avoid false-positive PageTail() */
 			INIT_LIST_HEAD(&page->lru);
 
+			/*设置该page为reserved状态,该函数的定义使用宏定义出来,相当于如下定义
+			　#define SetPageReserved(page) set_bit(PG_reserved, &(page)->flags)*/
 			SetPageReserved(page);
 		}
 	}
@@ -1249,6 +1257,8 @@ static void __free_pages_ok(struct page *page, unsigned int order)
 {
 	unsigned long flags;
 	int migratetype;
+
+	/*由page获取页帧号*/
 	unsigned long pfn = page_to_pfn(page);
 
 	if (!free_pages_prepare(page, order, true))
@@ -1257,17 +1267,21 @@ static void __free_pages_ok(struct page *page, unsigned int order)
 	migratetype = get_pfnblock_migratetype(page, pfn);
 	local_irq_save(flags);
 	__count_vm_events(PGFREE, 1 << order);
+
+	/*把该order的页帧释放给伙伴系统,主要是找到伙伴填充对应的freelist链表*/
 	free_one_page(page_zone(page), page, pfn, order, migratetype);
 	local_irq_restore(flags);
 }
 
 static void __init __free_pages_boot_core(struct page *page, unsigned int order)
 {
+	/*计算出该order包含的页面个数*/
 	unsigned int nr_pages = 1 << order;
 	struct page *p = page;
 	unsigned int loop;
 
 	prefetchw(p);
+	/*循环处理这批页帧,清除reserve标记,设置引用计数为0*/
 	for (loop = 0; loop < (nr_pages - 1); loop++, p++) {
 		prefetchw(p + 1);
 		__ClearPageReserved(p);
@@ -1276,8 +1290,13 @@ static void __init __free_pages_boot_core(struct page *page, unsigned int order)
 	__ClearPageReserved(p);
 	set_page_count(p, 0);
 
+	/*累计可用的空闲页面*/
 	page_zone(page)->managed_pages += nr_pages;
+
+	/*设置page的引用计数为1,下面free_pages函数会使用,并且会去掉该引用*/
 	set_page_refcounted(page);
+
+	/*调用该函数完成实质性的工作*/
 	__free_pages(page, order);
 }
 
@@ -1340,6 +1359,8 @@ void __init __free_pages_bootmem(struct page *page, unsigned long pfn,
 {
 	if (early_page_uninitialised(pfn))
 		return;
+
+	/*跟踪调用链*/
 	return __free_pages_boot_core(page, order);
 }
 
@@ -1957,6 +1978,8 @@ struct page *__rmqueue_smallest(struct zone *zone, unsigned int order,
 	/* Find a page of the appropriate size in the preferred list */
 	for (current_order = order; current_order < MAX_ORDER; ++current_order) {
 		area = &(zone->free_area[current_order]);
+
+		/*从空闲链表中获取第一个元素*/
 		page = list_first_entry_or_null(&area->free_list[migratetype],
 							struct page, lru);
 
@@ -2784,11 +2807,18 @@ static void free_unref_page_commit(struct page *page, unsigned long pfn)
 		migratetype = MIGRATE_MOVABLE;
 	}
 
+	/*把该页面加入对应的per cpu缓存链表中*/
 	pcp = &this_cpu_ptr(zone->pageset)->pcp;
 	list_add(&page->lru, &pcp->lists[migratetype]);
+
+	/*统计当前缓存页的数目*/
 	pcp->count++;
+
+	/*如果缓存页高于最高水位值*/
 	if (pcp->count >= pcp->high) {
 		unsigned long batch = READ_ONCE(pcp->batch);
+
+		/*释放batch个页面给伙伴系统*/
 		free_pcppages_bulk(zone, batch, pcp);
 	}
 }
@@ -2799,12 +2829,14 @@ static void free_unref_page_commit(struct page *page, unsigned long pfn)
 void free_unref_page(struct page *page)
 {
 	unsigned long flags;
+	/*获取page对应的pfn*/
 	unsigned long pfn = page_to_pfn(page);
 
 	if (!free_unref_page_prepare(page, pfn))
 		return;
 
 	local_irq_save(flags);
+	/*加入per cpu的缓存链表中*/
 	free_unref_page_commit(page, pfn);
 	local_irq_restore(flags);
 }
@@ -3331,12 +3363,14 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 			}
 		}
 
-		/*下面代码用于检测当前的zone的watermark水位是否充足*/
 		mark = zone->watermark[alloc_flags & ALLOC_WMARK_MASK];
+
+		/*检测当前的zone的watermark水位是否充足*/
 		if (!zone_watermark_fast(zone, order, mark,
 				       ac_classzone_idx(ac), alloc_flags)) {
 			int ret;
 
+/*默认配置CONFIG_DEFERRED_STRUCT_PAGE_INIT is not set*/
 #ifdef CONFIG_DEFERRED_STRUCT_PAGE_INIT
 			/*
 			 * Watermark failed for this zone, but see if we can
@@ -3366,6 +3400,7 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 				/* scanned but unreclaimable */
 				continue;
 			default:
+				/*如果已经回收了充足的内存,则跳到try_this_zone标签处继续分配*/
 				/* did we reclaim enough */
 				if (zone_watermark_ok(zone, order, mark,
 						ac_classzone_idx(ac), alloc_flags))
@@ -3380,7 +3415,6 @@ try_this_zone:
 		page = rmqueue(ac->preferred_zoneref->zone, zone, order,
 				gfp_mask, alloc_flags, ac->migratetype);
 		if (page) {
-
 			/*对分配到的page使用前进行一些预处理*/
 			prep_new_page(page, order, gfp_mask, alloc_flags);
 
@@ -3394,6 +3428,7 @@ try_this_zone:
 			/*向上层调用返回分配到的page结构体*/
 			return page;
 		} else {
+/*默认配置CONFIG_DEFERRED_STRUCT_PAGE_INIT is not set*/
 #ifdef CONFIG_DEFERRED_STRUCT_PAGE_INIT
 			/* Try again if zone has deferred pages */
 			if (static_branch_unlikely(&deferred_pages)) {
@@ -3404,6 +3439,7 @@ try_this_zone:
 		}
 	}
 
+	/*遍历完所有区域都没有分配到内存，则向上层调用返回NULL*/
 	return NULL;
 }
 
@@ -4473,10 +4509,14 @@ EXPORT_SYMBOL(get_zeroed_page);
 
 void __free_pages(struct page *page, unsigned int order)
 {
+	/*测试page的引用减一是否为0*/
 	if (put_page_testzero(page)) {
+
+		/*如果要释放的页面order为0*/
 		if (order == 0)
 			free_unref_page(page);
 		else
+			/*要释放的页面order大于0*/
 			__free_pages_ok(page, order);
 	}
 }
@@ -5800,7 +5840,10 @@ void __meminit init_currently_empty_zone(struct zone *zone,
 			(unsigned long)zone_idx(zone),
 			zone_start_pfn, (zone_start_pfn + size));
 
+	/*初始化freelist链表结构*/
 	zone_init_free_lists(zone);
+
+	/*标示该zone初始化完成*/
 	zone->initialized = 1;
 }
 
@@ -6385,6 +6428,8 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat)
 
 		/*定义了CONFIG_SPARSEMEM该函数为空*/
 		setup_usemap(pgdat, zone, zone_start_pfn, size);
+
+		/*初始化伙伴算法使用的free_area链表*/
 		init_currently_empty_zone(zone, zone_start_pfn, size);
 
 		/*为本内存区域的页帧逐个填写page结构体*/

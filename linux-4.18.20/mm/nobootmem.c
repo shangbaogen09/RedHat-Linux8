@@ -100,12 +100,16 @@ static void __init __free_pages_memory(unsigned long start, unsigned long end)
 {
 	int order;
 
+	/*循环处理该页帧区间*/
 	while (start < end) {
+		/*获取页帧所属的order*/
 		order = min(MAX_ORDER - 1UL, __ffs(start));
 
+		/*根据区间的大小确定当前循环处理的order*/
 		while (start + (1UL << order) > end)
 			order--;
 
+		/*处理当前order页帧*/
 		__free_pages_bootmem(pfn_to_page(start), start, order);
 
 		start += (1UL << order);
@@ -122,8 +126,10 @@ static unsigned long __init __free_memory_core(phys_addr_t start,
 	if (start_pfn >= end_pfn)
 		return 0;
 
+	/*继续调用该函数完成余下的工作*/
 	__free_pages_memory(start_pfn, end_pfn);
 
+	/*计算并返回空闲页帧个数*/
 	return end_pfn - start_pfn;
 }
 
@@ -135,7 +141,9 @@ static unsigned long __init free_low_memory_core_early(void)
 
 	memblock_clear_hotplug(0, -1);
 
+	/*循环处理每一个区,获取起始地址和结束地址*/
 	for_each_reserved_mem_region(i, &start, &end)
+		/*把该区域的每个页帧都标记为reserved*/
 		reserve_bootmem_region(start, end);
 
 	/*
@@ -143,10 +151,13 @@ static unsigned long __init free_low_memory_core_early(void)
 	 *  because in some case like Node0 doesn't have RAM installed
 	 *  low ram will be on Node1
 	 */
+	/*循环遍历找到free mem区域,起始地址由start和end带出*/
 	for_each_free_mem_range(i, NUMA_NO_NODE, MEMBLOCK_NONE, &start, &end,
 				NULL)
+		/*处理每一个内存区,并累计处理的页帧数*/
 		count += __free_memory_core(start, end);
 
+	/*向上层调用返回空闲的页帧数目*/
 	return count;
 }
 
