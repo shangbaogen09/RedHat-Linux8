@@ -1544,6 +1544,7 @@ static void setup_local_APIC(void)
 	/*
 	 * Enable APIC
 	 */
+	/*设置伪中断向量寄存器对应的位以开启APIC*/
 	value |= APIC_SPIV_APIC_ENABLED;
 
 #ifdef CONFIG_X86_32

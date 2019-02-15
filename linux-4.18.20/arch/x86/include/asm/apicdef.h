@@ -34,6 +34,8 @@
 #endif
 #define		APIC_XAPIC(x)		((x) >= 0x14)
 #define		APIC_EXT_SPACE(x)	((x) & 0x80000000)
+
+/*任务优先级寄存器*/
 #define	APIC_TASKPRI	0x80
 #define		APIC_TPRI_MASK		0xFFu
 #define	APIC_ARBPRI	0x90
@@ -50,9 +52,17 @@
 #define	APIC_DFR	0xE0
 #define		APIC_DFR_CLUSTER		0x0FFFFFFFul
 #define		APIC_DFR_FLAT			0xFFFFFFFFul
+
+/*伪中断向量寄存器偏移*/
 #define	APIC_SPIV	0xF0
+
+/*禁止广播EOI消息使能标志位*/
 #define		APIC_SPIV_DIRECTED_EOI		(1 << 12)
+
+/*焦点处理器检测标志位*/
 #define		APIC_SPIV_FOCUS_DISABLED	(1 << 9)
+
+/*APIC软件使能标志位*/
 #define		APIC_SPIV_APIC_ENABLED		(1 << 8)
 #define	APIC_ISR	0x100
 #define	APIC_ISR_NR     0x8     /* Number of 32 bit ISR registers. */
