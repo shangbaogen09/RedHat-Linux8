@@ -288,7 +288,7 @@ static int __meminit sparse_init_one_section(struct mem_section *ms,
 	if (!present_section(ms))
 		return -EINVAL;
 
-	/将section_mem_map成员的"地址段"清零/
+	/*将section_mem_map成员的"地址段"清零*/
 	ms->section_mem_map &= ~SECTION_MAP_MASK;
 
 	/*赋值section_mem_map成员的"地址段"*/

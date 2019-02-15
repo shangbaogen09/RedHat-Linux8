@@ -517,6 +517,8 @@ static void __init mm_init(void)
 	 * bigger than MAX_ORDER unless SPARSEMEM.
 	 */
 	page_ext_init_flatmem();
+	
+	/*伙伴系统初始化*/
 	mem_init();
 
 	/*slab分配器的初始化*/

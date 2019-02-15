@@ -47,7 +47,7 @@ EOF
 #gzip -c rootfs.img > rootfs.img.gz
 
 使用qemu启动kernel和rootfs:
-qemu-system-x86_64 -kernel linux-4.18.20/arch/i386/boot/bzImage -initrd ./rootfs.img.gz -append "root=/dev/ram rdinit=sbin/init noapic"
+qemu-system-x86_64 -kernel linux-4.18.20/arch/x86/boot/bzImage -initrd ./rootfs.img.gz -append "root=/dev/ram rdinit=sbin/init noapic"
 
 printk_ratelimit()这个函数，其作用就如其名，限制printk的打印数量.
 使用方法如下:

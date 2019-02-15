@@ -1342,8 +1342,10 @@ void __init init_bsp_APIC(void)
 /* Init the interrupt delivery mode for the BSP */
 void __init apic_intr_mode_init(void)
 {
+	/*系统默认没有打开该配置,所以upmode值为0*/
 	bool upmode = IS_ENABLED(CONFIG_UP_LATE_INIT);
 
+	/*该函数默认返回APIC_SYMMETRIC_IO模式*/
 	apic_intr_mode = apic_intr_mode_select();
 
 	switch (apic_intr_mode) {
@@ -1359,6 +1361,8 @@ void __init apic_intr_mode_init(void)
 		upmode = true;
 		default_setup_apic_routing();
 		break;
+
+	/*根据系统打印的log,默认走该路径*/
 	case APIC_SYMMETRIC_IO:
 		pr_info("APIC: Switch to symmetric I/O mode setup\n");
 		default_setup_apic_routing();
@@ -1368,6 +1372,7 @@ void __init apic_intr_mode_init(void)
 		break;
 	}
 
+	/*初始化local apic和io apic*/
 	apic_bsp_setup(upmode);
 }
 
@@ -1469,6 +1474,7 @@ static void apic_pending_intr_clear(void)
  */
 static void setup_local_APIC(void)
 {
+	/*获取当前处理器的id*/
 	int cpu = smp_processor_id();
 	unsigned int value;
 #ifdef CONFIG_X86_32
@@ -1503,6 +1509,7 @@ static void setup_local_APIC(void)
 	 * an APIC.  See e.g. "AP-388 82489DX User's Manual" (Intel
 	 * document number 292116).  So here it goes...
 	 */
+	/*实际调用flat_init_apic_ldr函数设置DFR, LDR and TPR寄存器*/
 	apic->init_apic_ldr();
 
 #ifdef CONFIG_X86_32
@@ -1522,6 +1529,7 @@ static void setup_local_APIC(void)
 	 * Set Task Priority to 'accept all'. We never change this
 	 * later on.
 	 */
+	/*设置任务优先级为接受所有优先级级别的中断*/
 	value = apic_read(APIC_TASKPRI);
 	value &= ~APIC_TPRI_MASK;
 	apic_write(APIC_TASKPRI, value);
@@ -1569,6 +1577,7 @@ static void setup_local_APIC(void)
 	/*
 	 * Set spurious IRQ vector
 	 */
+	/*使能local apic并设置spurious IRQ vector*/
 	value |= SPURIOUS_APIC_VECTOR;
 	apic_write(APIC_SPIV, value);
 
@@ -1590,6 +1599,8 @@ static void setup_local_APIC(void)
 		value = APIC_DM_EXTINT | APIC_LVT_MASKED;
 		apic_printk(APIC_VERBOSE, "masked ExtINT on CPU#%d\n", cpu);
 	}
+
+	/*设置LVT0*/
 	apic_write(APIC_LVT0, value);
 
 	/*
@@ -1605,6 +1616,8 @@ static void setup_local_APIC(void)
 	/* Is 82489DX ? */
 	if (!lapic_is_integrated())
 		value |= APIC_LVT_LEVEL_TRIGGER;
+
+	/*设置LVT1*/
 	apic_write(APIC_LVT1, value);
 
 #ifdef CONFIG_X86_MCE_INTEL
@@ -1840,6 +1853,7 @@ static int __init detect_init_APIC(void)
 		return -1;
 	}
 
+	/*设置local apic配置寄存器的物理地址*/
 	mp_lapic_addr = APIC_DEFAULT_PHYS_BASE;
 	return 0;
 }
@@ -1962,18 +1976,22 @@ void __init init_apic_mappings(void)
 		return;
 	}
 
+	/*在全局变量mp_lapic_addr中设置local apic配置寄存器的物理地址*/
 	/* If no local APIC can be found return early */
 	if (!smp_found_config && detect_init_APIC()) {
 		/* lets NOP'ify apic operations */
 		pr_info("APIC: disable apic facility\n");
 		apic_disable();
 	} else {
+
+		/*转存赋值后的物理地址到静态全局变量pic_phys中*/
 		apic_phys = mp_lapic_addr;
 
 		/*
 		 * If the system has ACPI MADT tables or MP info, the LAPIC
 		 * address is already registered.
 		 */
+		/*对local apic配置寄存器的物理地址进行映射*/
 		if (!acpi_lapic && !smp_found_config)
 			register_lapic_address(apic_phys);
 	}
@@ -2000,6 +2018,7 @@ void __init register_lapic_address(unsigned long address)
 {
 	mp_lapic_addr = address;
 
+	/*对apic的物理地址进行un-cacheable的固定映射*/
 	if (!x2apic_mode) {
 		set_fixmap_nocache(FIX_APIC_BASE, address);
 		apic_printk(APIC_VERBOSE, "mapped APIC to %16lx (%16lx)\n",
@@ -2407,9 +2426,12 @@ static void __init apic_bsp_up_setup(void)
  */
 void __init apic_bsp_setup(bool upmode)
 {
+	/*x64系统该函数为空*/
 	connect_bsp_APIC();
 	if (upmode)
 		apic_bsp_up_setup();
+
+	/*设置local ioapic*/
 	setup_local_APIC();
 
 	enable_IO_APIC();

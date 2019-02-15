@@ -176,6 +176,7 @@ int nr_ioapics;
 /* The one past the highest gsi number used */
 u32 gsi_top;
 
+/*全局数组mp_irqs，用于管理系统中所有的硬件中断信号和irq之间的关联*/
 /* MP IRQ source entries */
 struct mpc_intsrc mp_irqs[MAX_IRQ_SOURCES];
 
@@ -1210,6 +1211,7 @@ static void __init setup_IO_APIC_irqs(void)
 
 	apic_printk(APIC_VERBOSE, KERN_DEBUG "init IO_APIC IRQs\n");
 
+	/*遍历系统中所有的ioapic*/
 	for_each_ioapic_pin(ioapic, pin) {
 		idx = find_irq_entry(ioapic, pin, mp_INT);
 		if (idx < 0)
@@ -2318,11 +2320,14 @@ void __init setup_IO_APIC(void)
 	x86_init.mpparse.setup_ioapic_ids();
 
 	sync_Arb_IDs();
+
+	/*初始化io apic芯片*/
 	setup_IO_APIC_irqs();
 	init_IO_APIC_traps();
 	if (nr_legacy_irqs())
 		check_timer();
 
+	/*表示ioapic初始化完毕*/
 	ioapic_initialized = 1;
 }
 
@@ -2602,9 +2607,13 @@ void __init io_apic_init_mappings(void)
 	struct resource *ioapic_res;
 	int i;
 
+	/*分配并初始化资源管理数组*/
 	ioapic_res = ioapic_setup_resources();
+
+	/*遍历系统中的所有的io apic*/
 	for_each_ioapic(i) {
 		if (smp_found_config) {
+			/*获取真正的io apic的配置寄存器的物理地址*/
 			ioapic_phys = mpc_ioapic_addr(i);
 #ifdef CONFIG_X86_32
 			if (!ioapic_phys) {
@@ -2621,15 +2630,19 @@ void __init io_apic_init_mappings(void)
 #ifdef CONFIG_X86_32
 fake_ioapic_page:
 #endif
+			/*没有检测到apic，分配一个物理页，充当假的apic*/
 			ioapic_phys = (unsigned long)alloc_bootmem_pages(PAGE_SIZE);
 			ioapic_phys = __pa(ioapic_phys);
 		}
+
+		/*io apic的un-cacheable的固定映射*/
 		set_fixmap_nocache(idx, ioapic_phys);
 		apic_printk(APIC_VERBOSE, "mapped IOAPIC to %08lx (%08lx)\n",
 			__fix_to_virt(idx) + (ioapic_phys & ~PAGE_MASK),
 			ioapic_phys);
 		idx++;
 
+		/*更新ioapic_res数组*/
 		ioapic_res->start = ioapic_phys;
 		ioapic_res->end = ioapic_phys + IO_APIC_SLOT_SIZE - 1;
 		ioapic_res++;

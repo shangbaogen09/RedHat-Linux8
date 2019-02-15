@@ -8,8 +8,10 @@
  * Alan Cox <Alan.Cox@linux.org>, 1995.
  * Ingo Molnar <mingo@redhat.com>, 1999, 2000
  */
-
+/*io apic配置寄存器的物理地址*/
 #define IO_APIC_DEFAULT_PHYS_BASE	0xfec00000
+
+/*local apic配置寄存器的物理地址*/
 #define	APIC_DEFAULT_PHYS_BASE		0xfee00000
 
 /*
@@ -143,6 +145,7 @@
 #define		APIC_EILVT_MSG_EXT	0x7
 #define		APIC_EILVT_MASKED	(1 << 16)
 
+/*APIC寄存器基地址*/
 #define APIC_BASE (fix_to_virt(FIX_APIC_BASE))
 #define APIC_BASE_MSR	0x800
 #define XAPIC_ENABLE	(1UL << 11)

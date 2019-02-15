@@ -68,6 +68,7 @@ void __init init_ISA_irqs(void)
 	 * On some 32-bit UP machines, whose APIC has been disabled by BIOS
 	 * and then got re-enabled by "lapic", it hangs at boot time without this.
 	 */
+	/*调用init_bsp_APIC函数来配置本地LAPIC芯片*/
 	init_bsp_APIC();
 
 	legacy_pic->init(0);
@@ -96,6 +97,7 @@ void __init init_IRQ(void)
 
 void __init native_init_IRQ(void)
 {
+	/*该回调函数为init_ISA_irqs*/
 	/* Execute any quirks before the call gates are initialised: */
 	x86_init.irqs.pre_vector_init();
 

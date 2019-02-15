@@ -24,7 +24,7 @@
 #include <asm/irq_remapping.h>
 
 #include <asm/trace/irq_vectors.h>
-
+#define DEBUG
 struct apic_chip_data {
 	struct irq_cfg		hw_irq_cfg;
 	unsigned int		vector;

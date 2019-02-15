@@ -25,6 +25,8 @@
 /*
  * Check the APIC IDs in bios_cpu_apicid and choose the APIC mode.
  */
+/*该函数会按照各个struct apic结构在.apicdrivers中的顺序，依次调用其probe接口，
+第一个调用返回非0的struct apic结构就被初始化到全局变量apic*/
 void __init default_setup_apic_routing(void)
 {
 	struct apic **drv;
@@ -35,6 +37,7 @@ void __init default_setup_apic_routing(void)
 		if ((*drv)->probe && (*drv)->probe()) {
 			if (apic != *drv) {
 				apic = *drv;
+				/*ubuntu系统打印的log:[0.029051] Switched APIC routing to cluster x2apic.*/
 				pr_info("Switched APIC routing to %s.\n",
 					apic->name);
 			}
@@ -42,6 +45,7 @@ void __init default_setup_apic_routing(void)
 		}
 	}
 
+	/*x86默认没有定义该函数*/
 	if (x86_platform.apic_post_init)
 		x86_platform.apic_post_init();
 }

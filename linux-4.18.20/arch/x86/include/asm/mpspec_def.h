@@ -111,13 +111,22 @@ struct mpc_ioapic {
 	unsigned int apicaddr;
 };
 
+/*该数据结构用于使用I/O APIC的系统中，描述系统中所有PCI设备4个INT#信号和I/OAPIC输入引脚的对应关系*/
 struct mpc_intsrc {
 	unsigned char type;
 	unsigned char irqtype;
 	unsigned short irqflag;
+
+	/*对应PCI设备的bus id*/
 	unsigned char srcbus;
+
+	/*srcbusirq描述了一个INT#信号，其bit0-bit1用于描述是INTA#–INTD#中的哪一个(对应值为0-3)，bit2-bit6描述该PCI设备的slot id*/
 	unsigned char srcbusirq;
+
+	/*dstapic为该描述对应的I/O APIC的ID*/
 	unsigned char dstapic;
+
+	/*dstirq描述srcbus和srcbusirq确定的INT#对应的irq号信息*/
 	unsigned char dstirq;
 };
 

@@ -389,11 +389,13 @@ extern int lapic_can_unplug_cpu(void);
 
 static inline u32 apic_read(u32 reg)
 {
+	/*调用对应实际系统的apic读函数native_apic_mem_read*/
 	return apic->read(reg);
 }
 
 static inline void apic_write(u32 reg, u32 val)
 {
+	/*调用对应实际系统的apic写函数native_apic_mem_write*/
 	apic->write(reg, val);
 }
 

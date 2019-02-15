@@ -1265,12 +1265,14 @@ void __init setup_arch(char **cmdline_p)
 	 * Systems w/o ACPI and mptables might not have it mapped the local
 	 * APIC yet, but prefill_possible_map() might need to access it.
 	 */
+	/*local apic配置寄存器的物理地址映射*/
 	init_apic_mappings();
 
 	prefill_possible_map();
 
 	init_cpu_to_node();
 
+	/*io apic配置寄存器的物理地址映射*/
 	io_apic_init_mappings();
 
 	x86_init.hyper.guest_late_init();

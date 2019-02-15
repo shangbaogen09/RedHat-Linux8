@@ -141,6 +141,7 @@ static int flat_probe(void)
 	return 1;
 }
 
+/*qemux64系统默认使用的是该apic结构体*/
 static struct apic apic_flat __ro_after_init = {
 	.name				= "flat",
 	.probe				= flat_probe,
@@ -293,4 +294,5 @@ static struct apic apic_physflat __ro_after_init = {
 /*
  * We need to check for physflat first, so this order is important.
  */
+/*把这两个结构体按照顺序放入.apicdrivers段中*/
 apic_drivers(apic_physflat, apic_flat);

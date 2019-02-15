@@ -29,6 +29,8 @@
 static __always_inline unsigned long fix_to_virt(const unsigned int idx)
 {
 	BUILD_BUG_ON(idx >= __end_of_fixed_addresses);
+
+	/*根据idx值获取对应的区间基地址*/
 	return __fix_to_virt(idx);
 }
 
