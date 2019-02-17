@@ -1601,7 +1601,7 @@ static void setup_local_APIC(void)
 		apic_printk(APIC_VERBOSE, "masked ExtINT on CPU#%d\n", cpu);
 	}
 
-	/*设置LVT0*/
+	/*设置LVT LINT0寄存器*/
 	apic_write(APIC_LVT0, value);
 
 	/*
@@ -1618,7 +1618,7 @@ static void setup_local_APIC(void)
 	if (!lapic_is_integrated())
 		value |= APIC_LVT_LEVEL_TRIGGER;
 
-	/*设置LVT1*/
+	/*设置LVT LINT1寄存器*/
 	apic_write(APIC_LVT1, value);
 
 #ifdef CONFIG_X86_MCE_INTEL
@@ -1671,11 +1671,18 @@ static void __x2apic_disable(void)
 	if (!boot_cpu_has(X86_FEATURE_APIC))
 		return;
 
+	/*读取IA32_APICBASE寄存器内容*/
 	rdmsrl(MSR_IA32_APICBASE, msr);
+
+	/*如果x2apic已经disable，则直接返回*/
 	if (!(msr & X2APIC_ENABLE))
 		return;
+
+	/*禁止xapic和x2apic*/
 	/* Disable xapic and x2apic first and then reenable xapic mode */
 	wrmsrl(MSR_IA32_APICBASE, msr & ~(X2APIC_ENABLE | XAPIC_ENABLE));
+
+	/*重新使能xapic*/
 	wrmsrl(MSR_IA32_APICBASE, msr & ~X2APIC_ENABLE);
 	printk_once(KERN_INFO "x2apic disabled\n");
 }
@@ -1684,26 +1691,39 @@ static void __x2apic_enable(void)
 {
 	u64 msr;
 
+	/*读取IA32_APICBASE寄存器内容*/
 	rdmsrl(MSR_IA32_APICBASE, msr);
+
+	/*如果x2apic已经disable，则直接返回*/
 	if (msr & X2APIC_ENABLE)
 		return;
+
+	/*使能x2apic*/
 	wrmsrl(MSR_IA32_APICBASE, msr | X2APIC_ENABLE);
 	printk_once(KERN_INFO "x2apic enabled\n");
 }
 
+/*处理命令行传入的nox2apic参数*/
 static int __init setup_nox2apic(char *str)
 {
 	if (x2apic_enabled()) {
+
+		/*读取local apic id寄存器的值*/
 		int apicid = native_apic_msr_read(APIC_ID);
 
+		/*如果apic值大于255,则不能禁止x2apic*/
 		if (apicid >= 255) {
 			pr_warning("Apicid: %08x, cannot enforce nox2apic\n",
 				   apicid);
 			return 0;
 		}
 		pr_warning("x2apic already enabled.\n");
+
+		/*把x2apic去使能*/
 		__x2apic_disable();
 	}
+
+	/*清除x2apic位图feature*/
 	setup_clear_cpu_cap(X86_FEATURE_X2APIC);
 	x2apic_state = X2APIC_DISABLED;
 	x2apic_mode = 0;
@@ -1722,6 +1742,7 @@ void x2apic_setup(void)
 		__x2apic_disable();
 		return;
 	}
+	/*使能x2apic*/
 	__x2apic_enable();
 }
 

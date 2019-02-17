@@ -4422,9 +4422,14 @@ int pci_dev_specific_acs_enabled(struct pci_dev *dev, u16 acs_flags)
 }
 
 /* Config space offset of Root Complex Base Address register */
+/*RCBA寄存器在LPC寄存器组的0xF0偏移处*/
 #define INTEL_LPC_RCBA_REG 0xf0
+
+/*RCBA寄存器的14-31位为RCBA物理基地址*/
 /* 31:14 RCBA address */
 #define INTEL_LPC_RCBA_MASK 0xffffc000
+
+/*RCBA寄存器的使能标志位*/
 /* RCBA Enable */
 #define INTEL_LPC_RCBA_ENABLE (1 << 0)
 

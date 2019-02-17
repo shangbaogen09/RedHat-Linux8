@@ -488,9 +488,16 @@
 #define FEATURE_CONTROL_VMXON_ENABLED_OUTSIDE_SMX	(1<<2)
 #define FEATURE_CONTROL_LMCE				(1<<20)
 
+/*IA32_APICBASE(apic&xapic)寄存器基地址*/
 #define MSR_IA32_APICBASE		0x0000001b
+
+/*指示当前处理器为引导处理器*/
 #define MSR_IA32_APICBASE_BSP		(1<<8)
+
+/*APIC的全局使能标志位*/
 #define MSR_IA32_APICBASE_ENABLE	(1<<11)
+
+/*APIC寄存器的物理地址*/
 #define MSR_IA32_APICBASE_BASE		(0xfffff<<12)
 
 #define MSR_IA32_TSCDEADLINE		0x000006e0

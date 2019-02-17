@@ -155,10 +155,16 @@
 #define		APIC_EILVT_MSG_EXT	0x7
 #define		APIC_EILVT_MASKED	(1 << 16)
 
-/*APIC寄存器基地址*/
+/*LOCAL APIC寄存器物理基地址*/
 #define APIC_BASE (fix_to_virt(FIX_APIC_BASE))
+
+/*LOCAL APIC寄存器MSR基地址*/
 #define APIC_BASE_MSR	0x800
+
+/*xapic全局使能位*/
 #define XAPIC_ENABLE	(1UL << 11)
+
+/*x2apic使能位*/
 #define X2APIC_ENABLE	(1UL << 10)
 
 #ifdef CONFIG_X86_32
