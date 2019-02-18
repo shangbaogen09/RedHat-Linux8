@@ -20,8 +20,10 @@
  */
 #define IO_APIC_SLOT_SIZE		1024
 
+/*LOCAL APIC ID寄存器*/
 #define	APIC_ID		0x20
 
+/*LOCAL APIC版本寄存器*/
 #define	APIC_LVR	0x30
 #define		APIC_LVR_MASK		0xFF00FF
 #define		APIC_LVR_DIRECTED_EOI	(1 << 24)
@@ -35,25 +37,37 @@
 #define		APIC_XAPIC(x)		((x) >= 0x14)
 #define		APIC_EXT_SPACE(x)	((x) & 0x80000000)
 
-/*任务优先级寄存器*/
+/*任务优先级寄存器TPR*/
 #define	APIC_TASKPRI	0x80
 #define		APIC_TPRI_MASK		0xFFu
+
+/*优先级仲裁寄存器APR*/
 #define	APIC_ARBPRI	0x90
 #define		APIC_ARBPRI_MASK	0xFFu
+
+/*处理器优先级寄存器PPR*/
 #define	APIC_PROCPRI	0xA0
+
+/*EOI寄存器*/
 #define	APIC_EOI	0xB0
 #define		APIC_EOI_ACK		0x0 /* Docs say 0 for future compat. */
+
+/*远程读取寄存器RRD*/
 #define	APIC_RRR	0xC0
+
+/*逻辑目标寄存器LDR*/
 #define	APIC_LDR	0xD0
 #define		APIC_LDR_MASK		(0xFFu << 24)
 #define		GET_APIC_LOGICAL_ID(x)	(((x) >> 24) & 0xFFu)
 #define		SET_APIC_LOGICAL_ID(x)	(((x) << 24))
 #define		APIC_ALL_CPUS		0xFFu
+
+/*目标格式寄存器*/
 #define	APIC_DFR	0xE0
 #define		APIC_DFR_CLUSTER		0x0FFFFFFFul
 #define		APIC_DFR_FLAT			0xFFFFFFFFul
 
-/*伪中断向量寄存器偏移*/
+/*伪中断向量寄存器物理地址偏移*/
 #define	APIC_SPIV	0xF0
 
 /*禁止广播EOI消息使能标志位*/
@@ -64,10 +78,18 @@
 
 /*APIC软件使能标志位*/
 #define		APIC_SPIV_APIC_ENABLED		(1 << 8)
+
+/*ISR寄存器*/
 #define	APIC_ISR	0x100
 #define	APIC_ISR_NR     0x8     /* Number of 32 bit ISR registers. */
+
+/*TMR寄存器*/
 #define	APIC_TMR	0x180
+
+/*IRR寄存器*/
 #define	APIC_IRR	0x200
+
+/*错误状态寄存器*/
 #define	APIC_ESR	0x280
 #define		APIC_ESR_SEND_CS	0x00001
 #define		APIC_ESR_RECV_CS	0x00002
@@ -76,7 +98,11 @@
 #define		APIC_ESR_SENDILL	0x00020
 #define		APIC_ESR_RECVILL	0x00040
 #define		APIC_ESR_ILLREGA	0x00080
+
+/*LVT CMCI寄存器*/
 #define 	APIC_LVTCMCI	0x2f0
+
+/*中断命令寄存器ICR(bit 31:0)*/
 #define	APIC_ICR	0x300
 #define		APIC_DEST_SELF		0x40000
 #define		APIC_DEST_ALLINC	0x80000
@@ -100,12 +126,22 @@
 #define		APIC_DM_STARTUP		0x00600
 #define		APIC_DM_EXTINT		0x00700
 #define		APIC_VECTOR_MASK	0x000FF
+
+/*中断命令寄存器ICR(bit 63:32)*/
 #define	APIC_ICR2	0x310
 #define		GET_APIC_DEST_FIELD(x)	(((x) >> 24) & 0xFF)
 #define		SET_APIC_DEST_FIELD(x)	((x) << 24)
+
+/*LVT定时器寄存器*/
 #define	APIC_LVTT	0x320
+
+/*LVT温度传感器寄存器*/
 #define	APIC_LVTTHMR	0x330
+
+/*LVT性能监控器寄存器*/
 #define	APIC_LVTPC	0x340
+
+/*LVT LINT0寄存器*/
 #define	APIC_LVT0	0x350
 #define		APIC_LVT_TIMER_BASE_MASK	(0x3 << 18)
 #define		GET_APIC_TIMER_BASE(x)		(((x) >> 18) & 0x3)
@@ -113,9 +149,13 @@
 #define		APIC_TIMER_BASE_CLKIN		0x0
 #define		APIC_TIMER_BASE_TMBASE		0x1
 #define		APIC_TIMER_BASE_DIV		0x2
-#define		APIC_LVT_TIMER_ONESHOT		(0 << 17)
-#define		APIC_LVT_TIMER_PERIODIC		(1 << 17)
-#define		APIC_LVT_TIMER_TSCDEADLINE	(2 << 17)
+
+/*LVT定时器寄存器第17位为定时模式*/
+#define		APIC_LVT_TIMER_ONESHOT		(0 << 17) /*一次性定时*/
+#define		APIC_LVT_TIMER_PERIODIC		(1 << 17) /*周期性定时*/
+#define		APIC_LVT_TIMER_TSCDEADLINE	(2 << 17) /*定时*/
+
+/*屏蔽标志位*/
 #define		APIC_LVT_MASKED			(1 << 16)
 #define		APIC_LVT_LEVEL_TRIGGER		(1 << 15)
 #define		APIC_LVT_REMOTE_IRR		(1 << 14)
@@ -127,11 +167,23 @@
 #define			APIC_MODE_FIXED		0x0
 #define			APIC_MODE_NMI		0x4
 #define			APIC_MODE_EXTINT	0x7
+
+/*LVT LINT1寄存器*/
 #define	APIC_LVT1	0x360
+
+/*LVT错误寄存器*/
 #define	APIC_LVTERR	0x370
+
+/*初始计算寄存器(定时器专用)*/
 #define	APIC_TMICT	0x380
+
+/*当前计数寄存器(定时器专用)*/
 #define	APIC_TMCCT	0x390
+
+/*分频计数寄存器(定时器专用)*/
 #define	APIC_TDCR	0x3E0
+
+/*SELF IPI寄存器*/
 #define APIC_SELF_IPI	0x3F0
 #define		APIC_TDR_DIV_TMBASE	(1 << 2)
 #define		APIC_TDR_DIV_1		0xB
@@ -195,6 +247,7 @@
  */
 #define u32 unsigned int
 
+/*local apic的所有寄存器组成的结构体*/
 struct local_apic {
 
 /*000*/	struct { u32 __reserved[4]; } __reserved_01;
@@ -451,6 +504,7 @@ struct local_apic {
  #define BAD_APICID 0xFFFFu
 #endif
 
+/*local apic的投递模式*/
 enum ioapic_irq_destination_types {
 	dest_Fixed		= 0,
 	dest_LowestPrio		= 1,

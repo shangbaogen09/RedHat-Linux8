@@ -293,6 +293,7 @@ int get_physical_broadcast(void)
 /**
  * lapic_get_maxlvt - get the maximum number of local vector table entries
  */
+/*从local apic版本寄存器获取LVT表项数目*/
 int lapic_get_maxlvt(void)
 {
 	/*
@@ -324,7 +325,10 @@ static void __setup_APIC_LVTT(unsigned int clocks, int oneshot, int irqen)
 {
 	unsigned int lvtt_value, tmp_value;
 
+	/*把中断向量0xec赋值到要写入的变量*/
 	lvtt_value = LOCAL_TIMER_VECTOR;
+
+	/*根据传入的参数为定时器模式赋值*/
 	if (!oneshot)
 		lvtt_value |= APIC_LVT_TIMER_PERIODIC;
 	else if (boot_cpu_has(X86_FEATURE_TSC_DEADLINE_TIMER))
@@ -333,9 +337,11 @@ static void __setup_APIC_LVTT(unsigned int clocks, int oneshot, int irqen)
 	if (!lapic_is_integrated())
 		lvtt_value |= SET_APIC_TIMER_BASE(APIC_TIMER_BASE_DIV);
 
+	/*根据传入的参数为寄存器的屏蔽位赋值*/
 	if (!irqen)
 		lvtt_value |= APIC_LVT_MASKED;
 
+	/*把拼凑号的值写入到LVT定时器寄存器*/
 	apic_write(APIC_LVTT, lvtt_value);
 
 	if (lvtt_value & APIC_LVT_TIMER_TSCDEADLINE) {
@@ -494,15 +500,18 @@ lapic_timer_set_periodic_oneshot(struct clock_event_device *evt, bool oneshot)
 	if (evt->features & CLOCK_EVT_FEAT_DUMMY)
 		return 0;
 
+	/*配置LVTT定时器的寄存器*/
 	__setup_APIC_LVTT(lapic_timer_frequency, oneshot, 1);
 	return 0;
 }
 
+/*设置local apic timer为周期性模式*/
 static int lapic_timer_set_periodic(struct clock_event_device *evt)
 {
 	return lapic_timer_set_periodic_oneshot(evt, false);
 }
 
+/*设置local apic timer为一次性模式*/
 static int lapic_timer_set_oneshot(struct clock_event_device *evt)
 {
 	return lapic_timer_set_periodic_oneshot(evt, true);

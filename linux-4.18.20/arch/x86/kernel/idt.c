@@ -33,6 +33,7 @@ struct idt_data {
 		.segment	= _segment,		\
 	}
 
+/*中断门的定义*/
 /* Interrupt gate */
 #define INTG(_vector, _addr)				\
 	G(_vector, _addr, DEFAULT_STACK, GATE_INTERRUPT, DPL0, __KERNEL_CS)
@@ -71,19 +72,44 @@ static const __initconst struct idt_data early_idts[] = {
  * the traps which use them are reinitialized with IST after cpu_init() has
  * set up TSS.
  */
+
+/*系统默认的cpu内部中断处理程序*/
 static const __initconst struct idt_data def_idts[] = {
+	/*除法错误*/
 	INTG(X86_TRAP_DE,		divide_error),
+
+	/*NMI中断*/
 	INTG(X86_TRAP_NMI,		nmi),
+
+	/*边界监测中断*/
 	INTG(X86_TRAP_BR,		bounds),
+
+	/*无效操作码*/
 	INTG(X86_TRAP_UD,		invalid_op),
+
+	/*设备不可用*/
 	INTG(X86_TRAP_NM,		device_not_available),
+
+	/*协处理器段溢出*/
 	INTG(X86_TRAP_OLD_MF,		coprocessor_segment_overrun),
+
+	/*无效TSS*/
 	INTG(X86_TRAP_TS,		invalid_TSS),
+
+	/*缺段中断*/
 	INTG(X86_TRAP_NP,		segment_not_present),
+
+	/*堆栈异常*/
 	INTG(X86_TRAP_SS,		stack_segment),
+
+	/*一般保护异常*/
 	INTG(X86_TRAP_GP,		general_protection),
 	INTG(X86_TRAP_SPURIOUS,		spurious_interrupt_bug),
+
+	/*协处理器出错*/
 	INTG(X86_TRAP_MF,		coprocessor_error),
+
+	/*对齐检查中断*/
 	INTG(X86_TRAP_AC,		alignment_check),
 	INTG(X86_TRAP_XF,		simd_coprocessor_error),
 
@@ -92,12 +118,14 @@ static const __initconst struct idt_data def_idts[] = {
 #else
 	INTG(X86_TRAP_DF,		double_fault),
 #endif
+	/*调试异常*/
 	INTG(X86_TRAP_DB,		debug),
 
 #ifdef CONFIG_X86_MCE
 	INTG(X86_TRAP_MC,		&machine_check),
 #endif
 
+	/*溢出*/
 	SYSG(X86_TRAP_OF,		overflow),
 #if defined(CONFIG_IA32_EMULATION)
 	SYSG(IA32_SYSCALL_VECTOR,	entry_INT80_compat),
@@ -111,7 +139,10 @@ static const __initconst struct idt_data def_idts[] = {
  */
 static const __initconst struct idt_data apic_idts[] = {
 #ifdef CONFIG_SMP
+	/*处理器间中断， 用于cpu之间通信，其他cpu要求重新调度*/
 	INTG(RESCHEDULE_VECTOR,		reschedule_interrupt),
+
+	/*处理器间中断， 用于cpu之间通信，让另外的cpu调用某个函数*/
 	INTG(CALL_FUNCTION_VECTOR,	call_function_interrupt),
 	INTG(CALL_FUNCTION_SINGLE_VECTOR, call_function_single_interrupt),
 	INTG(IRQ_MOVE_CLEANUP_VECTOR,	irq_move_cleanup_interrupt),
@@ -131,6 +162,7 @@ static const __initconst struct idt_data apic_idts[] = {
 #endif
 
 #ifdef CONFIG_X86_LOCAL_APIC
+	/*APIC定期器中断*/
 	INTG(LOCAL_TIMER_VECTOR,	apic_timer_interrupt),
 	INTG(X86_PLATFORM_IPI_VECTOR,	x86_platform_ipi),
 # ifdef CONFIG_HAVE_KVM
@@ -221,7 +253,9 @@ idt_setup_from_table(gate_desc *idt, const struct idt_data *t, int size, bool sy
 {
 	gate_desc desc;
 
+	/*循环处理传入的数组t*/
 	for (; size > 0; t++, size--) {
+		/*使用传入的数组项，初始化结构体变量desc*/
 		idt_init_desc(&desc, t);
 		write_idt_entry(idt, t->vector, &desc);
 		if (sys)
