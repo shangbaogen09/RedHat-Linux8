@@ -223,6 +223,7 @@
 # define MAX_IO_APICS 64
 # define MAX_LOCAL_APIC 256
 #else
+/*定义系统支持的最大local apic和io apic数目*/
 # define MAX_IO_APICS 128
 # define MAX_LOCAL_APIC 32768
 #endif

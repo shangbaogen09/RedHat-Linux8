@@ -467,6 +467,7 @@ acpi_parse_ioapic(struct acpi_subtable_header * header, const unsigned long end)
 	if (ioapic->global_irq_base < nr_legacy_irqs())
 		cfg.type = IOAPIC_DOMAIN_LEGACY;
 
+	/*向系统注册ioapic*/
 	mp_register_ioapic(ioapic->id, ioapic->address, ioapic->global_irq_base,
 			   &cfg);
 
@@ -1189,12 +1190,14 @@ static int __init acpi_parse_madt_ioapic_entries(void)
 	/*
 	 * if "noapic" boot option, don't look for IO-APICs
 	 */
+	/*如果设置了noapic,则跳过解析过程*/
 	if (skip_ioapic_setup) {
 		printk(KERN_INFO PREFIX "Skipping IOAPIC probe "
 		       "due to 'noapic' option.\n");
 		return -ENODEV;
 	}
 
+	/*解析io apic设备*/
 	count = acpi_table_parse_madt(ACPI_MADT_TYPE_IO_APIC, acpi_parse_ioapic,
 				      MAX_IO_APICS);
 	if (!count) {
@@ -1288,6 +1291,7 @@ static void __init acpi_process_madt(void)
 			 * Parse MADT IO-APIC entries
 			 */
 			mutex_lock(&acpi_ioapic_lock);
+			/*解析ioapic*/
 			error = acpi_parse_madt_ioapic_entries();
 			mutex_unlock(&acpi_ioapic_lock);
 			if (!error) {
@@ -1321,6 +1325,7 @@ static void __init acpi_process_madt(void)
 	 * ACPI supports both logical (e.g. Hyper-Threading) and physical
 	 * processors, where MPS only supports physical.
 	 */
+	/*系统默认打印出该log*/
 	if (acpi_lapic && acpi_ioapic)
 		printk(KERN_INFO "Using ACPI (MADT) for SMP configuration "
 		       "information\n");

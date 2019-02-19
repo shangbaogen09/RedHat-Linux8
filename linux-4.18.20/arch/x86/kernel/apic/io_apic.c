@@ -263,11 +263,17 @@ int __init arch_early_ioapic_init(void)
 	return 0;
 }
 
+/*访问io apic的寄存器*/
 struct io_apic {
+	/*间接索引寄存器*/
 	unsigned int index;
 	unsigned int unused[3];
+
+	/*数据操作寄存器*/
 	unsigned int data;
 	unsigned int unused2[11];
+
+	/*EOI寄存器*/
 	unsigned int eoi;
 };
 
@@ -285,20 +291,30 @@ static inline void io_apic_eoi(unsigned int apic, unsigned int vector)
 
 unsigned int native_io_apic_read(unsigned int apic, unsigned int reg)
 {
+	/*由参数apic找到对应的io apic寄存器操作结构体*/
 	struct io_apic __iomem *io_apic = io_apic_base(apic);
+
+	/*把要读取的地址写入间接索引寄存器中*/
 	writel(reg, &io_apic->index);
+
+	/*读取数据寄存器*/
 	return readl(&io_apic->data);
 }
 
 static void io_apic_write(unsigned int apic, unsigned int reg,
 			  unsigned int value)
 {
+	/*由参数apic找到对应的io apic寄存器操作结构体*/
 	struct io_apic __iomem *io_apic = io_apic_base(apic);
 
+	/*向该结构体中的间接索引寄存器写入要操作的寄存器地址*/
 	writel(reg, &io_apic->index);
+
+	/*向该结构体中的数据操作寄存器写入要操作的数据*/
 	writel(value, &io_apic->data);
 }
 
+/*该联合体为64位*/
 union entry_union {
 	struct { u32 w1, w2; };
 	struct IO_APIC_route_entry entry;
@@ -308,21 +324,27 @@ static struct IO_APIC_route_entry __ioapic_read_entry(int apic, int pin)
 {
 	union entry_union eu;
 
+	/*从数据操作寄存器中读两次合成一个表项*/
 	eu.w1 = io_apic_read(apic, 0x10 + 2 * pin);
 	eu.w2 = io_apic_read(apic, 0x11 + 2 * pin);
 
+	/*向上层调用返回该表项*/
 	return eu.entry;
 }
 
+/*参数为io apic索引和io apic引脚*/
 static struct IO_APIC_route_entry ioapic_read_entry(int apic, int pin)
 {
 	union entry_union eu;
 	unsigned long flags;
 
 	raw_spin_lock_irqsave(&ioapic_lock, flags);
+
+	/*继续调用如下函数进行读取操作*/
 	eu.entry = __ioapic_read_entry(apic, pin);
 	raw_spin_unlock_irqrestore(&ioapic_lock, flags);
 
+	/*向上层返回读取到的内容*/
 	return eu.entry;
 }
 
@@ -337,15 +359,19 @@ static void __ioapic_write_entry(int apic, int pin, struct IO_APIC_route_entry e
 	union entry_union eu = {{0, 0}};
 
 	eu.entry = e;
+	/*向对应的寄存器写入表项*/
 	io_apic_write(apic, 0x11 + 2*pin, eu.w2);
 	io_apic_write(apic, 0x10 + 2*pin, eu.w1);
 }
 
+/*把参数e写入到对应io apic的pin引脚寄存器*/
 static void ioapic_write_entry(int apic, int pin, struct IO_APIC_route_entry e)
 {
 	unsigned long flags;
 
 	raw_spin_lock_irqsave(&ioapic_lock, flags);
+
+	/*继续调用该函数写入表项值*/
 	__ioapic_write_entry(apic, pin, e);
 	raw_spin_unlock_irqrestore(&ioapic_lock, flags);
 }
@@ -2736,6 +2762,8 @@ static int find_free_ioapic_entry(void)
  * @gsi_base:	base of GSI associated with the IOAPIC
  * @cfg:	configuration information for the IOAPIC
  */
+
+/*向系统注册一个ioapic设备*/
 int mp_register_ioapic(int id, u32 address, u32 gsi_base,
 		       struct ioapic_domain_cfg *cfg)
 {
@@ -2748,6 +2776,8 @@ int mp_register_ioapic(int id, u32 address, u32 gsi_base,
 		pr_warn("Bogus (zero) I/O APIC address found, skipping!\n");
 		return -EINVAL;
 	}
+
+	/*循环检查该io apic设备是否已经注册了*/
 	for_each_ioapic(ioapic)
 		if (ioapics[ioapic].mp_config.apicaddr == address) {
 			pr_warn("address 0x%x conflicts with IOAPIC%d\n",
@@ -2755,6 +2785,7 @@ int mp_register_ioapic(int id, u32 address, u32 gsi_base,
 			return -EEXIST;
 		}
 
+	/*获取一个空闲的io apic表项*/
 	idx = find_free_ioapic_entry();
 	if (idx >= MAX_IO_APICS) {
 		pr_warn("Max # of I/O APICs (%d) exceeded (found %d), skipping\n",
@@ -2762,6 +2793,7 @@ int mp_register_ioapic(int id, u32 address, u32 gsi_base,
 		return -ENOSPC;
 	}
 
+	/*使用传入的参数初始化io apic*/
 	ioapics[idx].mp_config.type = MP_IOAPIC;
 	ioapics[idx].mp_config.flags = MPC_APIC_USABLE;
 	ioapics[idx].mp_config.apicaddr = address;
@@ -2799,6 +2831,8 @@ int mp_register_ioapic(int id, u32 address, u32 gsi_base,
 	gsi_cfg->gsi_end = gsi_end;
 
 	ioapics[idx].irqdomain = NULL;
+
+	/*为该ioapic赋值操作函数*/
 	ioapics[idx].irqdomain_cfg = *cfg;
 
 	/*
@@ -2822,6 +2856,7 @@ int mp_register_ioapic(int id, u32 address, u32 gsi_base,
 	/* Set nr_registers to mark entry present */
 	ioapics[idx].nr_registers = entries;
 
+	/*系统打印的log默认会走到这里*/
 	pr_info("IOAPIC[%d]: apic_id %d, version %d, address 0x%x, GSI %d-%d\n",
 		idx, mpc_ioapic_id(idx),
 		mpc_ioapic_ver(idx), mpc_ioapic_addr(idx),

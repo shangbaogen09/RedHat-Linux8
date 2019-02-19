@@ -1357,6 +1357,7 @@ void __init apic_intr_mode_init(void)
 	/*该函数默认返回APIC_SYMMETRIC_IO模式*/
 	apic_intr_mode = apic_intr_mode_select();
 
+	/*根据返回值会走APIC_SYMMETRIC_IO分支处理*/
 	switch (apic_intr_mode) {
 	case APIC_PIC:
 		pr_info("APIC: Keep in PIC mode(8259)\n");
@@ -1374,6 +1375,8 @@ void __init apic_intr_mode_init(void)
 	/*根据系统打印的log,默认走该路径*/
 	case APIC_SYMMETRIC_IO:
 		pr_info("APIC: Switch to symmetric I/O mode setup\n");
+
+		/*设置全局变量apic的值*/
 		default_setup_apic_routing();
 		break;
 	case APIC_SYMMETRIC_IO_NO_ROUTING:
@@ -1381,7 +1384,7 @@ void __init apic_intr_mode_init(void)
 		break;
 	}
 
-	/*初始化local apic和io apic*/
+	/*初始化local apic和io apic,传入的参数upmode为0*/
 	apic_bsp_setup(upmode);
 }
 
@@ -1505,6 +1508,8 @@ static void setup_local_APIC(void)
 		apic_write(APIC_ESR, 0);
 	}
 #endif
+
+	/*设置性能监视寄存器*/
 	perf_events_lapic_init();
 
 	/*
@@ -1639,6 +1644,7 @@ static void setup_local_APIC(void)
 
 static void end_local_APIC_setup(void)
 {
+	/*设置local apic的LVT esr寄存器*/
 	lapic_setup_esr();
 
 #ifdef CONFIG_X86_32
@@ -1780,6 +1786,8 @@ static __init void x2apic_enable(void)
 
 	x2apic_mode = 1;
 	x2apic_state = X2APIC_ON;
+
+	/*操作寄存器使能x2apic*/
 	__x2apic_enable();
 }
 
@@ -1805,6 +1813,8 @@ static __init void try_to_enable_x2apic(int remap_mode)
 		 */
 		x2apic_phys = 1;
 	}
+
+	/*使能x2apic*/
 	x2apic_enable();
 }
 
@@ -1861,6 +1871,8 @@ void __init enable_IR_x2apic(void)
 	/* If irq_remapping_prepare() succeeded, try to enable it */
 	if (ir_stat >= 0)
 		ir_stat = irq_remapping_enable();
+
+	/*使能x2apic*/
 	/* ir_stat contains the remap mode or an error code */
 	try_to_enable_x2apic(ir_stat);
 
@@ -2459,6 +2471,8 @@ void __init apic_bsp_setup(bool upmode)
 {
 	/*x64系统该函数为空*/
 	connect_bsp_APIC();
+
+	/*专门为单处理器模式准备，默认为false*/
 	if (upmode)
 		apic_bsp_up_setup();
 

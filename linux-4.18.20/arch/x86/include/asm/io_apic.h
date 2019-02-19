@@ -64,21 +64,61 @@ union IO_APIC_reg_03 {
 	} __attribute__ ((packed)) bits;
 };
 
+/*内核用struct IO_APIC_route_entry结构表示RTE*/
 struct IO_APIC_route_entry {
+
+	/*Interrupt Vector，中断向量，R/W。指定该中断对应的vector，范围从10h到FEh（x86架构前16个vector被系统预留)*/
 	__u32	vector		:  8,
+
+		/*Delivery Mode，传送模式，R/W。用于指定该中断以何种方式发送给目的APIC，各种模式需要和相应的触发方式配合*/
 		delivery_mode	:  3,	/* 000: FIXED
 					 * 001: lowest prio
 					 * 111: ExtINT
 					 */
+
+		/*Destination Mode，目的地模式，R/W*/
 		dest_mode	:  1,	/* 0: physical, 1: logical */
+
+		/*
+		Delivery Status，传送状态，RO。
+		0：IDEL，当前没有中断
+		1：Send Pending，IOAPIC已经收到该中断，但由于某种原因该中断还未发送给LAPIC
+		*/
 		delivery_status	:  1,
+
+		/*
+		Interrupt Input Pin Polarity（INTPOL），中断管脚的极性，R/W。指定该管脚的有效电平是高电平还是低电平。
+		0：高电平
+		1：低电平
+		*/
 		polarity	:  1,
+
+		/*
+		Remote IRR，远程IRR，RO（只读）。只对level触发的中断有效，当该中断是edge触发时，该值代表的意义未定义。
+		当中断是level触发时，LAPIC接收了该中断，该位置一，LAPIC写EOI时，该位清零。
+		*/
 		irr		:  1,
+
+		/*
+		Trigger Mode，触发模式，R/W。指明该管脚的的中断由什么方式触发。
+		1：Level，电平触发
+		2：Edge，边沿触发
+		*/
 		trigger		:  1,	/* 0: edge, 1: level */
+
+		/*Interrupt Mask，中断屏蔽位，R/W。置一时，对应的中断管脚被屏蔽，这时产生的中断将被忽略。清零时，对应管脚产生的中断被发送至LAPIC*/
 		mask		:  1,	/* 0: enabled, 1: disabled */
+
+		/*17:55位，Reserved，预留未用*/
 		__reserved_2	: 15;
 
 	__u32	__reserved_3	: 24,
+
+		/*
+		Destination Field，目的字段，R/W（可读写）。根据Destination Filed（见下）值的不同，该字段值的意义不同，它有两个意义：
+		Physical Mode（Destination Mode为0时）： 其值为APIC ID，用于标识一个唯一的APIC。
+		Logical Mode（Destination Mode为1时）：其值根据LAPIC的不同配置，代表一组CPU（具体见LAPIC相关内容）
+		*/
 		dest		:  8;
 } __attribute__ ((packed));
 
@@ -187,6 +227,7 @@ extern void native_restore_boot_irq_mode(void);
 
 static inline unsigned int io_apic_read(unsigned int apic, unsigned int reg)
 {
+	/*实际的读写回调函数如下:native_io_apic_read*/
 	return x86_apic_ops.io_apic_read(apic, reg);
 }
 

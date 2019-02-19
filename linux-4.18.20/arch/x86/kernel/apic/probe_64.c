@@ -31,6 +31,7 @@ void __init default_setup_apic_routing(void)
 {
 	struct apic **drv;
 
+	/*使能x2apic*/
 	enable_IR_x2apic();
 
 	for (drv = __apicdrivers; drv < __apicdrivers_end; drv++) {
