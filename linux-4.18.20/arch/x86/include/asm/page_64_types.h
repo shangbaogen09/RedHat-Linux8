@@ -6,13 +6,17 @@
 #include <asm/kaslr.h>
 #endif
 
+/*默认# CONFIG_KASAN is not set*/
 #ifdef CONFIG_KASAN
 #define KASAN_STACK_ORDER 1
 #else
 #define KASAN_STACK_ORDER 0
 #endif
 
+/*默认order=2*/
 #define THREAD_SIZE_ORDER	(2 + KASAN_STACK_ORDER)
+
+/*内核栈的大小为4页*/
 #define THREAD_SIZE  (PAGE_SIZE << THREAD_SIZE_ORDER)
 #define CURRENT_MASK (~(THREAD_SIZE - 1))
 

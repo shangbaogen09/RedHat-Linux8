@@ -234,6 +234,7 @@ const struct desc_ptr debug_idt_descr = {
 };
 #endif
 
+/*使用struct idt_data内容初始化gate_desc　gate指针变量*/
 static inline void idt_init_desc(gate_desc *gate, const struct idt_data *d)
 {
 	unsigned long addr = (unsigned long) d->addr;
@@ -257,7 +258,11 @@ idt_setup_from_table(gate_desc *idt, const struct idt_data *t, int size, bool sy
 	for (; size > 0; t++, size--) {
 		/*使用传入的数组项，初始化结构体变量desc*/
 		idt_init_desc(&desc, t);
+
+		/*把描述符填入到对应表项idt[t->vector]=desc中*/
 		write_idt_entry(idt, t->vector, &desc);
+
+		/*把apic的中断向量记录到位图system_vectors中*/
 		if (sys)
 			set_bit(t->vector, system_vectors);
 	}
@@ -269,6 +274,7 @@ static void set_intr_gate(unsigned int n, const void *addr)
 
 	BUG_ON(n > 0xFF);
 
+	/*使用传入的函数地址初始化一个struct idt_data变量*/
 	memset(&data, 0, sizeof(data));
 	data.vector	= n;
 	data.addr	= addr;
@@ -276,6 +282,7 @@ static void set_intr_gate(unsigned int n, const void *addr)
 	data.bits.type	= GATE_INTERRUPT;
 	data.bits.p	= 1;
 
+	/*把结构体变量data写入到中断向量表中*/
 	idt_setup_from_table(idt_table, &data, 1, false);
 }
 
@@ -342,17 +349,23 @@ void __init idt_setup_debugidt_traps(void)
  */
 void __init idt_setup_apic_and_irq_gates(void)
 {
+	/*第一个外部中断向量从32开始*/
 	int i = FIRST_EXTERNAL_VECTOR;
 	void *entry;
 
+	/*设置apic中断控制器中的中断向量,具体处理是把数组的内容依次赋值到中断描述符表idt_table*/
 	idt_setup_from_table(idt_table, apic_idts, ARRAY_SIZE(apic_idts), true);
 
 	for_each_clear_bit_from(i, system_vectors, FIRST_SYSTEM_VECTOR) {
+		/*取出初始化后的中断处理片段条目,每个条目的大小为8个字节*/
 		entry = irq_entries_start + 8 * (i - FIRST_EXTERNAL_VECTOR);
+
+		/*写入到对应的中断向量号i对应的中断向量表中*/
 		set_intr_gate(i, entry);
 	}
 
 #ifdef CONFIG_X86_LOCAL_APIC
+	/*把没有设置中断向量处理函数的中断向量表设置为默认的spurious_interrupt处理函数*/
 	for_each_clear_bit_from(i, system_vectors, NR_VECTORS) {
 		set_bit(i, system_vectors);
 		set_intr_gate(i, spurious_interrupt);
@@ -367,12 +380,15 @@ void __init idt_setup_early_handler(void)
 {
 	int i;
 
+	/*初始化前32个中断描述符表处理函数*/
 	for (i = 0; i < NUM_EXCEPTION_VECTORS; i++)
 		set_intr_gate(i, early_idt_handler_array[i]);
 #ifdef CONFIG_X86_32
 	for ( ; i < NR_VECTORS; i++)
 		set_intr_gate(i, early_ignore_irq);
 #endif
+
+	/*把中断描述符表加载到中断描述符寄存器*/
 	load_idt(&idt_descr);
 }
 

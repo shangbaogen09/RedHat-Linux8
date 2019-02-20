@@ -639,6 +639,8 @@ asmlinkage __visible void __init start_kernel(void)
 	context_tracking_init();
 	/* init some links before init_ISA_irqs() */
 	early_irq_init();
+
+	/*初始化中断描述符表处理函数*/
 	init_IRQ();
 	tick_init();
 	rcu_init_nohz();
@@ -700,6 +702,8 @@ asmlinkage __visible void __init start_kernel(void)
 	setup_per_cpu_pageset();
 	numa_policy_init();
 	acpi_early_init();
+
+	/*默认执行该函数x86_late_time_init,配置local apci和io apic设备*/
 	if (late_time_init)
 		late_time_init();
 	calibrate_delay();

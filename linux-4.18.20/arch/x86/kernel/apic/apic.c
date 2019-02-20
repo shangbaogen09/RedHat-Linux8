@@ -2476,12 +2476,14 @@ void __init apic_bsp_setup(bool upmode)
 	if (upmode)
 		apic_bsp_up_setup();
 
-	/*设置local ioapic*/
+	/*设置local apic*/
 	setup_local_APIC();
 
 	enable_IO_APIC();
 	end_local_APIC_setup();
 	irq_remap_enable_fault_handling();
+
+	/*设置io apic设备*/
 	setup_IO_APIC();
 }
 

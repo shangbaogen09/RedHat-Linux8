@@ -114,6 +114,8 @@ static int __clockevents_switch_state(struct clock_event_device *dev,
 		/* Core internal bug */
 		if (!(dev->features & CLOCK_EVT_FEAT_PERIODIC))
 			return -ENOSYS;
+
+		/*配置local apci的timer寄存器为periodic模式*/
 		if (dev->set_state_periodic)
 			return dev->set_state_periodic(dev);
 		return 0;
@@ -122,6 +124,7 @@ static int __clockevents_switch_state(struct clock_event_device *dev,
 		/* Core internal bug */
 		if (!(dev->features & CLOCK_EVT_FEAT_ONESHOT))
 			return -ENOSYS;
+		/*配置local apci的timer寄存器为ontshot模式*/
 		if (dev->set_state_oneshot)
 			return dev->set_state_oneshot(dev);
 		return 0;

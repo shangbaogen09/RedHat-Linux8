@@ -423,6 +423,8 @@ END(ret_from_fork)
  * Build the entry stubs with some assembler magic.
  * We pack 1 stub into every 8-byte block.
  */
+/*从FIRST_EXTERNAL_VECTOR(外设中断的起始vector号，通常是0x20)到FIRST_SYSTEM_VECTOR(外部中断结束vector号0xec)
+  循环构建中断执行片段数组,起始为irq_entries_start*/
 	.align 8
 ENTRY(irq_entries_start)
     vector=FIRST_EXTERNAL_VECTOR

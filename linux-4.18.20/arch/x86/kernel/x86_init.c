@@ -58,8 +58,12 @@ struct x86_init_ops x86_init __initdata = {
 
 	.irqs = {
 		.pre_vector_init	= init_ISA_irqs,
+
+		/*初始化中断描述符表*/
 		.intr_init		= native_init_IRQ,
 		.trap_init		= x86_init_noop,
+
+		/*初始化配置local apic和io apic设备寄存器*/
 		.intr_mode_init		= apic_intr_mode_init
 	},
 

@@ -116,11 +116,13 @@ void irq_ctx_init(int cpu)
 	if (per_cpu(hardirq_stack, cpu))
 		return;
 
+	/*为当前cpu分配硬件中断栈大小为4页*/
 	irqstk = page_address(alloc_pages_node(cpu_to_node(cpu),
 					       THREADINFO_GFP,
 					       THREAD_SIZE_ORDER));
 	per_cpu(hardirq_stack, cpu) = irqstk;
 
+	/*为当前cpu分配软件中断栈，大小为4页*/
 	irqstk = page_address(alloc_pages_node(cpu_to_node(cpu),
 					       THREADINFO_GFP,
 					       THREAD_SIZE_ORDER));

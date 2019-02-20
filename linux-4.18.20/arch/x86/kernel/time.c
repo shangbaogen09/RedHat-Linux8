@@ -88,11 +88,14 @@ void __init hpet_time_init(void)
 
 static __init void x86_late_time_init(void)
 {
+	/*实际的初始化函数为hpet_time_init*/
 	x86_init.timers.timer_init();
 	/*
 	 * After PIT/HPET timers init, select and setup
 	 * the final interrupt mode for delivering IRQs.
 	 */
+
+	/*设置local apic和io apic的配置寄存器LVT和RTE*/
 	x86_init.irqs.intr_mode_init();
 	tsc_init();
 }
