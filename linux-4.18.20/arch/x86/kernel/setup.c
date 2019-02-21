@@ -1252,6 +1252,7 @@ void __init setup_arch(char **cmdline_p)
 	/*
 	 * Read APIC and some other early information from ACPI tables.
 	 */
+	/*处理系统中的local apic和io apic设备*/
 	acpi_boot_init();
 	sfi_init();
 	x86_dtb_init();

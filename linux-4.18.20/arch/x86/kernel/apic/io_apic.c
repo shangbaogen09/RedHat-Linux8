@@ -200,6 +200,7 @@ void disable_ioapic_support(void)
 	noioapicquirk = 1;
 	noioapicreroute = -1;
 #endif
+	/*设置全局变量skip_ioapic_setup为1,在设置io apic时使用*/
 	skip_ioapic_setup = 1;
 }
 
@@ -209,6 +210,8 @@ static int __init parse_noapic(char *str)
 	disable_ioapic_support();
 	return 0;
 }
+
+/*处理noapic命令行参数*/
 early_param("noapic", parse_noapic);
 
 /* Will be called in mpparse/acpi/sfi codes for saving IRQ info */
@@ -956,6 +959,7 @@ static void mp_register_handler(unsigned int irq, unsigned long trigger)
 		fasteoi = false;
 	}
 
+	/*根据触发模式设置中断描述符的hander*/
 	hdl = fasteoi ? handle_fasteoi_irq : handle_edge_irq;
 	__irq_set_handler(irq, hdl, 0, fasteoi ? "fasteoi" : "edge");
 }
@@ -1128,6 +1132,7 @@ static int pin_2_irq(int idx, int ioapic, int pin, unsigned int flags)
 	}
 #endif
 
+	/*针对输入的pin查找对应的irq*/
 	return  mp_map_pin_to_irq(gsi, idx, ioapic, pin, flags, NULL);
 }
 
@@ -1245,6 +1250,7 @@ static void __init setup_IO_APIC_irqs(void)
 				    KERN_DEBUG " apic %d pin %d not connected\n",
 				    mpc_ioapic_id(ioapic), pin);
 		else
+			/*由pin查找对应的irq号*/
 			pin_2_irq(idx, ioapic, pin,
 				  ioapic ? 0 : IOAPIC_MAP_ALLOC);
 	}
@@ -1919,6 +1925,7 @@ static int ioapic_set_affinity(struct irq_data *irq_data,
 	return ret;
 }
 
+/*系统使用的IO-APIC中断控制器*/
 static struct irq_chip ioapic_chip __read_mostly = {
 	.name			= "IO-APIC",
 	.irq_startup		= startup_ioapic_irq,
@@ -1990,6 +1997,7 @@ static void ack_lapic_irq(struct irq_data *data)
 	ack_APIC_irq();
 }
 
+/*local apic芯片的操作处理函数*/
 static struct irq_chip lapic_chip __read_mostly = {
 	.name		= "local-APIC",
 	.irq_mask	= mask_lapic_irq,
@@ -2000,6 +2008,8 @@ static struct irq_chip lapic_chip __read_mostly = {
 static void lapic_register_intr(int irq)
 {
 	irq_clear_status_flags(irq, IRQ_LEVEL);
+
+	/*设置中断描述符中的中断控制器芯片和通用处理函数*/
 	irq_set_chip_and_handler_name(irq, &lapic_chip, handle_edge_irq,
 				      "edge");
 }
@@ -2210,6 +2220,7 @@ static inline void __init check_timer(void)
 	apic_printk(APIC_QUIET, KERN_INFO
 		    "...trying to set up timer as Virtual Wire IRQ...\n");
 
+	/*向系统注册0号中断*/
 	lapic_register_intr(0);
 	apic_write(APIC_LVT0, APIC_DM_FIXED | cfg->vector);	/* Fixed mode */
 	legacy_pic->unmask(0);
@@ -2272,6 +2283,8 @@ static int mp_irqdomain_create(int ioapic)
 	struct irq_alloc_info info;
 	struct irq_domain *parent;
 	int hwirqs = mp_ioapic_pin_count(ioapic);
+
+	/*根据ioapic的id找到对应的struct ioapic*/
 	struct ioapic *ip = &ioapics[ioapic];
 	struct ioapic_domain_cfg *cfg = &ip->irqdomain_cfg;
 	struct mp_ioapic_gsi *gsi_cfg = mp_ioapic_gsi_routing(ioapic);
@@ -2299,6 +2312,7 @@ static int mp_irqdomain_create(int ioapic)
 			return -ENOMEM;
 	}
 
+	/*创建一个线性的irq_domain*/
 	ip->irqdomain = irq_domain_create_linear(fn, hwirqs, cfg->ops,
 						 (void *)(long)ioapic);
 
@@ -2999,6 +3013,8 @@ int mp_irqdomain_alloc(struct irq_domain *domain, unsigned int virq,
 	local_irq_save(flags);
 	if (info->ioapic_entry)
 		mp_setup_entry(cfg, data, info->ioapic_entry);
+
+	/*根据触发模式设置中断描述符的hander*/
 	mp_register_handler(virq, data->trigger);
 	if (virq < nr_legacy_irqs())
 		legacy_pic->mask(virq);
@@ -3054,6 +3070,7 @@ int mp_irqdomain_ioapic_idx(struct irq_domain *domain)
 	return (int)(long)domain->host_data;
 }
 
+/*irq_domain的操作函数*/
 const struct irq_domain_ops mp_ioapic_irqdomain_ops = {
 	.alloc		= mp_irqdomain_alloc,
 	.free		= mp_irqdomain_free,

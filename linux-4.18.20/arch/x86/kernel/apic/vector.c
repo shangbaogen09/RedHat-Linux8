@@ -701,10 +701,14 @@ int __init arch_early_irq_init(void)
 
 	fn = irq_domain_alloc_named_fwnode("VECTOR");
 	BUG_ON(!fn);
+
+	/*创建系统根的irq_domain*/
 	x86_vector_domain = irq_domain_create_tree(fn, &x86_vector_domain_ops,
 						   NULL);
 	BUG_ON(x86_vector_domain == NULL);
 	irq_domain_free_fwnode(fn);
+
+	/*为默认的irq_domain变量赋值*/
 	irq_set_default_host(x86_vector_domain);
 
 	arch_init_msi_domain(x86_vector_domain);

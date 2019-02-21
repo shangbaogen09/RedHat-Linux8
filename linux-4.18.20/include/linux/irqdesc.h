@@ -52,15 +52,34 @@ struct pt_regs;
  * @debugfs_file:	dentry for the debugfs file
  * @name:		flow handler name for /proc/interrupts output
  */
+/*使用struct irq_desc来描述一个外设的中断*/
 struct irq_desc {
+	/*针对中断控制器的通用数据*/
 	struct irq_common_data	irq_common_data;
+
+	/*底层irq chip相关的数据结构*/
 	struct irq_data		irq_data;
+
+	/*IRQ的统计信息*/
 	unsigned int __percpu	*kstat_irqs;
+
+  /*
+   highlevel irq-events handler可以分成：
+  （a）处理电平触发类型的中断handler（handle_level_irq）
+  （b）处理边缘触发类型的中断handler（handle_edge_irq）
+  （c）处理简单类型的中断handler（handle_simple_irq）
+  （d）处理EOI类型的中断handler（handle_fasteoi_irq） 
+  */
 	irq_flow_handler_t	handle_irq;
 #ifdef CONFIG_IRQ_PREFLOW_FASTEOI
 	irq_preflow_handler_t	preflow_handler;
 #endif
+
+	/*action指向一个struct irqaction的链表。如果一个interrupt request line允许共享，
+      那么该链表中的成员可以是多个，否则，该链表只有一个节点*/
 	struct irqaction	*action;	/* IRQ action list */
+
+	/*断描述符的状态*/
 	unsigned int		status_use_accessors;
 	unsigned int		core_internal_state__do_not_mess_with_it;
 	unsigned int		depth;		/* nested irq disables */

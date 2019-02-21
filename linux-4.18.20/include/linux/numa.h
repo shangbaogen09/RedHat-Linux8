@@ -9,6 +9,7 @@
 #define NODES_SHIFT     0
 #endif
 
+/*默认定义值为2^6=64*/
 #define MAX_NUMNODES    (1 << NODES_SHIFT)
 
 #define	NUMA_NO_NODE	(-1)

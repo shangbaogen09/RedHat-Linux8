@@ -92,7 +92,7 @@ void __init init_IRQ(void)
 	for (i = 0; i < nr_legacy_irqs(); i++)
 		per_cpu(vector_irq, 0)[ISA_IRQ_VECTOR(i)] = irq_to_desc(i);
 
-	/*主要工作是初始化中断描述符表*/
+	/*主要工作是初始化中断描述符表,回调函数为native_init_IRQ*/
 	x86_init.irqs.intr_init();
 }
 

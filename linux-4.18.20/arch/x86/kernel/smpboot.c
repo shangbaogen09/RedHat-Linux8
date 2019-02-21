@@ -1147,6 +1147,7 @@ unreg_nmi:
  */
 void arch_disable_smp_support(void)
 {
+	/*禁止io apic的设置*/
 	disable_ioapic_support();
 }
 

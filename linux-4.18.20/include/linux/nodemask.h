@@ -411,6 +411,7 @@ enum node_states {
 
 extern nodemask_t node_states[NR_NODE_STATES];
 
+/*默认MAX_NUMNODES=64*/
 #if MAX_NUMNODES > 1
 static inline int node_state(int node, enum node_states state)
 {

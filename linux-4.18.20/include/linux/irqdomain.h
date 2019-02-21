@@ -107,6 +107,8 @@ struct irq_domain_ops {
 	int (*xlate)(struct irq_domain *d, struct device_node *node,
 		     const u32 *intspec, unsigned int intsize,
 		     unsigned long *out_hwirq, unsigned int *out_type);
+
+/*系统默认打开了该宏*/
 #ifdef	CONFIG_IRQ_DOMAIN_HIERARCHY
 	/* extended V2 interfaces to support hierarchy irq_domains */
 	int (*alloc)(struct irq_domain *d, unsigned int virq,
@@ -155,8 +157,13 @@ struct irq_domain_chip_generic;
  * @linear_revmap: Linear table of hwirq->virq reverse mappings
  */
 struct irq_domain {
+	/*链接到全局链表的连接件*/
 	struct list_head link;
+
+	/*该interrupt domain的名字*/
 	const char *name;
+
+	/*callback函数*/
 	const struct irq_domain_ops *ops;
 	void *host_data;
 	unsigned int flags;
@@ -317,13 +324,21 @@ static inline struct irq_domain *irq_find_host(struct device_node *node)
  * @ops: map/unmap domain callbacks
  * @host_data: Controller private data pointer
  */
+
+/*线性映射,其实就是一个lookup table，HW interrupt ID作为index，通过查表可以获取对应的IRQ number.
+  对于Linear map而言,interrupt controller对其HW interrupt ID进行编码的时候要满足一定的条件:hw ID
+  不能过大,而且ID排列最好是紧密的*/
 static inline struct irq_domain *irq_domain_add_linear(struct device_node *of_node,
-					 unsigned int size,
-					 const struct irq_domain_ops *ops,
-					 void *host_data)
+					 unsigned int size,/*该interrupt domain支持多少IRQ*/
+					 const struct irq_domain_ops *ops,/*callback函数*/
+					 void *host_data)/*driver私有数据*/
 {
 	return __irq_domain_add(of_node_to_fwnode(of_node), size, size, 0, ops, host_data);
 }
+
+/*no map。有些中断控制器很强，可以通过寄存器配置HW interrupt ID而不是由物理连接决定的。
+  在这种情况下，不需要进行映射，我们直接把IRQ number写入HW interrupt ID配置寄存器就OK了
+  这时候，生成的HW interrupt ID就是IRQ number，也就不需要进行mapping了*/
 static inline struct irq_domain *irq_domain_add_nomap(struct device_node *of_node,
 					 unsigned int max_irq,
 					 const struct irq_domain_ops *ops,
@@ -339,6 +354,10 @@ static inline struct irq_domain *irq_domain_add_legacy_isa(
 	return irq_domain_add_legacy(of_node, NUM_ISA_INTERRUPTS, 0, 0, ops,
 				     host_data);
 }
+
+/*Radix Tree map,建立一个Radix Tree来维护HW interrupt ID到IRQ number映射关系。
+  HW interrupt ID作为lookup key，在Radix Tree检索到IRQ number。如果的确不能满
+  足线性映射的条件，可以考虑Radix Tree map*/
 static inline struct irq_domain *irq_domain_add_tree(struct device_node *of_node,
 					 const struct irq_domain_ops *ops,
 					 void *host_data)
@@ -351,6 +370,7 @@ static inline struct irq_domain *irq_domain_create_linear(struct fwnode_handle *
 					 const struct irq_domain_ops *ops,
 					 void *host_data)
 {
+	/*创建irq_domain并初始化,初始化后向上层返回irq_domain*/
 	return __irq_domain_add(fwnode, size, size, 0, ops, host_data);
 }
 
@@ -358,6 +378,7 @@ static inline struct irq_domain *irq_domain_create_tree(struct fwnode_handle *fw
 					 const struct irq_domain_ops *ops,
 					 void *host_data)
 {
+	/*创建irq_domain并初始化,初始化后向上层返回irq_domain*/
 	return __irq_domain_add(fwnode, 0, ~0, 0, ops, host_data);
 }
 

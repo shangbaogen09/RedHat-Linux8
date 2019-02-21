@@ -951,9 +951,12 @@ __irq_do_set_handler(struct irq_desc *desc, irq_flow_handler_t handle,
 			desc->action = NULL;
 		desc->depth = 1;
 	}
+
+	/*设置中断处理函数和名字*/
 	desc->handle_irq = handle;
 	desc->name = name;
 
+	/*如果是级联的中断控制器*/
 	if (handle != handle_bad_irq && is_chained) {
 		unsigned int type = irqd_get_trigger_type(&desc->irq_data);
 
@@ -974,6 +977,8 @@ __irq_do_set_handler(struct irq_desc *desc, irq_flow_handler_t handle,
 		irq_settings_set_norequest(desc);
 		irq_settings_set_nothread(desc);
 		desc->action = &chained_action;
+
+		/*配置中断控制器的对应管脚并且使能*/
 		irq_activate_and_startup(desc, IRQ_RESEND);
 	}
 }
@@ -983,11 +988,13 @@ __irq_set_handler(unsigned int irq, irq_flow_handler_t handle, int is_chained,
 		  const char *name)
 {
 	unsigned long flags;
+	/*通过中断号获取对应的中断描述符*/
 	struct irq_desc *desc = irq_get_desc_buslock(irq, &flags, 0);
 
 	if (!desc)
 		return;
 
+	/*设置中断电平处理函数*/
 	__irq_do_set_handler(desc, handle, is_chained, name);
 	irq_put_desc_busunlock(desc, flags);
 }
@@ -1010,11 +1017,15 @@ irq_set_chained_handler_and_data(unsigned int irq, irq_flow_handler_t handle,
 }
 EXPORT_SYMBOL_GPL(irq_set_chained_handler_and_data);
 
+/*设置中断控制器芯片和电平处理函数，并配置使能芯片*/
 void
 irq_set_chip_and_handler_name(unsigned int irq, struct irq_chip *chip,
 			      irq_flow_handler_t handle, const char *name)
 {
+	/*设置中断描述符的芯片操作函数结构体成员*/
 	irq_set_chip(irq, chip);
+
+	/*设置中断电平处理函数*/
 	__irq_set_handler(irq, handle, 0, name);
 }
 EXPORT_SYMBOL_GPL(irq_set_chip_and_handler_name);

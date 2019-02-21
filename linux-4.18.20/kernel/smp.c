@@ -496,6 +496,7 @@ int smp_call_function(smp_call_func_t func, void *info, int wait)
 }
 EXPORT_SYMBOL(smp_call_function);
 
+/*设置系统中最大使用的cpu个数*/
 /* Setup configured maximum number of CPUs to activate */
 unsigned int setup_max_cpus = NR_CPUS;
 EXPORT_SYMBOL(setup_max_cpus);
@@ -536,11 +537,14 @@ static int __init nrcpus(char *str)
 	return 0;
 }
 
+/*设置系统使用的cpu数目*/
 early_param("nr_cpus", nrcpus);
 
 static int __init maxcpus(char *str)
 {
 	get_option(&str, &setup_max_cpus);
+
+	/*如果传入的maxcpus最大cpu个数为0,则禁止smp的支持*/
 	if (setup_max_cpus == 0)
 		arch_disable_smp_support();
 
@@ -549,6 +553,7 @@ static int __init maxcpus(char *str)
 
 early_param("maxcpus", maxcpus);
 
+/*设置系统可能存在的cpu数目*/
 /* Setup number of possible processor ids */
 unsigned int nr_cpu_ids __read_mostly = NR_CPUS;
 EXPORT_SYMBOL(nr_cpu_ids);

@@ -451,6 +451,8 @@ static int __init
 acpi_parse_ioapic(struct acpi_subtable_header * header, const unsigned long end)
 {
 	struct acpi_madt_io_apic *ioapic = NULL;
+
+	/*初始化数据结构struct ioapic_domain_cfg*/
 	struct ioapic_domain_cfg cfg = {
 		.type = IOAPIC_DOMAIN_DYNAMIC,
 		.ops = &mp_ioapic_irqdomain_ops,
@@ -467,7 +469,7 @@ acpi_parse_ioapic(struct acpi_subtable_header * header, const unsigned long end)
 	if (ioapic->global_irq_base < nr_legacy_irqs())
 		cfg.type = IOAPIC_DOMAIN_LEGACY;
 
-	/*向系统注册ioapic*/
+	/*向系统注册ioapic,并传入初始化后的cfg变量为参数*/
 	mp_register_ioapic(ioapic->id, ioapic->address, ioapic->global_irq_base,
 			   &cfg);
 
@@ -1190,14 +1192,14 @@ static int __init acpi_parse_madt_ioapic_entries(void)
 	/*
 	 * if "noapic" boot option, don't look for IO-APICs
 	 */
-	/*如果设置了noapic,则跳过解析过程*/
+	/*如果设置了noapic命令行启动参数,则跳过解析过程*/
 	if (skip_ioapic_setup) {
 		printk(KERN_INFO PREFIX "Skipping IOAPIC probe "
 		       "due to 'noapic' option.\n");
 		return -ENODEV;
 	}
 
-	/*解析io apic设备*/
+	/*解析io apic设备,解析使用参数acpi_parse_ioapic函数*/
 	count = acpi_table_parse_madt(ACPI_MADT_TYPE_IO_APIC, acpi_parse_ioapic,
 				      MAX_IO_APICS);
 	if (!count) {
@@ -1291,7 +1293,8 @@ static void __init acpi_process_madt(void)
 			 * Parse MADT IO-APIC entries
 			 */
 			mutex_lock(&acpi_ioapic_lock);
-			/*解析ioapic*/
+
+			/*解析ioapic条目*/
 			error = acpi_parse_madt_ioapic_entries();
 			mutex_unlock(&acpi_ioapic_lock);
 			if (!error) {
@@ -1633,6 +1636,7 @@ int __init acpi_boot_init(void)
 	/*
 	 * Process the Multiple APIC Description Table (MADT), if present
 	 */
+	/*处理Multiple APIC Description Table (MADT)表*/
 	acpi_process_madt();
 
 	acpi_table_parse(ACPI_SIG_HPET, acpi_parse_hpet);

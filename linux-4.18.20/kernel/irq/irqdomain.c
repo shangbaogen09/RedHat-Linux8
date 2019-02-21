@@ -126,6 +126,8 @@ EXPORT_SYMBOL_GPL(irq_domain_free_fwnode);
  * Allocates and initialize and irq_domain structure.
  * Returns pointer to IRQ domain, or NULL on failure.
  */
+
+/*向系统全局链表irq_domain_list中增加一个irq_domain数据结构*/
 struct irq_domain *__irq_domain_add(struct fwnode_handle *fwnode, int size,
 				    irq_hw_number_t hwirq_max, int direct_max,
 				    const struct irq_domain_ops *ops,
@@ -137,6 +139,7 @@ struct irq_domain *__irq_domain_add(struct fwnode_handle *fwnode, int size,
 
 	static atomic_t unknown_domains;
 
+	/*分配一个irq_domain结构体*/
 	domain = kzalloc_node(sizeof(*domain) + (sizeof(unsigned int) * size),
 			      GFP_KERNEL, of_node_to_nid(of_node));
 	if (WARN_ON(!domain))
@@ -213,6 +216,8 @@ struct irq_domain *__irq_domain_add(struct fwnode_handle *fwnode, int size,
 	/* Fill structure */
 	INIT_RADIX_TREE(&domain->revmap_tree, GFP_KERNEL);
 	mutex_init(&domain->revmap_tree_mutex);
+
+	/*使用传入的参数初始化domain结构体*/
 	domain->ops = ops;
 	domain->host_data = host_data;
 	domain->hwirq_max = hwirq_max;
@@ -222,10 +227,14 @@ struct irq_domain *__irq_domain_add(struct fwnode_handle *fwnode, int size,
 
 	mutex_lock(&irq_domain_mutex);
 	debugfs_add_domain_dir(domain);
+
+	/*把该irq_domain结构体加入到全局链表irq_domain_list中*/
 	list_add(&domain->link, &irq_domain_list);
 	mutex_unlock(&irq_domain_mutex);
 
 	pr_debug("Added domain %s\n", domain->name);
+
+	/*向上层调用返回该domain*/
 	return domain;
 }
 EXPORT_SYMBOL_GPL(__irq_domain_add);
@@ -1037,6 +1046,8 @@ static void irq_domain_insert_irq(int virq)
 		struct irq_domain *domain = data->domain;
 
 		domain->mapcount++;
+
+		/*设置映射关系,以data->hwirq为键值把data插入到domain中*/
 		irq_domain_set_mapping(domain, data->hwirq, data);
 
 		/* If not already assigned, give the domain the chip's name */
@@ -1320,6 +1331,8 @@ int __irq_domain_alloc_irqs(struct irq_domain *domain, int irq_base,
 		mutex_unlock(&irq_domain_mutex);
 		goto out_free_irq_data;
 	}
+
+	/*建立映射数据库*/
 	for (i = 0; i < nr_irqs; i++)
 		irq_domain_insert_irq(virq + i);
 	mutex_unlock(&irq_domain_mutex);

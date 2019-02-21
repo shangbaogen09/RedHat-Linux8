@@ -132,6 +132,7 @@ EXPORT_SYMBOL_GPL(nr_irqs);
 static DEFINE_MUTEX(sparse_irq_lock);
 static DECLARE_BITMAP(allocated_irqs, IRQ_BITMAP_BITS);
 
+/*系统默认打开了该配置选项*/
 #ifdef CONFIG_SPARSE_IRQ
 
 static void irq_kobj_release(struct kobject *kobj);
@@ -333,8 +334,10 @@ static void irq_insert_desc(unsigned int irq, struct irq_desc *desc)
 	radix_tree_insert(&irq_desc_tree, irq, desc);
 }
 
+/*由中断号irq获取对应的中断描述符*/
 struct irq_desc *irq_to_desc(unsigned int irq)
 {
+	/*以中断号为索引查找irq_desc_tree为根的radix树，并返回查找到的中断描述符*/
 	return radix_tree_lookup(&irq_desc_tree, irq);
 }
 EXPORT_SYMBOL(irq_to_desc);
@@ -375,9 +378,12 @@ static struct irq_desc *alloc_desc(int irq, int node, unsigned int flags,
 {
 	struct irq_desc *desc;
 
+	/*分配中断描述符内存*/
 	desc = kzalloc_node(sizeof(*desc), GFP_KERNEL, node);
 	if (!desc)
 		return NULL;
+
+	/*初始化描述符的部分成员*/
 	/* allocate based on nr_cpu_ids */
 	desc->kstat_irqs = alloc_percpu(unsigned int);
 	if (!desc->kstat_irqs)
@@ -395,6 +401,7 @@ static struct irq_desc *alloc_desc(int irq, int node, unsigned int flags,
 	irqd_set(&desc->irq_data, flags);
 	kobject_init(&desc->kobj, &irq_kobj_type);
 
+	/*向上层调用返回中断描述符*/
 	return desc;
 
 err_kstat:
@@ -498,11 +505,13 @@ static int irq_expand_nr_irqs(unsigned int nr)
 
 int __init early_irq_init(void)
 {
+	/*找到第一个在线的内存节点*/
 	int i, initcnt, node = first_online_node;
 	struct irq_desc *desc;
 
 	init_irq_default_affinity();
 
+	/*返回传统中断控制器的中断数目*/
 	/* Let arch update nr_irqs and return the nr of preallocated irqs */
 	initcnt = arch_probe_nr_irqs();
 	printk(KERN_INFO "NR_IRQS: %d, nr_irqs: %d, preallocated irqs: %d\n",
@@ -517,14 +526,20 @@ int __init early_irq_init(void)
 	if (initcnt > nr_irqs)
 		nr_irqs = initcnt;
 
+	/*初始化管理中断的基树,针对传统的中断控制器前15个中断*/
 	for (i = 0; i < initcnt; i++) {
+		/*分配中断描述符*/
 		desc = alloc_desc(i, node, 0, NULL, NULL);
+
+		/*设置对应的bitmap标示已经分配过了*/
 		set_bit(i, allocated_irqs);
+
+		/*把分配好的中断描述符以i为索引插入到irq_desc_tree基树中*/
 		irq_insert_desc(i, desc);
 	}
 	return arch_early_irq_init();
 }
-
+/*系统默认设置了CONFIG_SPARSE_IRQ=y*/
 #else /* !CONFIG_SPARSE_IRQ */
 
 struct irq_desc irq_desc[NR_IRQS] __cacheline_aligned_in_smp = {
