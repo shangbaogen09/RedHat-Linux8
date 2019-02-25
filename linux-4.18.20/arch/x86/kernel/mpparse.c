@@ -505,6 +505,7 @@ void __init default_get_smp_config(unsigned int early)
 {
 	struct mpf_intel *mpf;
 
+	/*smp_found_config等于1*/
 	if (!smp_found_config)
 		return;
 
@@ -518,6 +519,7 @@ void __init default_get_smp_config(unsigned int early)
 	 * MPS doesn't support hyperthreading, aka only have
 	 * thread 0 apic id in MPS table
 	 */
+	/*走到此处acpi_lapic && acpi_ioapic都等于1,返回*/
 	if (acpi_lapic && acpi_ioapic)
 		return;
 
@@ -580,7 +582,6 @@ static int __init smp_scan_config(unsigned long base, unsigned long length)
 	unsigned int *bp;
 	struct mpf_intel *mpf;
 	int ret = 0;
-
 	apic_printk(APIC_VERBOSE, "Scan for SMP in [mem %#010lx-%#010lx]\n",
 		    base, base + length - 1);
 	BUILD_BUG_ON(sizeof(*mpf) != 16);
@@ -599,8 +600,8 @@ static int __init smp_scan_config(unsigned long base, unsigned long length)
 			mpf_base = base;
 			mpf_found = true;
 
-			pr_info("found SMP MP-table at [mem %#010lx-%#010lx] mapped at [%p]\n",
-				base, base + sizeof(*mpf) - 1, mpf);
+			pr_info("found SMP MP-table at [mem %#010lx-%#010lx] mapped at [%p],smp_found_config = %d.\n",
+				base, base + sizeof(*mpf) - 1, mpf, smp_found_config);
 
 			memblock_reserve(base, sizeof(*mpf));
 			if (mpf->physptr)
@@ -633,8 +634,8 @@ void __init default_find_smp_config(void)
 	 */
 	if (smp_scan_config(0x0, 0x400) ||
 	    smp_scan_config(639 * 0x400, 0x400) ||
-	    smp_scan_config(0xF0000, 0x10000))
-		return;
+	    smp_scan_config(0xF0000, 0x10000))/*qemu在该处找到SMP-table*/
+		return;/*走到此处返回*/
 	/*
 	 * If it is an SMP machine we should know now, unless the
 	 * configuration is in an EISA bus machine with an

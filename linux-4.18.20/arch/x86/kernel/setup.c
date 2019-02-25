@@ -1099,6 +1099,7 @@ void __init setup_arch(char **cmdline_p)
 	/*
 	 * Find and reserve possible boot-time SMP configuration:
 	 */
+	/*默认调用的函数为default_find_smp_config*/
 	find_smp_config();
 
 	reserve_ibft_region();
@@ -1207,6 +1208,7 @@ void __init setup_arch(char **cmdline_p)
 	 */
 	acpi_boot_table_init();
 
+	/*早期acpi的解析*/
 	early_acpi_boot_init();
 
 	initmem_init();
@@ -1252,7 +1254,7 @@ void __init setup_arch(char **cmdline_p)
 	/*
 	 * Read APIC and some other early information from ACPI tables.
 	 */
-	/*处理系统中的local apic和io apic设备*/
+	/*解析BIOS提供的关于系统中local apic和io apic设备的信息*/
 	acpi_boot_init();
 	sfi_init();
 	x86_dtb_init();
@@ -1260,6 +1262,7 @@ void __init setup_arch(char **cmdline_p)
 	/*
 	 * get boot-time SMP configuration:
 	 */
+	/*实际调用的是default_get_smp_config函数*/
 	get_smp_config();
 
 	/*

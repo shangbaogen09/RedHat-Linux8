@@ -2027,14 +2027,12 @@ void __init init_apic_mappings(void)
 		apic_disable();
 	} else {
 
-		/*转存赋值后的物理地址到静态全局变量pic_phys中*/
 		apic_phys = mp_lapic_addr;
 
 		/*
 		 * If the system has ACPI MADT tables or MP info, the LAPIC
 		 * address is already registered.
 		 */
-		/*对local apic配置寄存器的物理地址进行映射*/
 		if (!acpi_lapic && !smp_found_config)
 			register_lapic_address(apic_phys);
 	}

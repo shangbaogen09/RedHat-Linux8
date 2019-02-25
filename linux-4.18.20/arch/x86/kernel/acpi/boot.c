@@ -741,6 +741,8 @@ static void __init acpi_set_irq_model_ioapic(void)
 	acpi_irq_model = ACPI_IRQ_MODEL_IOAPIC;
 	__acpi_register_gsi = acpi_register_gsi_ioapic;
 	__acpi_unregister_gsi = acpi_unregister_gsi_ioapic;
+
+	/*设置全局变量acpi_ioapic=1*/
 	acpi_ioapic = 1;
 }
 #endif
@@ -1042,7 +1044,7 @@ static int __init early_acpi_parse_madt_lapic_addr_ovr(void)
 		       "Error parsing LAPIC address override entry\n");
 		return count;
 	}
-
+	/*注册acpi_lapic_addr=0xfee00000*/
 	register_lapic_address(acpi_lapic_addr);
 
 	return count;
@@ -1252,7 +1254,6 @@ static void __init early_acpi_process_madt(void)
 {
 #ifdef CONFIG_X86_LOCAL_APIC
 	int error;
-
 	if (!acpi_table_parse(ACPI_SIG_MADT, acpi_parse_madt)) {
 
 		/*
@@ -1285,8 +1286,10 @@ static void __init acpi_process_madt(void)
 		/*
 		 * Parse MADT LAPIC entries
 		 */
+		/*解析local apic条目*/
 		error = acpi_parse_madt_lapic_entries();
 		if (!error) {
+			/*设置全局变量acpi_lapic=1*/
 			acpi_lapic = 1;
 
 			/*
@@ -1294,10 +1297,11 @@ static void __init acpi_process_madt(void)
 			 */
 			mutex_lock(&acpi_ioapic_lock);
 
-			/*解析ioapic条目*/
+			/*解析io apic条目*/
 			error = acpi_parse_madt_ioapic_entries();
 			mutex_unlock(&acpi_ioapic_lock);
 			if (!error) {
+				/*设置全局变量acpi_ioapic=1*/
 				acpi_set_irq_model_ioapic();
 
 				smp_found_config = 1;
@@ -1605,6 +1609,7 @@ int __init early_acpi_boot_init(void)
 	/*
 	 * Process the Multiple APIC Description Table (MADT), if present
 	 */
+	/*解析早期的MADT表*/
 	early_acpi_process_madt();
 
 	/*
