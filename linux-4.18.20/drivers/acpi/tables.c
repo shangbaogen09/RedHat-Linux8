@@ -382,6 +382,7 @@ acpi_table_parse_madt(enum acpi_madt_type id,
  *
  * Return 0 if table found, -errno if not.
  */
+/*在early路径中传入的参数id为ACPI_SIG_MADT*/
 int __init acpi_table_parse(char *id, acpi_tbl_table_handler handler)
 {
 	struct acpi_table_header *table = NULL;
@@ -392,11 +393,14 @@ int __init acpi_table_parse(char *id, acpi_tbl_table_handler handler)
 	if (!id || !handler)
 		return -EINVAL;
 
+	/*比较传入的参数id是否为ACPI_SIG_MADT*/
 	if (strncmp(id, ACPI_SIG_MADT, 4) == 0)
+		/*获取acpi的表头,并由参数table带出*/
 		acpi_get_table(id, acpi_apic_instance, &table);
 	else
 		acpi_get_table(id, 0, &table);
 
+	/*如果表头存在,调用解析函数,acpi_parse_madt*/
 	if (table) {
 		handler(table);
 		acpi_put_table(table);

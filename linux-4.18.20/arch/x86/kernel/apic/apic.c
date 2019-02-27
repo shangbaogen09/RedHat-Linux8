@@ -2057,11 +2057,14 @@ void __init init_apic_mappings(void)
 
 void __init register_lapic_address(unsigned long address)
 {
+	/*记录该地址到全局变量mp_lapic_addr中*/
 	mp_lapic_addr = address;
 
 	/*对apic的物理地址进行un-cacheable的固定映射*/
 	if (!x2apic_mode) {
 		set_fixmap_nocache(FIX_APIC_BASE, address);
+
+		/*qemu打印出来的log为:mapped APIC to 0xffffffffff5fc000(0xfee00000)*/
 		apic_printk(APIC_VERBOSE, "mapped APIC to %16lx (%16lx)\n",
 			    APIC_BASE, address);
 	}

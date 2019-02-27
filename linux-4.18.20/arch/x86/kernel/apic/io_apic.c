@@ -101,6 +101,7 @@ struct mp_ioapic_gsi {
 	u32 gsi_end;
 };
 
+/*系统解析出来的IOAPIC相关信息，在ioapics数组中*/
 static struct ioapic {
 	/*
 	 * # of IRQ routing registers

@@ -143,12 +143,14 @@ static int __init acpi_parse_madt(struct acpi_table_header *table)
 	if (!boot_cpu_has(X86_FEATURE_APIC))
 		return -EINVAL;
 
+	/*强制转换该头部为结构体struct acpi_table_madt*/
 	madt = (struct acpi_table_madt *)table;
 	if (!madt) {
 		printk(KERN_WARNING PREFIX "Unable to map MADT\n");
 		return -ENODEV;
 	}
 
+	/*把解析出来的local apic的基地址存入全局变量acpi_lapic_addr中*/
 	if (madt->address) {
 		acpi_lapic_addr = (u64) madt->address;
 
@@ -159,6 +161,7 @@ static int __init acpi_parse_madt(struct acpi_table_header *table)
 	default_acpi_madt_oem_check(madt->header.oem_id,
 				    madt->header.oem_table_id);
 
+	/*向上层调用返回0*/
 	return 0;
 }
 
@@ -1037,6 +1040,7 @@ static int __init early_acpi_parse_madt_lapic_addr_ovr(void)
 	 * and (optionally) overridden by a LAPIC_ADDR_OVR entry (64-bit value).
 	 */
 
+	/*解析的覆盖条目地址，重新赋值之前的全局变量acpi_lapic_addr*/
 	count = acpi_table_parse_madt(ACPI_MADT_TYPE_LOCAL_APIC_OVERRIDE,
 				      acpi_parse_lapic_addr_ovr, 0);
 	if (count < 0) {
@@ -1044,6 +1048,7 @@ static int __init early_acpi_parse_madt_lapic_addr_ovr(void)
 		       "Error parsing LAPIC address override entry\n");
 		return count;
 	}
+
 	/*注册acpi_lapic_addr=0xfee00000*/
 	register_lapic_address(acpi_lapic_addr);
 
@@ -1254,13 +1259,16 @@ static void __init early_acpi_process_madt(void)
 {
 #ifdef CONFIG_X86_LOCAL_APIC
 	int error;
+	/*从表中解析出local apic设备寄存器基地址,并保存到全局变量中*/
 	if (!acpi_table_parse(ACPI_SIG_MADT, acpi_parse_madt)) {
 
 		/*
 		 * Parse MADT LAPIC entries
 		 */
+		/*解析local apic的重叠条目*/
 		error = early_acpi_parse_madt_lapic_addr_ovr();
 		if (!error) {
+			/*设置如下全局变量为1*/
 			acpi_lapic = 1;
 			smp_found_config = 1;
 		}
