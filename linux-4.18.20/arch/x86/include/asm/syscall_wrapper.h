@@ -154,6 +154,7 @@
  * named __ia32_sys_*() which decodes the struct pt_regs *regs according
  * to the i386 calling convention (bx, cx, dx, si, di, bp).
  */
+/*系统调用直接调用该宏定义的函数__x64_sys##name*/
 #define __SYSCALL_DEFINEx(x, name, ...)					\
 	asmlinkage long __x64_sys##name(const struct pt_regs *regs);	\
 	ALLOW_ERROR_INJECTION(__x64_sys##name, ERRNO);			\
@@ -166,12 +167,13 @@
 	__IA32_SYS_STUBx(x, name, __VA_ARGS__)				\
 	static long __se_sys##name(__MAP(x,__SC_LONG,__VA_ARGS__))	\
 	{								\
+		\ /*最终调用该函数完成实际的操作__do_sys##name*/
 		long ret = __do_sys##name(__MAP(x,__SC_CAST,__VA_ARGS__));\
 		__MAP(x,__SC_TEST,__VA_ARGS__);				\
 		__PROTECT(x, ret,__MAP(x,__SC_ARGS,__VA_ARGS__));	\
 		return ret;						\
 	}								\
-	static inline long __do_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__))
+	static inline long __do_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__))/*最终是该函数定义使用*/
 
 /*
  * As the generic SYSCALL_DEFINE0() macro does not decode any parameters for

@@ -108,6 +108,7 @@ static inline int desc_empty(const void *ptr)
 	return !(desc[0] | desc[1]);
 }
 
+/*系统默认没有定义CONFIG_PARAVIRT*/
 #ifdef CONFIG_PARAVIRT
 #include <asm/paravirt.h>
 #else

@@ -881,6 +881,7 @@ void __init setup_arch(char **cmdline_p)
 	 */
 	olpc_ofw_detect();
 
+	/*初始化部分中断描述符表,如debug和int3,并把描述符表写入对应的寄存器*/
 	idt_setup_early_traps();
 	early_cpu_init();
 	early_ioremap_init();
@@ -1245,6 +1246,7 @@ void __init setup_arch(char **cmdline_p)
 
 	tboot_probe();
 
+	/*映射vsyscal使用的页面到用户空间*/
 	map_vsyscall();
 
 	generic_apic_probe();

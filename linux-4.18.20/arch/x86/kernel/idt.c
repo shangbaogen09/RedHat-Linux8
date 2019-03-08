@@ -202,6 +202,7 @@ static const __initconst struct idt_data dbg_idts[] = {
 /* Must be page-aligned because the real IDT is used in a fixmap. */
 gate_desc idt_table[IDT_ENTRIES] __page_aligned_bss;
 
+/*中断描述符表，包括表项和大小*/
 struct desc_ptr idt_descr __ro_after_init = {
 	.size		= (IDT_ENTRIES * 2 * sizeof(unsigned long)) - 1,
 	.address	= (unsigned long) idt_table,
@@ -295,8 +296,11 @@ static void set_intr_gate(unsigned int n, const void *addr)
  */
 void __init idt_setup_early_traps(void)
 {
+	/*使用early_idts数组初始化中断描述符表,只设置了debug和int3*/
 	idt_setup_from_table(idt_table, early_idts, ARRAY_SIZE(early_idts),
 			     true);
+
+	/*把描述符结构的地址和大小加载到中断描述符寄存器中*/
 	load_idt(&idt_descr);
 }
 

@@ -589,6 +589,7 @@ int fixmaps_set;
 
 void __native_set_fixmap(enum fixed_addresses idx, pte_t pte)
 {
+	/*由固定地址获取虚拟地址*/
 	unsigned long address = __fix_to_virt(idx);
 
 #ifdef CONFIG_X86_64
@@ -604,6 +605,7 @@ void __native_set_fixmap(enum fixed_addresses idx, pte_t pte)
 		BUG();
 		return;
 	}
+	/*根据虚拟地址设置页表的pte*/
 	set_pte_vaddr(address, pte);
 	fixmaps_set++;
 }
@@ -612,8 +614,10 @@ void native_set_fixmap(enum fixed_addresses idx, phys_addr_t phys,
 		       pgprot_t flags)
 {
 	/* Sanitize 'prot' against any unsupported bits: */
+	/*再次检查页表的标记位*/
 	pgprot_val(flags) &= __default_kernel_pte_mask;
 
+	/*使用传入的参数生成一个页表项*/
 	__native_set_fixmap(idx, pfn_pte(phys >> PAGE_SHIFT, flags));
 }
 

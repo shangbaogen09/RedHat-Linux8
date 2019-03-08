@@ -361,12 +361,20 @@ void __init set_vsyscall_pgtable_user_bits(pgd_t *root)
 
 void __init map_vsyscall(void)
 {
+	/*该变量所指向的页面包含三个系统调用，大小为4096*/
 	extern char __vsyscall_page;
+
+	/*首先使用__pa_symbol宏获取页面的物理地址*/
 	unsigned long physaddr_vsyscall = __pa_symbol(&__vsyscall_page);
 
+	/*检查模式是否为EMULATE*/
 	if (vsyscall_mode != NONE) {
+
+		/*使用获取的物理地址进行固定映射,以及传入页表的标记PAGE_KERNEL_VVAR*/
 		__set_fixmap(VSYSCALL_PAGE, physaddr_vsyscall,
 			     PAGE_KERNEL_VVAR);
+
+		/*对覆盖VSYSCALL_ADDR的各级页表设置_PAGE_USER标记以便用户空间可以访问*/
 		set_vsyscall_pgtable_user_bits(swapper_pg_dir);
 	}
 

@@ -159,6 +159,7 @@ static int map_vdso(const struct vdso_image *image, unsigned long addr)
 	if (down_write_killable(&mm->mmap_sem))
 		return -EINTR;
 
+	/*找一块没有映射的虚拟地址*/
 	addr = get_unmapped_area(NULL, addr,
 				 image->size - image->sym_vvar_start, 0, 0);
 	if (IS_ERR_VALUE(addr)) {
@@ -166,6 +167,7 @@ static int map_vdso(const struct vdso_image *image, unsigned long addr)
 		goto up_fail;
 	}
 
+	/*计算vdso本身的text段起始地址*/
 	text_start = addr - image->sym_vvar_start;
 
 	/*
@@ -369,6 +371,7 @@ static int vgetcpu_online(unsigned int cpu)
 
 static int __init init_vdso(void)
 {
+	/*使用该函数初始化vdso_image_64结构体*/
 	init_vdso_image(&vdso_image_64);
 
 #ifdef CONFIG_X86_X32_ABI

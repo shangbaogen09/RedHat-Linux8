@@ -1218,6 +1218,7 @@ static int load_elf_binary(struct linux_binprm *bprm)
 	set_binfmt(&elf_format);
 
 #ifdef ARCH_HAS_SETUP_ADDITIONAL_PAGES
+	/*设置vdso的map*/
 	retval = arch_setup_additional_pages(bprm, !!elf_interpreter);
 	if (retval < 0)
 		goto out;

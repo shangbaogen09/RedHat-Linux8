@@ -15,6 +15,7 @@ extern asmlinkage long sys_ni_syscall(const struct pt_regs *);
 
 #define __SYSCALL_64(nr, sym, qual) [nr] = sym,
 
+/*x64位系统使用的系统调用表*/
 asmlinkage const sys_call_ptr_t sys_call_table[__NR_syscall_max+1] = {
 	/*
 	 * Smells like a compiler bug -- it doesn't work
@@ -22,4 +23,5 @@ asmlinkage const sys_call_ptr_t sys_call_table[__NR_syscall_max+1] = {
 	 */
 	[0 ... __NR_syscall_max] = &sys_ni_syscall,
 #include <asm/syscalls_64.h>
+/*系统调用[0]=__x64_sys_read*/
 };

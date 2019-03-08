@@ -210,6 +210,7 @@ static inline int is_syscall_trace_event(struct trace_event_call *tp_event)
 	asmlinkage long sys_##sname(void)
 #endif /* SYSCALL_DEFINE0 */
 
+/*系统调用定义:SYSCALL_DEFINE3(open, const char __user *, filename, int, flags, umode_t, mode)*/
 #define SYSCALL_DEFINE1(name, ...) SYSCALL_DEFINEx(1, _##name, __VA_ARGS__)
 #define SYSCALL_DEFINE2(name, ...) SYSCALL_DEFINEx(2, _##name, __VA_ARGS__)
 #define SYSCALL_DEFINE3(name, ...) SYSCALL_DEFINEx(3, _##name, __VA_ARGS__)
@@ -219,6 +220,7 @@ static inline int is_syscall_trace_event(struct trace_event_call *tp_event)
 
 #define SYSCALL_DEFINE_MAXARGS	6
 
+/*主要定义在__SYSCALL_DEFINEx*/
 #define SYSCALL_DEFINEx(x, sname, ...)				\
 	SYSCALL_METADATA(sname, x, __VA_ARGS__)			\
 	__SYSCALL_DEFINEx(x, sname, __VA_ARGS__)

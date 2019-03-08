@@ -203,6 +203,8 @@ ENTRY(entry_SYSCALL_64_stage2)
 	jmp	entry_SYSCALL_64_after_hwframe
 END(entry_SYSCALL_64_stage2)
 
+/*x64位系统的调用入口，执行syscall指令时，跳转到该函数执行,并且处理器
+会把用户内存空间下的rip被保存到rcx中，rflags被保存到r11*/
 ENTRY(entry_SYSCALL_64)
 	UNWIND_HINT_EMPTY
 	/*
@@ -211,17 +213,24 @@ ENTRY(entry_SYSCALL_64)
 	 * it is too small to ever cause noticeable irq latency.
 	 */
 
+	/*此时中断是关闭的*/
 	swapgs
 	/*
 	 * This path is only taken when PAGE_TABLE_ISOLATION is disabled so it
 	 * is not required to switch CR3.
 	 */
+	/*切换堆栈指针前，把用户空间堆栈rsp的值保存到当前cpu的rsp_scratch变量*/
 	movq	%rsp, PER_CPU_VAR(rsp_scratch)
+
+	/*从tss中取出当前内核堆栈值并切换到当前cpu的堆栈*/
 	movq	PER_CPU_VAR(cpu_current_top_of_stack), %rsp
 
+	/*把堆栈段及老的堆栈指针入栈*/
 	/* Construct struct pt_regs on stack */
 	pushq	$__USER_DS			/* pt_regs->ss */
 	pushq	PER_CPU_VAR(rsp_scratch)	/* pt_regs->sp */
+
+	/*把r11,cs,rcx,rax压栈*/
 	pushq	%r11				/* pt_regs->flags */
 	pushq	$__USER_CS			/* pt_regs->cs */
 	pushq	%rcx				/* pt_regs->ip */
@@ -232,6 +241,7 @@ GLOBAL(entry_SYSCALL_64_after_hwframe)
 
 	TRACE_IRQS_OFF
 
+	/*准备传入系统的参数并调用do_syscall_64*/
 	/* IRQs are off. */
 	movq	%rax, %rdi
 	movq	%rsp, %rsi
@@ -244,6 +254,7 @@ GLOBAL(entry_SYSCALL_64_after_hwframe)
 	 * a completely clean 64-bit userspace context.  If we're not,
 	 * go to the slow exit path.
 	 */
+	/*恢复堆栈中的返回地址到rcx*/
 	movq	RCX(%rsp), %rcx
 	movq	RIP(%rsp), %r11
 
@@ -276,6 +287,7 @@ GLOBAL(entry_SYSCALL_64_after_hwframe)
 	cmpq	$__USER_CS, CS(%rsp)		/* CS must match SYSRET */
 	jne	swapgs_restore_regs_and_return_to_usermode
 
+	/*把标志寄存器装入r11寄存器中*/
 	movq	R11(%rsp), %r11
 	cmpq	%r11, EFLAGS(%rsp)		/* R11 == RFLAGS */
 	jne	swapgs_restore_regs_and_return_to_usermode
@@ -313,6 +325,8 @@ GLOBAL(entry_SYSCALL_64_after_hwframe)
 syscall_return_via_sysret:
 	/* rcx and r11 are already restored (see code above) */
 	UNWIND_HINT_EMPTY
+
+	/*恢复通用寄存器，跳过r11,rcx*/
 	POP_REGS pop_rdi=0 skip_r11rcx=1
 
 	/*
@@ -333,6 +347,9 @@ syscall_return_via_sysret:
 
 	popq	%rdi
 	popq	%rsp
+
+	/*在恢复所有通用寄存器之后,rcx中装入的是返回地址, r11寄存器中装入标志寄存器,
+	  rsp装入老的堆栈指针,然后调用sysretq,执行rcx中的返回地址*/
 	USERGS_SYSRET64
 END(entry_SYSCALL_64)
 

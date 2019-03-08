@@ -255,6 +255,7 @@ __visible inline void syscall_return_slowpath(struct pt_regs *regs)
 	    WARN(irqs_disabled(), "syscall %ld left IRQs disabled", regs->orig_ax))
 		local_irq_enable();
 
+	/*主要工作由该函数来完成*/
 	rseq_syscall(regs);
 
 	/*
@@ -269,12 +270,17 @@ __visible inline void syscall_return_slowpath(struct pt_regs *regs)
 }
 
 #ifdef CONFIG_X86_64
+/*传入的参数为系统调用号和当前的堆栈栈顶*/
 __visible void do_syscall_64(unsigned long nr, struct pt_regs *regs)
 {
 	struct thread_info *ti;
 
 	enter_from_user_mode();
+
+	/*打开中断*/
 	local_irq_enable();
+
+	/*取出当前进程的thread_info结构体*/
 	ti = current_thread_info();
 	if (READ_ONCE(ti->flags) & _TIF_WORK_SYSCALL_ENTRY)
 		nr = syscall_trace_enter(regs);
@@ -284,12 +290,16 @@ __visible void do_syscall_64(unsigned long nr, struct pt_regs *regs)
 	 * table.  The only functional difference is the x32 bit in
 	 * regs->orig_ax, which changes the behavior of some syscalls.
 	 */
+	/*再次检查系统调用号*/
 	nr &= __SYSCALL_MASK;
 	if (likely(nr < NR_syscalls)) {
 		nr = array_index_nospec(nr, NR_syscalls);
+
+		/*通过系统调用号执行对应的函数,并把执行结果保存到堆栈中的ax寄存器*/
 		regs->ax = sys_call_table[nr](regs);
 	}
 
+	/*从系统调用返回*/
 	syscall_return_slowpath(regs);
 }
 #endif

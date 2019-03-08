@@ -1539,12 +1539,18 @@ void syscall_init(void)
 		(unsigned long)get_cpu_entry_area(cpu)->entry_trampoline +
 		(entry_SYSCALL_64_trampoline - _entry_trampoline);
 
+	/*MSR_STAR的63:48为用户代码的代码段。这些数据将加载至CS和SS段选择符，由提供将系统调用返回
+      至相应特权级的用户代码功能的sysret指令使用,同时从内核代码来看,当用户空间应用程序执行系统
+	  调用时,MSR_STAR的47:32将作为CS and SS段选择寄存器的基地址,为了修复"x86/cpu: Fix MSR value 
+	  truncation issue",修改为如下形式*/
 	wrmsr(MSR_STAR, 0, (__USER32_CS << 16) | __KERNEL_CS);
 	if (static_cpu_has(X86_FEATURE_PTI))
 		wrmsrl(MSR_LSTAR, SYSCALL64_entry_trampoline);
 	else
+		/*SYSCALL引起操作系统系统调用处理器处于特权级0，通过加载IA32_LSTAR MSR至RIP完成*/
 		wrmsrl(MSR_LSTAR, (unsigned long)entry_SYSCALL_64);
 
+/*系统默认CONFIG_IA32_EMULATION=y*/
 #ifdef CONFIG_IA32_EMULATION
 	wrmsrl(MSR_CSTAR, (unsigned long)entry_SYSCALL_compat);
 	/*
