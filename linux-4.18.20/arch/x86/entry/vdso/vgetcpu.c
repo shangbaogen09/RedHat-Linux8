@@ -24,5 +24,6 @@ __vdso_getcpu(unsigned *cpu, unsigned *node, struct getcpu_cache *unused)
 	return 0;
 }
 
+/*给__vdso_getcpu函数起个别名:getcpu*/
 long getcpu(unsigned *cpu, unsigned *node, struct getcpu_cache *tcache)
 	__attribute__((weak, alias("__vdso_getcpu")));

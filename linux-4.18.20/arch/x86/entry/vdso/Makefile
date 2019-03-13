@@ -11,11 +11,19 @@ OBJECT_FILES_NON_STANDARD	:= y
 # Prevents link failures: __sanitizer_cov_trace_pc() is not linked in.
 KCOV_INSTRUMENT		:= n
 
+#X64系统定义了CONFIG_X86_64＝y
 VDSO64-$(CONFIG_X86_64)		:= y
+
+#默认X64系统上CONFIG_X86_X32_ABI没有定义
 VDSOX32-$(CONFIG_X86_X32_ABI)	:= y
+
+#X64系统没有定义CONFIG_X86_32
 VDSO32-$(CONFIG_X86_32)		:= y
+
+#X64系统定义了CONFIG_IA32_EMULATION＝y
 VDSO32-$(CONFIG_IA32_EMULATION)	:= y
 
+#链接进vdso的目标文件
 # files to link into the vdso
 vobjs-y := vdso-note.o vclock_gettime.o vgetcpu.o
 
@@ -23,6 +31,7 @@ vobjs-y := vdso-note.o vclock_gettime.o vgetcpu.o
 obj-y				+= vma.o
 OBJECT_FILES_NON_STANDARD_vma.o	:= n
 
+#vdso_img-y += 64和vdso_img-y += 32
 # vDSO images to build
 vdso_img-$(VDSO64-y)		+= 64
 vdso_img-$(VDSOX32-y)		+= x32
@@ -30,12 +39,17 @@ vdso_img-$(VDSO32-y)		+= 32
 
 obj-$(VDSO32-y)			+= vdso32-setup.o
 
+/*$(foreach <var>,<list>,<text>),这个函数的意思是，把参数<list>;中的单词逐一取出放到参数<var>;
+  所指定的变量中，然后再执行< text>;所包含的表达式。每一次<text>;会返回一个字符串，循环过程中，
+  <text>;的所返回的每个字符串会以空格分隔，最后当整个循环结束时，<text>;所返回的每个字符串所组
+  成的整个字符串（以空格分隔）将会是foreach函数的返回值*/
 vobjs := $(foreach F,$(vobjs-y),$(obj)/$F)
 
 $(obj)/vdso.o: $(obj)/vdso.so
 
 targets += vdso.lds $(vobjs-y)
 
+#进行%变量替换,替换为vdso-image-64.o和vdso-image-64.c,vdso64.so.dbg
 # Build the vDSO image C files and link them in.
 vdso_img_objs := $(vdso_img-y:%=vdso-image-%.o)
 vdso_img_cfiles := $(vdso_img-y:%=vdso-image-%.c)
@@ -46,11 +60,13 @@ targets += $(vdso_img_sodbg) $(vdso_img-y:%=vdso%.so)
 
 CPPFLAGS_vdso.lds += -P -C
 
+#向vdso传入的链接脚本传入的参数
 VDSO_LDFLAGS_vdso.lds = -m64 -Wl,-soname=linux-vdso.so.1 \
 			-Wl,--no-undefined \
 			-Wl,-z,max-page-size=4096 -Wl,-z,common-page-size=4096 \
 			$(DISABLE_LTO)
 
+#生成vdso64.so.dbg的依赖规则
 $(obj)/vdso64.so.dbg: $(obj)/vdso.lds $(vobjs) FORCE
 	$(call if_changed,vdso)
 
@@ -58,10 +74,14 @@ HOST_EXTRACFLAGS += -I$(srctree)/tools/include -I$(srctree)/include/uapi -I$(src
 hostprogs-y			+= vdso2c
 
 quiet_cmd_vdso2c = VDSO2C  $@
+
+#生成文件vdso-image-64.c的命令规则,$@代表目标,$<代表第一个依赖对象,
+#该命令展开后为:vdso2c vdso64.so.dbg vdso64.so vdso-image-64.c
 define cmd_vdso2c
 	$(obj)/vdso2c $< $(<:%.dbg=%) $@
 endef
 
+#生成文件vdso-image-64.c的规则
 $(obj)/vdso-image-%.c: $(obj)/vdso%.so.dbg $(obj)/vdso%.so $(obj)/vdso2c FORCE
 	$(call if_changed,vdso2c)
 
@@ -121,7 +141,10 @@ $(obj)/%-x32.o: $(obj)/%.o FORCE
 
 targets += vdsox32.lds $(vobjx32s-y)
 
+#objcopy参数-S --strip-all Remove all symbol and relocation information
 $(obj)/%.so: OBJCOPYFLAGS := -S
+
+#生成vdso64.so规则
 $(obj)/%.so: $(obj)/%.so.dbg
 	$(call if_changed,objcopy)
 
@@ -170,6 +193,9 @@ $(obj)/vdso32.so.dbg: FORCE \
 #
 # The DSO images are built using a special linker script.
 #
+#该命令展开后为:cmd_arch/x86/entry/vdso/vdso64.so.dbg := gcc -nostdlib -o arch/x86/entry/vdso/vdso64.so.dbg -fPIC -shared  -Wl,--hash-style=both  
+#-Wl,--build-id -Wl,-Bsymbolic  -m64 -Wl,-soname=linux-vdso.so.1 -Wl,--no-undefined -Wl,-z,max-page-size=4096 -Wl,-z,common-page-size=4096  -Wl,-T,
+#arch/x86/entry/vdso/vdso.lds arch/x86/entry/vdso/vdso-note.o arch/x86/entry/vdso/vclock_gettime.o arch/x86/entry/vdso/vgetcpu.o
 quiet_cmd_vdso = VDSO    $@
       cmd_vdso = $(CC) -nostdlib -o $@ \
 		       $(VDSO_LDFLAGS) $(VDSO_LDFLAGS_$(filter %.lds,$(^F))) \

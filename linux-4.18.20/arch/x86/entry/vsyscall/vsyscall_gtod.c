@@ -19,6 +19,7 @@
 
 int vclocks_used __read_mostly;
 
+/*vdso就是从该变量中直接取值*/
 DEFINE_VVAR(struct vsyscall_gtod_data, vsyscall_gtod_data);
 
 void update_vsyscall_tz(void)

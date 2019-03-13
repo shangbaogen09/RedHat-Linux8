@@ -2240,7 +2240,10 @@ get_unmapped_area(struct file *file, unsigned long addr, unsigned long len,
 	if (offset_in_page(addr))
 		return -EINVAL;
 
+	/*检查获取到的地址*/
 	error = security_mmap_addr(addr);
+
+	/*向上层调用返回获取到的addr*/
 	return error ? error : addr;
 }
 

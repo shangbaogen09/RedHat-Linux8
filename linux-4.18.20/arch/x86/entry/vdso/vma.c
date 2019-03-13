@@ -151,6 +151,7 @@ static const struct vm_special_mapping vvar_mapping = {
  */
 static int map_vdso(const struct vdso_image *image, unsigned long addr)
 {
+	/*获取当前进程的内存空间管理结构体*/
 	struct mm_struct *mm = current->mm;
 	struct vm_area_struct *vma;
 	unsigned long text_start;
@@ -173,6 +174,7 @@ static int map_vdso(const struct vdso_image *image, unsigned long addr)
 	/*
 	 * MAYWRITE to allow gdb to COW and set breakpoints
 	 */
+	/*映射vdso*/
 	vma = _install_special_mapping(mm,
 				       text_start,
 				       image->size,
@@ -185,6 +187,7 @@ static int map_vdso(const struct vdso_image *image, unsigned long addr)
 		goto up_fail;
 	}
 
+	/*映射vvar区域*/
 	vma = _install_special_mapping(mm,
 				       addr,
 				       -image->sym_vvar_start,
@@ -252,8 +255,10 @@ static unsigned long vdso_addr(unsigned long start, unsigned len)
 
 static int map_vdso_randomized(const struct vdso_image *image)
 {
+	/*对栈顶地址current->mm->start_stack进行随机话处理，并返回赋值给addr*/
 	unsigned long addr = vdso_addr(current->mm->start_stack, image->size-image->sym_vvar_start);
 
+	/*把vdso和vvar映射到当前进程中*/
 	return map_vdso(image, addr);
 }
 #endif

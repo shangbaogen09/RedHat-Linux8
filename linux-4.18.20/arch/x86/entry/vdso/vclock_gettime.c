@@ -94,6 +94,7 @@ notrace static long vdso_fallback_gtod(struct timeval *tv, struct timezone *tz)
 
 #endif
 
+/*默认系统没有定义该宏*/
 #ifdef CONFIG_PARAVIRT_CLOCK
 static notrace const struct pvclock_vsyscall_time_info *get_pvti0(void)
 {
