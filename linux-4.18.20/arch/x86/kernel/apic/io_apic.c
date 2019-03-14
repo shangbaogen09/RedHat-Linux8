@@ -1389,7 +1389,6 @@ void __init print_IO_APICs(void)
 		pr_cont("\n");
 	}
 
-	printk(KERN_INFO ".................................... done.\n");
 }
 
 /* Where if anywhere is the i8259 connect in external int mode */

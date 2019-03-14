@@ -16,13 +16,10 @@ https://busybox.net/downloads/busybox-1.29.3.tar.bz2
 #tar xvf busybox-1.29.3.tar.bz2
 
 配置文件:
-#cd busybox-1.29.3
+#cd busybox-1.30.1
 #make menuconfig
-     Busybox Settings  --->  
-           Build Options  ---> 
-               [*] Build BusyBox as a static binary (no shared libs) //静态方式编译
-     Networking Utilities  --->
-          [ ] inetd  //去掉inetd
+     Settings  --->
+         [*] Build BusyBox as a static binary (no shared libs) //静态方式编译
 
 编译busybox:
 #make 
@@ -30,27 +27,39 @@ https://busybox.net/downloads/busybox-1.29.3.tar.bz2
 安装busybox:
 #make install
 执行完该命令后生成如下目录:
-#/home/barry-shang/linux-4.18.20/busybox-1.29.3/_install
+#/home/barry-shang/linux-4.18.20/busybox-1.30.1/_install
 
 创建根文件系统:
 -----------------------------------------------------------
-#cd /home/barry-shang/linux-4.18.20/busybox-1.29.3/_install
-# mkdir -pv proc sys dev etc etc/init.d
+#cd /home/barry-shang/linux-4.18.20/busybox-1.30.1/_install
+#mkdir dev proc sys
+#sudo cp -a /dev/{null, console, tty, tty1, tty2, tty3, tty4} dev/
+#rm linuxrc
+#vim init
+#chmod a+x init
 #cat << EOF > etc/init.d/rcS
 #!/bin/sh
-mount -t proc none /proc
-mount -t sysfs none /sys
-/sbin/mdev -s
+echo "Hello Linux Kernel-4.18!"
 EOF
 #chmod 777 ./etc/init.d/rcS
-#find . | cpio -o --format=newc > ./rootfs.img
-#gzip -c rootfs.img > rootfs.img.gz
+---------------------------
+init文件内容：
+
+#!/bin/busybox sh  
+mount -t proc none /proc
+mount -t sysfs none /sys
+
+exec /sbin/init
+---------------------------
+
+打包initramfs:
+$ find . -print0 | cpio --null -ov --format=newc | gzip -9 > ../initramfs.cpio.gz
 
 使用qemu启动kernel和rootfs:
-qemu-system-x86_64 -kernel linux-4.18.20/arch/x86/boot/bzImage -initrd ./rootfs.img.gz -append "root=/dev/ram rdinit=sbin/init noapic"
+qemu-system-x86_64 -kernel linux-4.18.20/arch/x86/boot/bzImage -initrd ./initramfs.cpio.gz -append "console=ttyS0" -nographic
 
 配置qemu启动命令:
-qemu-system-x86_64 -m 1024M -smp 2 -kernel ./linux-4.18.20/arch/x86/boot/bzImage -initrd ./linux-4.18.20/rootfs/rootfs.img.gz -append "root=/dev/ram rdinit=sbin/init console=ttyS0 apic=debug" -nographic -S -s
+qemu-system-x86_64 -m 1024M -smp 2 -kernel ./linux-4.18.20/arch/x86/boot/bzImage -initrd ./linux-4.18.20/rootfs/initramfs.cpio.gz -append "console=ttyS0 apic=debug" -nographic -S -s
 -m  为此guest虚拟机预留的内存大小，如果不指定，默认大小是128M
 -smp  表示guest虚拟机的cpu的个数
 
