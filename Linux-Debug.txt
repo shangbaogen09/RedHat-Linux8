@@ -49,6 +49,20 @@ EOF
 使用qemu启动kernel和rootfs:
 qemu-system-x86_64 -kernel linux-4.18.20/arch/x86/boot/bzImage -initrd ./rootfs.img.gz -append "root=/dev/ram rdinit=sbin/init noapic"
 
+配置qemu启动命令:
+qemu-system-x86_64 -m 1024M -smp 2 -kernel ./linux-4.18.20/arch/x86/boot/bzImage -initrd ./linux-4.18.20/rootfs/rootfs.img.gz -append "root=/dev/ram rdinit=sbin/init console=ttyS0 apic=debug" -nographic -S -s
+-m  为此guest虚拟机预留的内存大小，如果不指定，默认大小是128M
+-smp  表示guest虚拟机的cpu的个数
+
+上面两个不是必须的参数选项。
+-kernel 后面跟的是要调试的内核bzImage
+-initrd  后面跟的是文件系统
+-append 后面跟的是虚拟机的cmdline
+-nographic  表示启动的是非图形界面的
+-S 表示guest虚拟机一启动就会暂停
+-s 表示监听tcp:1234端口等待GDB的连接
+--------------------- 
+
 printk_ratelimit()这个函数，其作用就如其名，限制printk的打印数量.
 使用方法如下:
 
