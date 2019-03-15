@@ -3,6 +3,10 @@
 使用系统默认的x86_64配置文件配置内核,把生成的config文件放到0指定的目录
 make 0=/tmp/linux-4.18.20-obj/ x86_64_defconfig
 
+打开内核调试信息,同时关闭内核KASLR(否则无法打内核断点)
+[*] Compile the kernel with debug info
+[ ] Randomize the address of the kernel image (KASLR)
+
 编译内核,并把输出文件放到0指定的目录
 make 0=/tmp/linux-4.18.20-obj/ 
 
@@ -10,10 +14,10 @@ make 0=/tmp/linux-4.18.20-obj/
 编译busybox的步骤:
 -----------------------------------------------------
 下载最新的稳定版busybox:
-https://busybox.net/downloads/busybox-1.29.3.tar.bz2
+https://busybox.net/downloads/busybox-1.30.1.tar.bz2
 
-解压文件busybox-1.29.3.tar.bz2
-#tar xvf busybox-1.29.3.tar.bz2
+解压文件busybox-1.30.1.tar.bz2
+#tar xvf busybox-1.30.1.tar.bz2
 
 配置文件:
 #cd busybox-1.30.1
@@ -31,28 +35,53 @@ https://busybox.net/downloads/busybox-1.29.3.tar.bz2
 
 创建根文件系统:
 -----------------------------------------------------------
-#cd /home/barry-shang/linux-4.18.20/busybox-1.30.1/_install
-#mkdir dev proc sys
-#sudo cp -a /dev/{null, console, tty, tty1, tty2, tty3, tty4} dev/
-#rm linuxrc
-#vim init
-#chmod a+x init
-#cat << EOF > etc/init.d/rcS
+#mkdir initramfs
+#cp -r /home/barry-shang/linux-4.18.20/busybox-1.30.1/_install initramfs
+#cd initramfs
+#mkdir -pv {bin,sbin,etc,proc,sys,usr/{bin,sbin},dev}
+
+init程序首先会访问etc/inittab文件，因此，我们需要编写inittab，指定开机需要启动的所有程序
+#cd etc
+#vim inittab
+inittab文件的内容如下所示：
+::sysinit:/etc/init.d/rcS   
+::askfirst:-/bin/sh    
+::restart:/sbin/init
+::ctrlaltdel:/sbin/reboot
+::shutdown:/bin/umount -a -r
+::shutdown:/sbin/swapoff -a
+
+赋予可执行权限
+#chmod +x inittab
+
+编写系统初始化命令
+从inittab文件中可以看出，首先执行的是/etc/init.d/rcS脚本，因此，我们生成初始化脚本
+
+#mkdir init.d
+#cd init.d
+#vim rcS
+rcS文件的内容如下所示：
+--------------------- 
 #!/bin/sh
-echo "Hello Linux Kernel-4.18!"
-EOF
-#chmod 777 ./etc/init.d/rcS
+
+mount proc
+mount -o remount,rw /
+mount -a  
+--------------------- 
+赋予可执行权限
+#chmod +x rcS
+在rcS脚本中，mount -a 是自动挂载 /etc/fstab 里面的东西，可以理解为挂在文件系统，因此我们还需要编写 fstab文件来设置我们的文件系统。
+#cd etc/
+#vim fstab
+
+fstab文件内容如下：
+# /etc/fstab
+proc            /proc        proc    defaults          0       0
+sysfs           /sys         sysfs   defaults          0       0
+devtmpfs        /dev         devtmpfs  defaults          0       0
+
+至此，我们已经完成了RAM Disk中相关文件的配置，可以压缩生成文件镜像了。
 ---------------------------
-init文件内容：
-
-#!/bin/busybox sh  
-mount -t proc none /proc
-mount -t sysfs none /sys
-
-exec /sbin/init
----------------------------
-
-打包initramfs:
 $ find . -print0 | cpio --null -ov --format=newc | gzip -9 > ../initramfs.cpio.gz
 
 使用qemu启动kernel和rootfs:
@@ -139,3 +168,35 @@ Linux backport patches steps:
 2.如果打不上patch,则手动修改.
 3.修改完成后,使用git add ~/modify.file
 4.使用git am --resolved再次应用,就能把原始patch的log打上.
+
+编译gdb-8.2
+#wget http://ftp.gnu.org/gnu/gdb/gdb-8.2.tar.gz
+#tar xvf gdb-8.2.tar.gz
+#vim gdb-8.2/gdb/remote.c
+/*修改gdb-8.2源码，解决remote 'g' too long.*/
+/* Further sanity checks, with knowledge of the architecture.  */
+//if (buf_len > 2 * rsa->sizeof_g_packet)
+// error (_("Remote 'g' packet reply is too long (expected %ld bytes, got %d "
+//     "bytes): %s"), rsa->sizeof_g_packet, buf_len / 2, rs->buf);
+if (buf_len > 2 * rsa->sizeof_g_packet) {
+  rsa->sizeof_g_packet = buf_len;
+  for (i = 0; i < gdbarch_num_regs (gdbarch); i++)
+  {
+      if (rsa->regs[i].pnum == -1)
+          continue;
+      if (rsa->regs[i].offset >= rsa->sizeof_g_packet)
+          rsa->regs[i].in_g_packet = 0;
+      else
+          rsa->regs[i].in_g_packet = 1;
+  }
+}
+#make
+#make install
+
+下载编译最新的qemu-3.1:
+#wget https://download.qemu.org/qemu-3.1.0.tar.xz
+#tar xvJf qemu-3.1.0.tar.xz
+#cd qemu-3.1.0
+#./configure --enable-debug  --target-list=x86_64-softmmu 
+#make
+#make install
