@@ -217,8 +217,13 @@ static __initdata char *collect;
 static void __init read_into(char *buf, unsigned size, enum state next)
 {
 	if (byte_count >= size) {
+		/*当前要处理的buffer位置*/
 		collected = victim;
+
+		/*跳过110字节的头部*/
 		eat(size);
+
+		/*下一步要执行do_header*/
 		state = next;
 	} else {
 		collect = collected = buf;
@@ -232,6 +237,7 @@ static __initdata char *header_buf, *symlink_buf, *name_buf;
 
 static int __init do_start(void)
 {
+	/*实际作用是将collect指针移动到打包的cpio每一个文件头处*/
 	read_into(header_buf, 110, GotHeader);
 	return 0;
 }
@@ -250,6 +256,7 @@ static int __init do_collect(void)
 	return 0;
 }
 
+/*do_header解析110字节的头*/
 static int __init do_header(void)
 {
 	if (memcmp(collected, "070707", 6)==0) {
@@ -260,8 +267,14 @@ static int __init do_header(void)
 		error("no cpio magic");
 		return 1;
 	}
+
+	/*从101个字节的头中解析出inod mode uid gid等*/
 	parse_header(collected);
+
+	/*移到下一个文件的头处*/
 	next_header = this_header + N_ALIGN(name_len) + body_len;
+
+	/*cpio的头部都是4字节对齐的*/
 	next_header = (next_header + 3) & ~3;
 	state = SkipIt;
 	if (name_len <= 0 || name_len > PATH_MAX)
@@ -275,7 +288,10 @@ static int __init do_header(void)
 		state = Collect;
 		return 0;
 	}
+
+	/*目录的body_len为0设备文件的body_len也为0,所以这儿代表的是所有非链接文件*/
 	if (S_ISREG(mode) || !body_len)
+		/*将指针移动到下一个文件的头处,并将状态改为GotName,即要调用do_name*/
 		read_into(name_buf, N_ALIGN(name_len), GotName);
 	return 0;
 }
@@ -325,14 +341,19 @@ static void __init clean_path(char *path, umode_t fmode)
 
 static __initdata int wfd;
 
+/*进行到此处,系统中己存在/与/root两个目录(都是虚拟的),此时再把打包在cpio里面的文件解析到系统的相应位置上*/
 static int __init do_name(void)
 {
 	state = SkipIt;
 	next_state = Reset;
+
+	/*判断是不是结尾*/
 	if (strcmp(collected, "TRAILER!!!") == 0) {
 		free_hash();
 		return 0;
 	}
+
+	/*把原先有的路径去掉, 相当于rmdir /dev 或 rm /dev/console*/
 	clean_path(collected, mode);
 	if (S_ISREG(mode)) {
 		int ml = maybe_link();
@@ -340,29 +361,34 @@ static int __init do_name(void)
 			int openflags = O_WRONLY|O_CREAT;
 			if (ml != 1)
 				openflags |= O_TRUNC;
+
+			/*如果是普通文件打开sys_open*/
 			wfd = ksys_open(collected, openflags, mode);
 
 			if (wfd >= 0) {
+				/*设置权限等*/
 				ksys_fchown(wfd, uid, gid);
 				ksys_fchmod(wfd, mode);
 				if (body_len)
 					ksys_ftruncate(wfd, body_len);
 				vcollected = kstrdup(collected, GFP_KERNEL);
+
+				/*最后调用do_copy将文件内容复制过来*/
 				state = CopyFile;
 			}
 		}
-	} else if (S_ISDIR(mode)) {
-		ksys_mkdir(collected, mode);
-		ksys_chown(collected, uid, gid);
-		ksys_chmod(collected, mode);
-		dir_add(collected, mtime);
+	} else if (S_ISDIR(mode)) {/*以/dev为例*/
+		ksys_mkdir(collected, mode);/*创建 /dev目录*/
+		ksys_chown(collected, uid, gid);/*设置所有者权限*/
+		ksys_chmod(collected, mode);/*设置权限*/
+		dir_add(collected, mtime);/*更改dev目录的mtime*/
 	} else if (S_ISBLK(mode) || S_ISCHR(mode) ||
-		   S_ISFIFO(mode) || S_ISSOCK(mode)) {
+		   S_ISFIFO(mode) || S_ISSOCK(mode)) {/*以/dev/console为例*/
 		if (maybe_link() == 0) {
-			ksys_mknod(collected, mode, rdev);
-			ksys_chown(collected, uid, gid);
-			ksys_chmod(collected, mode);
-			do_utime(collected, mtime);
+			ksys_mknod(collected, mode, rdev);/*创建 /dev/console结点*/
+			ksys_chown(collected, uid, gid);/*设置所有者权限*/
+			ksys_chmod(collected, mode);/*设置权限*/
+			do_utime(collected, mtime);/*更改dev目录的mtime*/
 		}
 	}
 	return 0;
@@ -411,8 +437,10 @@ static __initdata int (*actions[])(void) = {
 	[Reset]		= do_reset,
 };
 
+/*参数buf=initramfs_start, len=initramfs_size*/
 static long __init write_buffer(char *buf, unsigned long len)
 {
+	/*保存要解析的buf和长度到全局变量中*/
 	byte_count = len;
 	victim = buf;
 
@@ -467,8 +495,12 @@ static char * __init unpack_to_rootfs(char *buf, unsigned long len)
 	message = NULL;
 	while (!message && len) {
 		loff_t saved_offset = this_header;
+
+		/*如果开头以字符'0'开始,说明这是cpio格式的ram disk,不用解压直接用复制*/
 		if (*buf == '0' && !(this_header & 3)) {
 			state = Start;
+
+			/*参数buf=initramfs_start, len=initramfs_size*/
 			written = write_buffer(buf, len);
 			buf += written;
 			len -= written;
@@ -484,6 +516,7 @@ static char * __init unpack_to_rootfs(char *buf, unsigned long len)
 		decompress = decompress_method(buf, len, &compress_name);
 		pr_debug("Detected %s compressed data\n", compress_name);
 		if (decompress) {
+			/*调用压缩函数进行解压缩,解压后调用flush_buffer拷贝到各个目录*/
 			int res = decompress(buf, len, NULL, flush_buffer, NULL,
 				   &my_inptr, error);
 			if (res)
@@ -607,14 +640,18 @@ static void __init clean_rootfs(void)
 }
 #endif
 
+/*处理initramfs的代码*/
 static int __init populate_rootfs(void)
 {
+	/*将内核内置的initramfs解压到rootfs中，如果len为0，则直接返回null*/
 	/* Load the built in initramfs */
 	char *err = unpack_to_rootfs(__initramfs_start, __initramfs_size);
 	if (err)
 		panic("%s", err); /* Failed to decompress INTERNAL initramfs */
 	/* If available load the bootloader supplied initrd */
 	if (initrd_start && !IS_ENABLED(CONFIG_INITRAMFS_FORCE)) {
+
+/*默认没有打开该配置选项*/
 #ifdef CONFIG_BLK_DEV_RAM
 		int fd;
 		printk(KERN_INFO "Trying to unpack rootfs image as initramfs...\n");

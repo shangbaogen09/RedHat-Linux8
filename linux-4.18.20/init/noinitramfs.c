@@ -25,20 +25,24 @@
 /*
  * Create a simple rootfs that is similar to the default initramfs
  */
+/*建立一个临时的根文件系统*/
 static int __init default_rootfs(void)
 {
 	int err;
 
+	/*创建"/dev"目录*/
 	err = ksys_mkdir((const char __user __force *) "/dev", 0755);
 	if (err < 0)
 		goto out;
 
+	/*创建"/dev/console"节点,保证第一个进程能打开控制台设备，否则内核会panic*/
 	err = ksys_mknod((const char __user __force *) "/dev/console",
 			S_IFCHR | S_IRUSR | S_IWUSR,
 			new_encode_dev(MKDEV(5, 1)));
 	if (err < 0)
 		goto out;
 
+	/*创建"/root"目录*/
 	err = ksys_mkdir((const char __user __force *) "/root", 0700);
 	if (err < 0)
 		goto out;
