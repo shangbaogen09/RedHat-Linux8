@@ -200,3 +200,26 @@ if (buf_len > 2 * rsa->sizeof_g_packet) {
 #./configure --enable-debug  --target-list=x86_64-softmmu 
 #make
 #make install
+
+/*新的qemu启动命令，指定根文件系*/
+qemu-system-x86_64 -m 1024M -smp 2 -kernel /home/barry-shang/linux-4.18.20/git-hub/RedHat-Linux8/linux-4.18.20/arch/x86/boot/bzImage -initrd /home/barry-shang/linux-4.18.20/rootfs/initramfs.cpio.gz -append "console=ttyS0 apic=debug rdinit=/init root=/dev/sda" -nographic -drive if=ide,index=1,format=raw,file=/home/barry-shang/linux-4.18.20/rootfs/hda.img
+
+
+/*挂在真实的文件系统*/
+--------------------------------------------------
+modprobe ata_piix
+
+for x in $(cat /proc/cmdline); do
+	case $x in
+	root=*)
+		ROOT=${x#root=}
+		;;
+	esac
+done
+
+echo ${ROOT}
+mount ${ROOT} /root
+
+echo "Change to real rootfs!"
+exec switch_root -c /dev/console /root /sbin/init
+--------------------------------------------------
