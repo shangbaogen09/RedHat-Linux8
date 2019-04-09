@@ -197,7 +197,7 @@ if (buf_len > 2 * rsa->sizeof_g_packet) {
 #wget https://download.qemu.org/qemu-3.1.0.tar.xz
 #tar xvJf qemu-3.1.0.tar.xz
 #cd qemu-3.1.0
-#./configure --enable-debug  --target-list=x86_64-softmmu 
+#./configure --enable-debug --enable-kvm --target-list=x86_64-softmmu 
 #make
 #make install
 
@@ -223,3 +223,21 @@ mount ${ROOT} /root
 echo "Change to real rootfs!"
 exec switch_root -c /dev/console /root /sbin/init
 --------------------------------------------------
+
+创建qemu支持的硬盘镜像:
+qemu-img create -f qcow2 Fedora-29.img 160G
+
+使用Fedora-29安装系统:
+qemu-system-x86_64 --enable-kvm -m 8192 -smp 8 -boot d -hda ./Fedora-29.img -cdrom ./Fedora-Workstation-Live-x86_64-29-1.2.iso
+
+安装后启动硬盘上的系统:
+qemu-system-x86_64 --enable-kvm -m 8192 -smp 8 -net nic -net user,hostfwd=tcp::32768-:22 -boot c -hda ./Fedora-29.img
+
+在安装qemu的机器上使用ssh登陆该系统:
+ssh -p 32768 barry@127.0.0.1
+
+注释:
+hostfwd=[tcp|udp]:[hostaddr]:hostport-[guestaddr]:guestport
+将进入到主机端口的TCP或者UDP连接转发到客户机的某个地址和端口
+
+hostfwd=tcp::32768-:22 将主机的32768端口的信息，转发到客户机的22端口.
