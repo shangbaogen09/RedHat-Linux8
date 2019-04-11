@@ -388,6 +388,10 @@ EXPORT_SYMBOL(ether_setup);
 struct net_device *alloc_etherdev_mqs(int sizeof_priv, unsigned int txqs,
 				      unsigned int rxqs)
 {
+	/*第一个参数是个整型的sizeof_priv，它用来表示驱动程序的“私有数据”的大小*/
+	/*第二个参数name，用来表示该网络接口的名称比如"eth0"，此接口名称字符串将保存在net_device对象的name成员中*/
+	/*第四个参数setup，用来初始化net_device对象中余下的一部分成员变量*/
+	/*第五和第六个参数用来表示该net_device对象将拥有的收发队列的数量*/
 	return alloc_netdev_mqs(sizeof_priv, "eth%d", NET_NAME_UNKNOWN,
 				ether_setup, txqs, rxqs);
 }

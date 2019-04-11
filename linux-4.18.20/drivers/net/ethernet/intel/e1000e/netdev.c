@@ -7021,6 +7021,7 @@ static const struct net_device_ops e1000e_netdev_ops = {
  * The OS initialization, configuring of the adapter private structure,
  * and a hardware reset occur.
  **/
+/*驱动注册匹配成功后要执行的函数*/
 static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
 	struct net_device *netdev;
@@ -7076,17 +7077,24 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		goto err_alloc_etherdev;
 
 	err = -ENOMEM;
+
+	/*分配一个net device的结构体，在该结构体的最后接的是私有成员(struct e1000_adapter)*/
 	netdev = alloc_etherdev(sizeof(struct e1000_adapter));
 	if (!netdev)
 		goto err_alloc_etherdev;
 
 	SET_NETDEV_DEV(netdev, &pdev->dev);
 
+	/*从pci设备中取出中断号*/
 	netdev->irq = pdev->irq;
 
 	pci_set_drvdata(pdev, netdev);
+
+	/*取出该net device后面接的私有结构体*/
 	adapter = netdev_priv(netdev);
 	hw = &adapter->hw;
+
+	/*初始化该私有结构体*/
 	adapter->netdev = netdev;
 	adapter->pdev = pdev;
 	adapter->ei = ei;
@@ -7098,6 +7106,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	adapter->max_hw_frame_size = ei->max_hw_frame_size;
 	adapter->msg_enable = netif_msg_init(debug, DEFAULT_MSG_ENABLE);
 
+	/*从pci设备中获取io端口信息*/
 	mmio_start = pci_resource_start(pdev, 0);
 	mmio_len = pci_resource_len(pdev, 0);
 
@@ -7121,12 +7130,20 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		adapter->eee_advert = MDIO_EEE_100TX | MDIO_EEE_1000T;
 
 	/* construct the net_device struct */
+	/*为netdev->netdev_ops成员设置操作函数集*/
 	netdev->netdev_ops = &e1000e_netdev_ops;
+
+	/*为netdev->ethtool_ops成员设置操作函数集*/
 	e1000e_set_ethtool_ops(netdev);
+
+	/*设置传输数据包的超时时间为5s*/
 	netdev->watchdog_timeo = 5 * HZ;
+
+	/*初始化私有数据adapter的结构成员napi*/
 	netif_napi_add(netdev, &adapter->napi, e1000e_poll, 64);
 	strlcpy(netdev->name, pci_name(pdev), sizeof(netdev->name));
 
+	/*把获取的端口信息放入netdev中*/
 	netdev->mem_start = mmio_start;
 	netdev->mem_end = mmio_start + mmio_len;
 
@@ -7134,6 +7151,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	e1000e_check_options(adapter);
 
+	/*继续初始化adapter结构体成员*/
 	/* setup adapter struct */
 	err = e1000_sw_init(adapter);
 	if (err)
@@ -7167,6 +7185,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		dev_info(&pdev->dev,
 			 "PHY reset is blocked due to SOL/IDER session.\n");
 
+	/*设置该设备默认支持的feature*/
 	/* Set initial default active device features */
 	netdev->features = (NETIF_F_SG |
 			    NETIF_F_HW_VLAN_CTAG_RX |
@@ -7227,10 +7246,12 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	e1000_eeprom_checks(adapter);
 
 	/* copy the MAC address */
+	/*从硬件设备中读出mac地址，并存放到adapter->hw.mac.addr中*/
 	if (e1000e_read_mac_addr(&adapter->hw))
 		dev_err(&pdev->dev,
 			"NVM Read Error while reading MAC address\n");
 
+	/*把读出的mac地址拷贝到net device的dev_addr成员中*/
 	memcpy(netdev->dev_addr, adapter->hw.mac.addr, netdev->addr_len);
 
 	if (!is_valid_ether_addr(netdev->dev_addr)) {
@@ -7240,9 +7261,13 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		goto err_eeprom;
 	}
 
+	/*初始化该adapter的watchdog_timer成员*/
 	timer_setup(&adapter->watchdog_timer, e1000_watchdog, 0);
+
+	/*初始化该adapter的phy_info_timer成员*/
 	timer_setup(&adapter->phy_info_timer, e1000_update_phy_info, 0);
 
+	/*初始化adapter的各种work处理函数*/
 	INIT_WORK(&adapter->reset_task, e1000_reset_task);
 	INIT_WORK(&adapter->watchdog_task, e1000_watchdog_task);
 	INIT_WORK(&adapter->downshift_task, e1000e_downshift_workaround);
@@ -7320,7 +7345,10 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (!(adapter->flags & FLAG_HAS_AMT))
 		e1000e_get_hw_control(adapter);
 
+	/*为该net device的name直接赋值，覆盖掉之前的*/
 	strlcpy(netdev->name, "eth%d", sizeof(netdev->name));
+
+	/*注册该网卡设备*/
 	err = register_netdev(netdev);
 	if (err)
 		goto err_register;
@@ -7333,6 +7361,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (pci_dev_run_wake(pdev))
 		pm_runtime_put_noidle(&pdev->dev);
 
+	/*向上层调用返回0*/
 	return 0;
 
 err_register:
@@ -7551,7 +7580,7 @@ static const struct dev_pm_ops e1000_pm_ops = {
 
 /* PCI Device API Driver */
 static struct pci_driver e1000_driver = {
-	.name     = e1000e_driver_name,
+	.name     = e1000e_driver_name,//"e1000e"
 	.id_table = e1000_pci_tbl,
 	.probe    = e1000_probe,
 	.remove   = e1000_remove,
@@ -7570,10 +7599,12 @@ static struct pci_driver e1000_driver = {
  **/
 static int __init e1000_init_module(void)
 {
+	/*模块加载的时候打印的网卡驱动的版本信息*/
 	pr_info("Intel(R) PRO/1000 Network Driver - %s\n",
 		e1000e_driver_version);
 	pr_info("Copyright(c) 1999 - 2015 Intel Corporation.\n");
 
+	/*注册该网卡驱动*/
 	return pci_register_driver(&e1000_driver);
 }
 module_init(e1000_init_module);
@@ -7586,6 +7617,7 @@ module_init(e1000_init_module);
  **/
 static void __exit e1000_exit_module(void)
 {
+	/*模块退出的时候注销该驱动*/
 	pci_unregister_driver(&e1000_driver);
 }
 module_exit(e1000_exit_module);

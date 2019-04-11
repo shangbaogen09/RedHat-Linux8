@@ -238,8 +238,14 @@ static void list_netdevice(struct net_device *dev)
 	ASSERT_RTNL();
 
 	write_lock_bh(&dev_base_lock);
+
+	/*将当前设备加入到所属命名空间(network namespace)中的dev_base_head所管理的全局链表*/
 	list_add_tail_rcu(&dev->dev_list, &net->dev_base_head);
+
+	/*以name作为hash值加入到net命名空间中的dev_name_head哈希链表*/
 	hlist_add_head_rcu(&dev->name_hlist, dev_name_hash(net, dev->name));
+
+	/*以ifindex作为hash值加入到net命名空间中的dev_index_head哈希链表*/
 	hlist_add_head_rcu(&dev->index_hlist,
 			   dev_index_hash(net, dev->ifindex));
 	write_unlock_bh(&dev_base_lock);
@@ -5719,22 +5725,33 @@ static enum hrtimer_restart napi_watchdog(struct hrtimer *timer)
 void netif_napi_add(struct net_device *dev, struct napi_struct *napi,
 		    int (*poll)(struct napi_struct *, int), int weight)
 {
+	/*初始化napi成员变量*/
 	INIT_LIST_HEAD(&napi->poll_list);
+
+	/*初始化napi的定时器*/
 	hrtimer_init(&napi->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL_PINNED);
 	napi->timer.function = napi_watchdog;
 	napi->gro_count = 0;
 	napi->gro_list = NULL;
 	napi->skb = NULL;
+
+	/*napi关联的poll函数*/
 	napi->poll = poll;
 	if (weight > NAPI_POLL_WEIGHT)
 		pr_err_once("netif_napi_add() called with weight %d on device %s\n",
 			    weight, dev->name);
+
+	/*napi关联的权重*/
 	napi->weight = weight;
+
+	/*napi和设备的关联*/
 	list_add(&napi->dev_list, &dev->napi_list);
 	napi->dev = dev;
 #ifdef CONFIG_NETPOLL
 	napi->poll_owner = -1;
 #endif
+
+	/*设置napi的状态为NAPI_STATE_SCHED*/
 	set_bit(NAPI_STATE_SCHED, &napi->state);
 	napi_hash_add(napi);
 }
@@ -7815,17 +7832,22 @@ static int netif_alloc_rx_queues(struct net_device *dev)
 {
 	unsigned int i, count = dev->num_rx_queues;
 	struct netdev_rx_queue *rx;
+
+	/*计算该接收队列所需内存的大小*/
 	size_t sz = count * sizeof(*rx);
 	int err = 0;
 
 	BUG_ON(count < 1);
 
+	/*为接收队列分配内存*/
 	rx = kvzalloc(sz, GFP_KERNEL | __GFP_RETRY_MAYFAIL);
 	if (!rx)
 		return -ENOMEM;
 
+	/*把dev->_rx和队列关联*/
 	dev->_rx = rx;
 
+	/*初始化该队列关联的net device*/
 	for (i = 0; i < count; i++) {
 		rx[i].dev = dev;
 
@@ -7882,17 +7904,22 @@ static int netif_alloc_netdev_queues(struct net_device *dev)
 {
 	unsigned int count = dev->num_tx_queues;
 	struct netdev_queue *tx;
+
+	/*计算要分配队列所需内存的大小*/
 	size_t sz = count * sizeof(*tx);
 
 	if (count < 1 || count > 0xffff)
 		return -EINVAL;
 
+	/*分配发送队列内存*/
 	tx = kvzalloc(sz, GFP_KERNEL | __GFP_RETRY_MAYFAIL);
 	if (!tx)
 		return -ENOMEM;
 
+	/*dev->_tx可以真正称为发送队列*/
 	dev->_tx = tx;
 
+	/*针对每一个队列都调用初始化函数netdev_init_one_queue*/
 	netdev_for_each_tx_queue(dev, netdev_init_one_queue, NULL);
 	spin_lock_init(&dev->tx_global_lock);
 
@@ -7931,6 +7958,8 @@ EXPORT_SYMBOL(netif_tx_stop_all_queues);
 int register_netdevice(struct net_device *dev)
 {
 	int ret;
+
+	/*取出该net device的命名空间:dev->nd_net =& init_net*/
 	struct net *net = dev_net(dev);
 
 	BUILD_BUG_ON(sizeof(netdev_features_t) * BITS_PER_BYTE <
@@ -7947,12 +7976,15 @@ int register_netdevice(struct net_device *dev)
 	spin_lock_init(&dev->addr_list_lock);
 	netdev_set_addr_lockdep_class(dev);
 
+	/*为该网络设备分配一个合法的网络设备名*/
 	ret = dev_get_valid_name(net, dev, dev->name);
 	if (ret < 0)
 		goto out;
 
 	/* Init, if this function is available */
+	/*如果驱动程序为新分配的设备对象dev提供了dev->netdev_ops->ndo_init的实现*/
 	if (dev->netdev_ops->ndo_init) {
+		/*那么在将设备向系统注册的过程中，该设备方法集中的ndo_init()将被调用*/
 		ret = dev->netdev_ops->ndo_init(dev);
 		if (ret) {
 			if (ret > 0)
@@ -7971,7 +8003,10 @@ int register_netdevice(struct net_device *dev)
 	}
 
 	ret = -EBUSY;
+
+	/*假如net->ifindex初始值为0*/
 	if (!dev->ifindex)
+		/*从net的命名空间中分配一个index赋值给该device的ifindex*/
 		dev->ifindex = dev_new_index(net);
 	else if (__dev_get_by_index(net, dev->ifindex))
 		goto err_uninit;
@@ -8023,9 +8058,13 @@ int register_netdevice(struct net_device *dev)
 	if (ret)
 		goto err_uninit;
 
+	/*通过Linux设备驱动模型来向系统添加当前的设备，同时通过sysfs的方式将
+	  当前网络设备的一些属性等以文件或者目录的方式传递到用户空间*/
 	ret = netdev_register_kobject(dev);
 	if (ret)
 		goto err_uninit;
+
+	/*标明该设备处于注册状态*/
 	dev->reg_state = NETREG_REGISTERED;
 
 	__netdev_update_features(dev);
@@ -8034,13 +8073,18 @@ int register_netdevice(struct net_device *dev)
 	 *	Default initial state at registry is that the
 	 *	device is present.
 	 */
-
+	/*当用register_netdev向系统成功注册一个设备对象dev时， dev->state的__
+       LINK_STATE_PRESENT位被置1,表示设备已经进驻到了系统*/
 	set_bit(__LINK_STATE_PRESENT, &dev->state);
 
 	linkwatch_init_dev(dev);
 
+	/*该函数主要用来初始化设备对象dev所定义的发送队列的Qdisc,在设备注册阶段，
+	  每个发送队列都使用同一个缺省的Qdisc对象noop_qdisc*/
 	dev_init_scheduler(dev);
 	dev_hold(dev);
+
+	/*该函数主要是将当前正在注册的网络设备对象加入到系统维护的几个链表中*/
 	list_netdevice(dev);
 	add_device_randomness(dev->dev_addr, dev->addr_len);
 
@@ -8052,6 +8096,8 @@ int register_netdevice(struct net_device *dev)
 		memcpy(dev->perm_addr, dev->dev_addr, dev->addr_len);
 
 	/* Notify protocols, that a new device appeared. */
+	/*通过网络设备的通知链netdev_chain通告内核网络子系统一个新的网络设备dev已经加入到系统中，这导致内核的inetdev_event函数被调用，
+	  后者会分配并初始化一个in_device对象，然后把它的地址赋予dev->ip_ptr，用来完成IPv4相关功能，比如路由等*/
 	ret = call_netdevice_notifiers(NETDEV_REGISTER, dev);
 	ret = notifier_to_errno(ret);
 	if (ret) {
@@ -8067,6 +8113,7 @@ int register_netdevice(struct net_device *dev)
 		rtmsg_ifinfo(RTM_NEWLINK, dev, ~0U, GFP_KERNEL);
 
 out:
+	/*向上层调用返回执行结果*/
 	return ret;
 
 err_uninit:
@@ -8138,6 +8185,8 @@ int register_netdev(struct net_device *dev)
 
 	if (rtnl_lock_killable())
 		return -EINTR;
+
+	/*主要工作委托给register_netdevice来完成*/
 	err = register_netdevice(dev);
 	rtnl_unlock();
 	return err;
@@ -8401,6 +8450,7 @@ void netdev_freemem(struct net_device *dev)
  * and performs basic initialization.  Also allocates subqueue structs
  * for each queue on the device.
  */
+/*创建以太网设备的函数*/
 struct net_device *alloc_netdev_mqs(int sizeof_priv, const char *name,
 		unsigned char name_assign_type,
 		void (*setup)(struct net_device *),
@@ -8422,6 +8472,7 @@ struct net_device *alloc_netdev_mqs(int sizeof_priv, const char *name,
 		return NULL;
 	}
 
+	/*计算struct net_device加sizeof_priv的大小，并进行对齐处理*/
 	alloc_size = sizeof(struct net_device);
 	if (sizeof_priv) {
 		/* ensure 32-byte alignment of private area */
@@ -8431,10 +8482,12 @@ struct net_device *alloc_netdev_mqs(int sizeof_priv, const char *name,
 	/* ensure 32-byte alignment of whole construct */
 	alloc_size += NETDEV_ALIGN - 1;
 
+	/*设备对象内存的分配*/
 	p = kvzalloc(alloc_size, GFP_KERNEL | __GFP_RETRY_MAYFAIL);
 	if (!p)
 		return NULL;
-
+	
+	/*把返回的分配的内存指针强制转换为struct net_device结构*/
 	dev = PTR_ALIGN(p, NETDEV_ALIGN);
 	dev->padded = (char *)dev - (char *)p;
 
@@ -8442,12 +8495,15 @@ struct net_device *alloc_netdev_mqs(int sizeof_priv, const char *name,
 	if (!dev->pcpu_refcnt)
 		goto free_dev;
 
+	/*dev_addr_init(dev)用来初始化dev对象中的硬件地址链表dev_addrs*/
 	if (dev_addr_init(dev))
 		goto free_pcpu;
 
+	/*dev_mc_init和dev_uc_init函数分别用来初始化当前设备对象的组播multicast和单播unicast MAC地址列表*/
 	dev_mc_init(dev);
 	dev_uc_init(dev);
 
+	/*dev_net_set()则将该net_device对象的命名空间(namespace)设定为init_net*/
 	dev_net_set(dev, &init_net);
 
 	dev->gso_max_size = GSO_MAX_SIZE;
@@ -8465,6 +8521,8 @@ struct net_device *alloc_netdev_mqs(int sizeof_priv, const char *name,
 	hash_init(dev->qdisc_hash);
 #endif
 	dev->priv_flags = IFF_XMIT_DST_RELEASE | IFF_XMIT_DST_RELEASE_PERM;
+
+	/*调用实参传递过来的setup()函数继续初始化net_device对象的其他成员变量*/
 	setup(dev);
 
 	if (!dev->tx_queue_len) {
@@ -8472,16 +8530,24 @@ struct net_device *alloc_netdev_mqs(int sizeof_priv, const char *name,
 		dev->tx_queue_len = DEFAULT_TX_QUEUE_LEN;
 	}
 
+	/*初始化发送队列的个数*/
 	dev->num_tx_queues = txqs;
 	dev->real_num_tx_queues = txqs;
+
+	/*为该net device分配发送队列*/
 	if (netif_alloc_netdev_queues(dev))
 		goto free_all;
 
 	dev->num_rx_queues = rxqs;
 	dev->real_num_rx_queues = rxqs;
+
+	/*dev->_rx则主要用于RPS，用来将接收到的分组分流到不同的cpu上处理，所以它其实是一个伪队列。
+	  而真正的接收队列实际上是由内核提供的一对{sd->input_pkt_queue，sd->process_queue}，对于
+	  SMP系统而言，系统中每个cpu都拥有一个此队列对(rx queue pair)*/
 	if (netif_alloc_rx_queues(dev))
 		goto free_all;
 
+	/*初始化以太网的名字*/
 	strcpy(dev->name, name);
 	dev->name_assign_type = name_assign_type;
 	dev->group = INIT_NETDEV_GROUP;
@@ -8490,6 +8556,7 @@ struct net_device *alloc_netdev_mqs(int sizeof_priv, const char *name,
 
 	nf_hook_ingress_init(dev);
 
+	/*返回初始化后的struct net_device指针*/
 	return dev;
 
 free_all:

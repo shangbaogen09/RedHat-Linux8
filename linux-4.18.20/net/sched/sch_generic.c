@@ -1243,6 +1243,7 @@ static void dev_init_scheduler_queue(struct net_device *dev,
 {
 	struct Qdisc *qdisc = _qdisc;
 
+	/*设备的队列和qdisc关联*/
 	rcu_assign_pointer(dev_queue->qdisc, qdisc);
 	dev_queue->qdisc_sleeping = qdisc;
 	__skb_queue_head_init(&qdisc->gso_skb);
@@ -1252,6 +1253,8 @@ static void dev_init_scheduler_queue(struct net_device *dev,
 void dev_init_scheduler(struct net_device *dev)
 {
 	dev->qdisc = &noop_qdisc;
+
+	/*每个发送队列都使用同一个缺省的Qdisc对象noop_qdisc*/
 	netdev_for_each_tx_queue(dev, dev_init_scheduler_queue, &noop_qdisc);
 	if (dev_ingress_queue(dev))
 		dev_init_scheduler_queue(dev, dev_ingress_queue(dev), &noop_qdisc);
