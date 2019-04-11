@@ -241,3 +241,212 @@ hostfwd=[tcp|udp]:[hostaddr]:hostport-[guestaddr]:guestport
 将进入到主机端口的TCP或者UDP连接转发到客户机的某个地址和端口
 
 hostfwd=tcp::32768-:22 将主机的32768端口的信息，转发到客户机的22端口.
+
+#为qemu虚拟机增加硬盘分区
+qemu-img create -f qcow2 disk.img 10G
+-hdb /你的路径/disk.img
+
+#Fedora-29需要安装的环境
+sudo yum install gcc-c++
+sudo yum install bison
+sudo yum install texinfo
+
+$准备工作分区与相应目录$
+-----------------------------------------------------------------------------------
+#为新分区创建文件系统
+#mkfs.ext4 /dev/sdb
+
+#在/mnt目录中创建lfs目录,然后挂载/dev/sdb到/mnt/lfs目录中:
+#mkdir /mnt/lfs
+#mount /dev/sdb /mnt/lfs
+#export LFS=/mnt/lfs
+
+在/mnt/lfs目录中,以root用户运行以下的命令来创建需要的文件夹：
+#mkdir -v $LFS/tools
+#mkdir -v $LFS/sources
+
+#在宿主系统中创建/tools的符号链接,将其指向LFS分区中新建的目录：
+#ln -sv $LFS/tools /
+-----------------------------------------------------------------------------------
+
+$添加LFS用户$
+-----------------------------------------------------------------------------------
+#groupadd lfs
+#useradd -s /bin/bash -g lfs -m -k /dev/null lfs
+
+#给lfs用户设置一个密码
+#passwd lfs
+
+#通过更改目录所有者为 lfs，为用户 lfs 赋予了访问 $LFS/tools 目录的所有权限：
+#chown -v lfs $LFS/tools
+#chown -v lfs $LFS/sources
+
+#以lfs用户身份登录
+$su - lfs
+-----------------------------------------------------------------------------------
+
+
+$设置环境$
+-----------------------------------------------------------------------------------
+#通过为bash shell创建两个开机启动的文件，设置合适的工作环境。当以lfs用户身份登录时，
+#运行以下命令创建一个新的.bash_profile文件
+cat > ~/.bash_profile << "EOF"
+exec env -i HOME=$HOME TERM=$TERM PS1='\u:\w\$ ' /bin/bash
+EOF
+
+#创建.bashrc文件:
+cat > ~/.bashrc << "EOF"
+set +h
+umask 022
+LFS=/mnt/lfs
+LC_ALL=POSIX
+LFS_TGT=$(uname -m)-lfs-linux-gnu
+PATH=/tools/bin:/bin:/usr/bin
+export LFS LC_ALL LFS_TGT PATH
+EOF
+
+#启用刚才创建的用户配置，为构建临时工具完全准备好环境：
+source ~/.bash_profile
+-----------------------------------------------------------------------------------
+
+编译binutils第一遍:
+-----------------------------------------------------------------------------------
+$tar xvf /mnt/lfs/sources/binutils-2.31.1.tar.xz
+$cd binutils-2.31.1/
+$mkdir build
+$cd build/
+$../configure --prefix=/tools  --with-sysroot=$LFS  --with-lib-path=/tools/lib  --target=$LFS_TGT  --disable-nls  --disable-werror
+$make
+
+如果是在x86_64上构建,创建符号链接,以确保工具链的完整性:
+case $(uname -m) in
+ x86_64) mkdir -v /tools/lib && ln -sv lib /tools/lib64 ;;
+esac
+
+$make install
+-----------------------------------------------------------------------------------
+
+编译gcc第一遍:
+-----------------------------------------------------------------------------------
+$tar xvf /mnt/lfs/sources/gcc-8.2.0.tar.xz
+$cd gcc-8.2.0/
+$./contrib/download_prerequisites
+
+下面的指令将会修改GCC默认的动态链接器的位置,安装到/tools目录中的.并将/usr/include从
+GCC的include检索路径中移除:
+for file in gcc/config/{linux,i386/linux{,64}}.h
+do
+ cp -uv $file{,.orig}
+ sed -e 's@/lib\(64\)\?\(32\)\?/ld@/tools&@g' \
+ -e 's@/usr@/tools@g' $file.orig > $file
+ echo '
+#undef STANDARD_STARTFILE_PREFIX_1
+#undef STANDARD_STARTFILE_PREFIX_2
+#define STANDARD_STARTFILE_PREFIX_1 "/tools/lib/"
+#define STANDARD_STARTFILE_PREFIX_2 ""' >> $file
+ touch $file.orig
+done
+
+在x86_64的主机上，为64位的库设置默认目录名至lib:
+case $(uname -m) in
+ x86_64)
+ sed -e '/m64=/s/lib64/lib/' \
+ -i.orig gcc/config/i386/t-linux64
+ ;;
+esac
+
+$mkdir build
+$cd build/
+$../configure  --target=$LFS_TGT  --prefix=/tools  --with-glibc-version=2.28  --with-sysroot=$LFS  --with-newlib  --without-headers  --with-local-prefix=/tools  --with-native-system-header-dir=/tools/include  --disable-nls  --disable-shared  --disable-multilib  --disable-decimal-float  --disable-threads  --disable-libatomic  --disable-libgomp  --disable-libmpx  --disable-libquadmath  --disable-libssp  --disable-libvtv  --disable-libstdcxx  --enable-languages=c,c++
+
+$make
+$make install
+-----------------------------------------------------------------------------------
+
+安装linux内核头文件:
+-----------------------------------------------------------------------------------
+$tar xvf /mnt/lfs/sources/linux-4.18.20.tar.xz
+$cd linux-4.18.20/
+$make mrproper
+$make INSTALL_HDR_PATH=dest headers_install
+$cp -rv dest/include/* /tools/include
+-----------------------------------------------------------------------------------
+
+编译glibc:
+-----------------------------------------------------------------------------------
+$tar xvf /mnt/lfs/sources/glibc-2.28.tar.xz
+$cd glibc-2.28/
+$mkdir build
+$cd build/
+$../configure  --prefix=/tools  --host=$LFS_TGT  --build=$(../scripts/config.guess)  --enable-kernel=4.18.0  --with-headers=/tools/include
+$make
+$make install
+-----------------------------------------------------------------------------------
+
+编译GCC-8.2.0中的Libstdc++(依赖glibc):
+-----------------------------------------------------------------------------------
+$cd gcc-8.2.0/
+$mv build build-first
+$mkdir build
+$../libstdc++-v3/configure  --host=$LFS_TGT  --prefix=/tools  --disable-multilib  --disable-nls  --disable-libstdcxx-threads  --disable-libstdcxx-pch  --with-gxx-include-dir=/tools/$LFS_TGT/include/c++/8.2.0
+$make
+$make install
+-----------------------------------------------------------------------------------
+
+
+编译binutils第二遍:
+-----------------------------------------------------------------------------------
+$cd binutils-2.31.1/
+$mv build build-first
+$mkdir build
+$CC=$LFS_TGT-gcc AR=$LFS_TGT-ar RANLIB=$LFS_TGT-ranlib ../configure  --prefix=/tools  --disable-nls  --disable-werror  --with-lib-path=/tools/lib  --with-sysroot
+$make 
+$make install
+
+为下一章「Re-adjusting」阶段准备链接器：
+make -C ld clean
+make -C ld LIB_PATH=/usr/lib:/lib
+cp -v ld/ld-new /tools/bin
+-----------------------------------------------------------------------------------
+
+编译gcc第二遍:
+-----------------------------------------------------------------------------------
+$cd gcc-8.2.0/
+
+#创建一个完整版本的内部头文件
+$cat gcc/limitx.h gcc/glimits.h gcc/limity.h >  `dirname $($LFS_TGT-gcc -print-libgcc-file-name)`/include-fixed/limits.h
+
+#更改GCC的默认动态链接器的位置,使用安装在/tools的那个
+for file in gcc/config/{linux,i386/linux{,64}}.h
+do
+ cp -uv $file{,.orig}
+ sed -e 's@/lib\(64\)\?\(32\)\?/ld@/tools&@g' \
+ -e 's@/usr@/tools@g' $file.orig > $file
+ echo '
+#undef STANDARD_STARTFILE_PREFIX_1
+#undef STANDARD_STARTFILE_PREFIX_2
+#define STANDARD_STARTFILE_PREFIX_1 "/tools/lib/"
+#define STANDARD_STARTFILE_PREFIX_2 ""' >> $file
+ touch $file.orig
+done
+
+#如果是在x86_64环境上构建,为64位库改变默认目录名至lib:
+case $(uname -m) in
+ x86_64)
+ sed -e '/m64=/s/lib64/lib/' \
+ -i.orig gcc/config/i386/t-linux64
+ ;;
+esac
+
+#创建编译目录
+$mv build build-libstdc++
+$mkdir build
+$cd build
+$CC=$LFS_TGT-gcc CXX=$LFS_TGT-g++ AR=$LFS_TGT-ar RANLIB=$LFS_TGT-ranlib ../configure  --prefix=/tools  --with-local-prefix=/tools  --with-native-system-header-dir=/tools/include  --enable-languages=c,c++  --disable-libstdcxx-pch  --disable-multilib  --disable-bootstrap  --disable-libgomp
+$make
+$make install
+
+#创建符号链接
+$cd /tools/bin/
+$ln -sv gcc /tools/bin/cc
+-----------------------------------------------------------------------------------
