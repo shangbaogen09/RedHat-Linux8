@@ -123,6 +123,7 @@ static inline int __dev_requeue_skb(struct sk_buff *skb, struct Qdisc *q)
 	while (skb) {
 		struct sk_buff *next = skb->next;
 
+		/*将当前分组放入gso_skb*/
 		__skb_queue_tail(&q->gso_skb, skb);
 		q->qstats.requeues++;
 		qdisc_qstats_backlog_inc(q, skb);
@@ -130,6 +131,8 @@ static inline int __dev_requeue_skb(struct sk_buff *skb, struct Qdisc *q)
 
 		skb = next;
 	}
+
+	/*重新调度*/
 	__netif_schedule(q);
 
 	return 0;
@@ -274,9 +277,12 @@ validate:
 	skb = qdisc_dequeue_skb_bad_txq(q);
 	if (unlikely(skb))
 		goto bulk;
+
+	/*qdisc队列中获取一个最高优先级的skb,默认处理函数为pfifo_fast_dequeue*/
 	skb = q->dequeue(q);
 	if (skb) {
 bulk:
+		/*使用bytelimit为限制，将取出的多个独立的skb构造一个skb链表*/
 		if (qdisc_may_bulk(q))
 			try_bulk_dequeue_skb(q, skb, txq, packets);
 		else
@@ -284,6 +290,8 @@ bulk:
 	}
 trace:
 	trace_qdisc_dequeue(q, txq, *packets, skb);
+
+	/*返回skb链表指针*/
 	return skb;
 }
 
@@ -321,8 +329,11 @@ bool sch_direct_xmit(struct sk_buff *skb, struct Qdisc *q,
 	}
 #endif
 
+	/*skb链表*/
 	if (likely(skb)) {
 		HARD_TX_LOCK(dev, txq, smp_processor_id());
+
+		/*调用硬件发送函数,前提是流控机制的状态位QUEUE_STATE_ANY_XOFF_OR_FROZEN没有置位*/
 		if (!netif_xmit_frozen_or_stopped(txq))
 			skb = dev_hard_start_xmit(skb, dev, txq, &ret);
 
@@ -336,16 +347,20 @@ bool sch_direct_xmit(struct sk_buff *skb, struct Qdisc *q,
 	if (root_lock)
 		spin_lock(root_lock);
 
+	/*正常发送成功完成*/
 	if (!dev_xmit_complete(ret)) {
 		/* Driver returned NETDEV_TX_BUSY - requeue skb */
 		if (unlikely(ret != NETDEV_TX_BUSY))
 			net_warn_ratelimited("BUG %s code %d qlen %d\n",
 					     dev->name, ret, q->q.qlen);
 
+		/*假如skb并没有被网络设备成功发送出去，此时内核不会丢弃该分组，而是调用dev_requeue_skb()将skb放入
+        到当前qdisc对象的gso_skb成员中，并更新当前发送队列的一些统计值，等待下一次被调度发送的机会*/
 		dev_requeue_skb(skb, q);
 		return false;
 	}
 
+	/*向上层调用返回true表示发送成功*/
 	return true;
 }
 
@@ -376,6 +391,7 @@ static inline bool qdisc_restart(struct Qdisc *q, int *packets)
 	struct sk_buff *skb;
 	bool validate;
 
+	/*从它的qdisc队列中取出分组*/
 	/* Dequeue packet */
 	skb = dequeue_skb(q, &validate, packets);
 	if (unlikely(!skb))
@@ -384,17 +400,24 @@ static inline bool qdisc_restart(struct Qdisc *q, int *packets)
 	if (!(q->flags & TCQ_F_NOLOCK))
 		root_lock = qdisc_lock(q);
 
+	/*获取对应qdisc的发送设备*/
 	dev = qdisc_dev(q);
+
+	/*获取该skb的发送队列*/
 	txq = skb_get_tx_queue(dev, skb);
 
+	/*将skb交由sch_direct_xmit来处理*/
 	return sch_direct_xmit(skb, q, dev, txq, root_lock, validate);
 }
 
 void __qdisc_run(struct Qdisc *q)
 {
+	/*定义的默认值为64*/
 	int quota = dev_tx_weight;
 	int packets;
 
+	/*当__qdisc_run运行时其所属的qdisc对象处于RUNNING状态并且拥有root_lock锁,如果队列不为空
+    并且取出的分组没有超出配额，那么它将一直重复dequeue_skb，再sch_direct_xmit这一过程*/
 	while (qdisc_restart(q, &packets)) {
 		/*
 		 * Ordered by possible occurrence: Postpone processing if
@@ -402,6 +425,8 @@ void __qdisc_run(struct Qdisc *q)
 		 * 2. another process needs the CPU;
 		 */
 		quota -= packets;
+
+		/*如果配额使用完将强制进行qdisc调度*/
 		if (quota <= 0 || need_resched()) {
 			__netif_schedule(q);
 			break;

@@ -4154,6 +4154,8 @@ static inline netdev_tx_t __netdev_start_xmit(const struct net_device_ops *ops,
 					      bool more)
 {
 	skb->xmit_more = more ? 1 : 0;
+
+	/*调用具体网卡的发送函数:e1000_xmit_frame*/
 	return ops->ndo_start_xmit(skb, dev);
 }
 
@@ -4163,7 +4165,10 @@ static inline netdev_tx_t netdev_start_xmit(struct sk_buff *skb, struct net_devi
 	const struct net_device_ops *ops = dev->netdev_ops;
 	int rc;
 
+	/*跟踪调用链*/
 	rc = __netdev_start_xmit(ops, skb, dev, more);
+
+	/*如果传输成功，更新发送队列的时间戳,防止发送超时启动看门狗*/
 	if (rc == NETDEV_TX_OK)
 		txq_trans_update(txq);
 

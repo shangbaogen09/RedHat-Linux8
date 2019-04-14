@@ -1837,10 +1837,15 @@ static irqreturn_t e1000_intr_msi(int __always_unused irq, void *data)
 static irqreturn_t e1000_intr(int __always_unused irq, void *data)
 {
 	struct net_device *netdev = data;
+
+	/*取出该net device的私有结构体*/
 	struct e1000_adapter *adapter = netdev_priv(netdev);
 	struct e1000_hw *hw = &adapter->hw;
+
+	/*读取中断状态寄存器的值*/
 	u32 rctl, icr = er32(ICR);
 
+	/*判断是否是自己的中断*/
 	if (!icr || test_bit(__E1000_DOWN, &adapter->state))
 		return IRQ_NONE;	/* Not our interrupt */
 
@@ -1855,6 +1860,8 @@ static irqreturn_t e1000_intr(int __always_unused irq, void *data)
 	 * IMC write
 	 */
 
+	/*该网卡的中断在读ICR寄存器的时候，自动关闭，不需要手动禁止*/
+	/*表示链路状态发生了改变*/
 	if (icr & E1000_ICR_LSC) {
 		hw->mac.get_link_status = true;
 		/* ICH8 workaround-- Call gig speed drop workaround on cable
@@ -1898,11 +1905,16 @@ static irqreturn_t e1000_intr(int __always_unused irq, void *data)
 		return IRQ_HANDLED;
 	}
 
+	/*先判断是否可以进行调度*/
 	if (napi_schedule_prep(&adapter->napi)) {
+
+		/*如果可以调度，则把各个的统计值设置为0*/
 		adapter->total_tx_bytes = 0;
 		adapter->total_tx_packets = 0;
 		adapter->total_rx_bytes = 0;
 		adapter->total_rx_packets = 0;
+
+		/*如果可以调度的话，则把该私有结构的napi加入到当前cpu的poll列表,在软中断中进行polling数据包处理*/
 		__napi_schedule(&adapter->napi);
 	}
 
@@ -2698,6 +2710,7 @@ static int e1000e_poll(struct napi_struct *napi, int weight)
 
 	adapter = netdev_priv(poll_dev);
 
+	/*回收发送完成后的skb buffer*/
 	if (!adapter->msix_entries ||
 	    (adapter->rx_ring->ims_val & adapter->tx_ring->ims_val))
 		tx_cleaned = e1000_clean_tx_irq(adapter->tx_ring);
@@ -5587,8 +5600,10 @@ static int e1000_tx_map(struct e1000_ring *tx_ring, struct sk_buff *skb,
 	unsigned int offset = 0, size, count = 0, i;
 	unsigned int f, bytecount, segs;
 
+	/*取出要映射的buffer_info索引*/
 	i = tx_ring->next_to_use;
 
+	/*为该skb建立dma映射*/
 	while (len) {
 		buffer_info = &tx_ring->buffer_info[i];
 		size = min(len, max_per_txd);
@@ -5614,6 +5629,7 @@ static int e1000_tx_map(struct e1000_ring *tx_ring, struct sk_buff *skb,
 		}
 	}
 
+	/*为对应的分片建立dma映射*/
 	for (f = 0; f < nr_frags; f++) {
 		const struct skb_frag_struct *frag;
 
@@ -5654,6 +5670,7 @@ static int e1000_tx_map(struct e1000_ring *tx_ring, struct sk_buff *skb,
 	tx_ring->buffer_info[i].bytecount = bytecount;
 	tx_ring->buffer_info[first].next_to_watch = i;
 
+	/*向上层返回要发送数据包的数目*/
 	return count;
 
 dma_error:
@@ -5708,19 +5725,28 @@ static void e1000_tx_queue(struct e1000_ring *tx_ring, int tx_flags, int count)
 		txd_upper |= E1000_TXD_EXTCMD_TSTAMP;
 	}
 
+	/*取出要发送的数据包索引*/
 	i = tx_ring->next_to_use;
 
 	do {
+		/*取出该ring中的描述符关联的buffer信息*/
 		buffer_info = &tx_ring->buffer_info[i];
+
+		/*取出对应的发送描述符tx_desc*/
 		tx_desc = E1000_TX_DESC(*tx_ring, i);
+
+		/*把本次要发送内存的dma地址写入发送描述符中*/
 		tx_desc->buffer_addr = cpu_to_le64(buffer_info->dma);
 		tx_desc->lower.data = cpu_to_le32(txd_lower |
 						  buffer_info->length);
 		tx_desc->upper.data = cpu_to_le32(txd_upper);
 
+		/*更新索引，移动到下一个要发送的数据包*/
 		i++;
 		if (i == tx_ring->count)
 			i = 0;
+
+	/*循环初始化要发送数据包*/
 	} while (--count > 0);
 
 	tx_desc->lower.data |= cpu_to_le32(adapter->txd_cmd);
@@ -5736,6 +5762,7 @@ static void e1000_tx_queue(struct e1000_ring *tx_ring, int tx_flags, int count)
 	 */
 	wmb();
 
+	/*记录下次要处理数据包的位置*/
 	tx_ring->next_to_use = i;
 }
 
@@ -5812,7 +5839,10 @@ static int e1000_maybe_stop_tx(struct e1000_ring *tx_ring, int size)
 static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 				    struct net_device *netdev)
 {
+	/*取出net device对应的私有数据结构体*/
 	struct e1000_adapter *adapter = netdev_priv(netdev);
+
+	/*取出该私有结构体中的发送ring*/
 	struct e1000_ring *tx_ring = adapter->tx_ring;
 	unsigned int first;
 	unsigned int tx_flags = 0;
@@ -5872,6 +5902,7 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 
 	count += DIV_ROUND_UP(len, adapter->tx_fifo_limit);
 
+	/*要发送的分片数*/
 	nr_frags = skb_shinfo(skb)->nr_frags;
 	for (f = 0; f < nr_frags; f++)
 		count += DIV_ROUND_UP(skb_frag_size(&skb_shinfo(skb)->frags[f]),
@@ -5892,6 +5923,7 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 			     E1000_TX_FLAGS_VLAN_SHIFT);
 	}
 
+	/*取出第一个可用的描述符*/
 	first = tx_ring->next_to_use;
 
 	tso = e1000_tso(tx_ring, skb, protocol);
@@ -5915,9 +5947,12 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 	if (unlikely(skb->no_fcs))
 		tx_flags |= E1000_TX_FLAGS_NO_FCS;
 
+	/*进行map处理，主要功能是为SKB里的数据建立一个可以DMA的地址*/
 	/* if count is 0 then mapping error has occurred */
 	count = e1000_tx_map(tx_ring, skb, first, adapter->tx_fifo_limit,
 			     nr_frags);
+
+	/*如果要发送的数据包个数不为0*/
 	if (count) {
 		if (unlikely(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP) &&
 		    (adapter->flags & FLAG_HAS_HW_TIMESTAMP)) {
@@ -5935,6 +5970,8 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 		skb_tx_timestamp(skb);
 
 		netdev_sent_queue(netdev, skb->len);
+
+		/*调用该函数进行数据包的发送的初始化，也就是把要发送的数据关联到对应的描述符上*/
 		e1000_tx_queue(tx_ring, tx_flags, count);
 		/* Make sure there is space in the ring for the next send. */
 		e1000_maybe_stop_tx(tx_ring,
@@ -5948,6 +5985,7 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 				e1000e_update_tdt_wa(tx_ring,
 						     tx_ring->next_to_use);
 			else
+				/*从网卡的开发手册中可以查到，如果写了descriptor tail，那么网卡就会自动读取descriptor,然后把包发送出去*/
 				writel(tx_ring->next_to_use, tx_ring->tail);
 
 			/* we need this if more than one processor can write
@@ -5962,6 +6000,7 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 		tx_ring->next_to_use = first;
 	}
 
+	/*向上层调用返回发送成功*/
 	return NETDEV_TX_OK;
 }
 

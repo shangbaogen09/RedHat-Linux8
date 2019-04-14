@@ -2536,14 +2536,21 @@ static void __netif_reschedule(struct Qdisc *q)
 	local_irq_save(flags);
 	sd = this_cpu_ptr(&softnet_data);
 	q->next_sched = NULL;
+
+	/*把它加到该调度队列的尾部*/
 	*sd->output_queue_tailp = q;
 	sd->output_queue_tailp = &q->next_sched;
+
+	/*同时调用raise_softirq_irqoff(NET_TX_SOFTIRQ)来标志网络设备中断处理流程的softirq*/
 	raise_softirq_irqoff(NET_TX_SOFTIRQ);
 	local_irq_restore(flags);
 }
 
 void __netif_schedule(struct Qdisc *q)
 {
+ 	/*考察当前设备所对应的qdisc对象的状态，也即__QDISC_STATE_SCHED位有没有被置1，如果没
+     有则表明当前qdisc对象尚未加入到正运行它的CPU的qdisc对象调度队列output_queue中,先设
+     置__QDISC_STATE_SCHED位*/
 	if (!test_and_set_bit(__QDISC_STATE_SCHED, &q->state))
 		__netif_reschedule(q);
 }
@@ -3066,6 +3073,8 @@ static int xmit_one(struct sk_buff *skb, struct net_device *dev,
 
 	len = skb->len;
 	trace_net_dev_start_xmit(skb, dev);
+
+	/*实际的发送由该函数来完成*/
 	rc = netdev_start_xmit(skb, dev, txq, more);
 	trace_net_dev_xmit(skb, rc, dev, len);
 
@@ -3078,17 +3087,23 @@ struct sk_buff *dev_hard_start_xmit(struct sk_buff *first, struct net_device *de
 	struct sk_buff *skb = first;
 	int rc = NETDEV_TX_OK;
 
+	/*循环处理skb链表中的skb*/
 	while (skb) {
 		struct sk_buff *next = skb->next;
 
 		skb->next = NULL;
+
+		/*调用xmit_one将发送链表中的skb依次发送出去*/
 		rc = xmit_one(skb, dev, txq, next != NULL);
 		if (unlikely(!dev_xmit_complete(rc))) {
 			skb->next = next;
 			goto out;
 		}
 
+		/*处理链中的下一个skb*/
 		skb = next;
+
+		/*判断该发送队列的状态为(QUEUE_STATE_DRV_XOFF | QUEUE_STATE_STACK_XOFF)，则跳出循环停止发送*/
 		if (netif_xmit_stopped(txq) && skb) {
 			rc = NETDEV_TX_BUSY;
 			break;
@@ -3283,6 +3298,11 @@ static inline int __dev_xmit_skb(struct sk_buff *skb, struct Qdisc *q,
 	if (unlikely(test_bit(__QDISC_STATE_DEACTIVATED, &q->state))) {
 		__qdisc_drop(skb, &to_free);
 		rc = NET_XMIT_DROP;
+
+	/*如果同时满足以下三个条件，那么分组将不会经过qdisc队列的enqueue和dequeue流程而直接交由设备驱动程序处理(sch_direct_xmit)*/
+	/*条件a，qdisc对象可以被by-pass：q->flags&TCQ_F_CAN_BYPASS(内核缺省使用的pfifo_fast qdisc在其初始化函数中会设置该标志)
+	  条件b，qdisc当前的队列长度为0：q->q.qlen = 0
+	  条件c，qdisc当前还没有处于RUNNING状态：q->__state&__QDISC___STATE_RUNNING = 0;*/
 	} else if ((q->flags & TCQ_F_CAN_BYPASS) && !qdisc_qlen(q) &&
 		   qdisc_run_begin(q)) {
 		/*
@@ -3293,24 +3313,34 @@ static inline int __dev_xmit_skb(struct sk_buff *skb, struct Qdisc *q,
 
 		qdisc_bstats_update(q, skb);
 
+		/*直接交由设备驱动程序处理(sch_direct_xmit)*/
 		if (sch_direct_xmit(skb, q, dev, txq, root_lock, true)) {
 			if (unlikely(contended)) {
 				spin_unlock(&q->busylock);
 				contended = false;
 			}
+			/*走到这里说明qdisc的队列不为空，所以__qdisc_run()的主要功能是将队列中的
+			  分组排空，也就是试图将队列中所有的skb都交给驱动程序发送出去*/
 			__qdisc_run(q);
 		}
 
 		qdisc_run_end(q);
 		rc = NET_XMIT_SUCCESS;
 	} else {
+		/*把该skb加入到qdisc的队列中,默认回调函数为pfifo_fast_enqueue*/
 		rc = q->enqueue(skb, q, &to_free) & NET_XMIT_MASK;
+
+		/*检查该qdisc的状态是否为running，如果已经为running，则直接跳过发送，否则设置为running状态*/
 		if (qdisc_run_begin(q)) {
 			if (unlikely(contended)) {
 				spin_unlock(&q->busylock);
 				contended = false;
 			}
+
+			/*试图将队列中所有的skb都交给驱动程序发送出去*/
 			__qdisc_run(q);
+
+			/*清除对应的running状态*/
 			qdisc_run_end(q);
 		}
 	}
@@ -3527,6 +3557,7 @@ struct netdev_queue *netdev_pick_tx(struct net_device *dev,
  */
 static int __dev_queue_xmit(struct sk_buff *skb, void *accel_priv)
 {
+	/*取出发送分组所使用的net device*/
 	struct net_device *dev = skb->dev;
 	struct netdev_queue *txq;
 	struct Qdisc *q;
@@ -3564,11 +3595,18 @@ static int __dev_queue_xmit(struct sk_buff *skb, void *accel_priv)
 	else
 		skb_dst_force(skb);
 
+	/*选择一个发送队列*/
 	txq = netdev_pick_tx(dev, skb, accel_priv);
+
+	/*取出该发送队列关联的qdisc*/
 	q = rcu_dereference_bh(txq->qdisc);
 
 	trace_net_dev_queue(skb);
+
+	/*如果qdisc有对应的enqueue函数*/
 	if (q->enqueue) {
+
+		/*跟踪调用链*/
 		rc = __dev_xmit_skb(skb, q, dev, txq);
 		goto out;
 	}
@@ -3632,8 +3670,10 @@ out:
 	return rc;
 }
 
+/*从上层传下来的skb,该流程衔接socket发送数据流程*/
 int dev_queue_xmit(struct sk_buff *skb)
 {
+	/*跟踪调用链*/
 	return __dev_queue_xmit(skb, NULL);
 }
 EXPORT_SYMBOL(dev_queue_xmit);
@@ -4298,14 +4338,18 @@ static __latent_entropy void net_tx_action(struct softirq_action *h)
 {
 	struct softnet_data *sd = this_cpu_ptr(&softnet_data);
 
+	/*当NIC设备将分组正常发送出去时，在softirq部分将这些skb对象所在内存空间释放出去*/
 	if (sd->completion_queue) {
 		struct sk_buff *clist;
 
 		local_irq_disable();
+
+		/*把要释放的skb链表保存到一个临时链表中*/
 		clist = sd->completion_queue;
 		sd->completion_queue = NULL;
 		local_irq_enable();
 
+		/*依次释放该链表上的skb*/
 		while (clist) {
 			struct sk_buff *skb = clist;
 
@@ -4317,6 +4361,7 @@ static __latent_entropy void net_tx_action(struct softirq_action *h)
 			else
 				trace_kfree_skb(skb, net_tx_action);
 
+			/*释放该skb*/
 			if (skb->fclone != SKB_FCLONE_UNAVAILABLE)
 				__kfree_skb(skb);
 			else
@@ -4326,15 +4371,21 @@ static __latent_entropy void net_tx_action(struct softirq_action *h)
 		__kfree_skb_flush();
 	}
 
+
+	/*当一个qdisc对象用完其配额时，对于SMP环境而言，为了保证系统中其他处理器能获得公平的分组发送机会，内核会将正在当前cpu
+      上调度执行的qdisc对象挂起，以便在后续合适的时间点上再次去调度它。内核挂起当前qdisc对象的做法是调用__netif_schedule*/
 	if (sd->output_queue) {
 		struct Qdisc *head;
 
 		local_irq_disable();
+
+		/*取出队列的头保存到临时变量head中*/
 		head = sd->output_queue;
 		sd->output_queue = NULL;
 		sd->output_queue_tailp = &sd->output_queue;
 		local_irq_enable();
 
+		/*循环处理该链表中的qdisc*/
 		while (head) {
 			struct Qdisc *q = head;
 			spinlock_t *root_lock = NULL;
@@ -4349,7 +4400,11 @@ static __latent_entropy void net_tx_action(struct softirq_action *h)
 			 * before clearing __QDISC_STATE_SCHED
 			 */
 			smp_mb__before_atomic();
+
+			/*清除qdisc的状态标记*/
 			clear_bit(__QDISC_STATE_SCHED, &q->state);
+
+			/*再次调度qdisc，发送该qdisc的数据包*/
 			qdisc_run(q);
 			if (root_lock)
 				spin_unlock(root_lock);
