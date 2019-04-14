@@ -148,10 +148,20 @@ struct e1000_buffer {
 };
 
 struct e1000_ring {
+
+	/*该ring所属的adapter*/
 	struct e1000_adapter *adapter;	/* back pointer to adapter */
+
+	/*该ring中包含的所有描述符的虚拟地址*/
 	void *desc;			/* pointer to ring memory  */
+
+	/*该ring中包含的所有描述符的DMA物理地址*/
 	dma_addr_t dma;			/* phys address of ring    */
+
+	/*该ring中包含的所有描述符的总大小*/
 	unsigned int size;		/* length of ring in bytes */
+
+	/*在环中的描述符个数*/
 	unsigned int count;		/* number of desc. in ring */
 
 	u16 next_to_use;
@@ -160,6 +170,7 @@ struct e1000_ring {
 	void __iomem *head;
 	void __iomem *tail;
 
+	/*每一个描述符都有一个关联的buffer*,buffer_info指向这些buffer的首地址/
 	/* array of buffer information structs */
 	struct e1000_buffer *buffer_info;
 

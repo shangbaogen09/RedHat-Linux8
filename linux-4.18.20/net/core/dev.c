@@ -1385,26 +1385,33 @@ static int __dev_open(struct net_device *dev)
 	 */
 	netpoll_poll_disable(dev);
 
+	/*先发NETDEV_PRE_UP给到通知链*/
 	ret = call_netdevice_notifiers(NETDEV_PRE_UP, dev);
 	ret = notifier_to_errno(ret);
 	if (ret)
 		return ret;
 
+	/*给设备的状态置__LINK_STATE_START*/
 	set_bit(__LINK_STATE_START, &dev->state);
 
 	if (ops->ndo_validate_addr)
 		ret = ops->ndo_validate_addr(dev);
 
+	/*调用驱动的ndo_open*/
 	if (!ret && ops->ndo_open)
 		ret = ops->ndo_open(dev);
 
 	netpoll_poll_enable(dev);
 
+	/*如果失败，则清除__LINK_STATE_START标志*/
 	if (ret)
 		clear_bit(__LINK_STATE_START, &dev->state);
 	else {
+		/*设置设备的flags变量：dev->flags |= IFF_UP*/
 		dev->flags |= IFF_UP;
 		dev_set_rx_mode(dev);
+
+		/*active该网卡设备*/
 		dev_activate(dev);
 		add_device_randomness(dev->dev_addr, dev->addr_len);
 	}
@@ -7023,6 +7030,7 @@ int __dev_change_flags(struct net_device *dev, unsigned int flags)
 	 */
 
 	ret = 0;
+	/*根据标志选择打开设备__dev_open或关闭__dev_close*/
 	if ((old_flags ^ flags) & IFF_UP) {
 		if (old_flags & IFF_UP)
 			__dev_close(dev);
@@ -7096,11 +7104,14 @@ int dev_change_flags(struct net_device *dev, unsigned int flags)
 	int ret;
 	unsigned int changes, old_flags = dev->flags, old_gflags = dev->gflags;
 
+	/*打开设备/或者关闭设备*/
 	ret = __dev_change_flags(dev, flags);
 	if (ret < 0)
 		return ret;
 
 	changes = (old_flags ^ dev->flags) | (old_gflags ^ dev->gflags);
+
+	/*向通道链netdev_chain发出通知*/
 	__dev_notify_flags(dev, old_flags, changes);
 	return ret;
 }

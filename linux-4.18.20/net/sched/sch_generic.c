@@ -429,12 +429,18 @@ unsigned long dev_trans_start(struct net_device *dev)
 }
 EXPORT_SYMBOL(dev_trans_start);
 
+/*看门狗定时器的处理函数*/
 static void dev_watchdog(struct timer_list *t)
 {
+	/*由timer获取当前的发送设备*/
 	struct net_device *dev = from_timer(dev, t, watchdog_timer);
 
 	netif_tx_lock(dev);
+
+	/*watchdog只对非noop qdisc对象的网络设备有效*/
 	if (!qdisc_tx_is_noop(dev)) {
+
+		/*网卡设备的当前状态全是okay的*/
 		if (netif_device_present(dev) &&
 		    netif_running(dev) &&
 		    netif_carrier_ok(dev)) {
@@ -442,25 +448,39 @@ static void dev_watchdog(struct timer_list *t)
 			unsigned int i;
 			unsigned long trans_start;
 
+			/*检测每个发送队列是否超时*/
 			for (i = 0; i < dev->num_tx_queues; i++) {
 				struct netdev_queue *txq;
 
+				/*由发送设备获取发送队列*/
 				txq = netdev_get_tx_queue(dev, i);
+
+				/*取出发送队列的开始发送时间·*/
 				trans_start = txq->trans_start;
+
+				/*当前网络设备的队列处于停止(stopped)状态,当前时间(指调用dev_watchdog 时的时间戳)
+				  已经在最近一次发送分组的时间加上dev->watchdog_timeo的时间之后了*/
 				if (netif_xmit_stopped(txq) &&
 				    time_after(jiffies, (trans_start +
 							 dev->watchdog_timeo))) {
+				
+					/*设置超时变量*/
 					some_queue_timedout = 1;
+
+					/*统计超时的次数*/
 					txq->trans_timeout++;
 					break;
 				}
 			}
 
+			/*调用网卡设备的ndo_tx_timeout*/
 			if (some_queue_timedout) {
 				WARN_ONCE(1, KERN_INFO "NETDEV WATCHDOG: %s (%s): transmit queue %u timed out\n",
 				       dev->name, netdev_drivername(dev), i);
 				dev->netdev_ops->ndo_tx_timeout(dev);
 			}
+
+			/*再次重新启动定时器*/
 			if (!mod_timer(&dev->watchdog_timer,
 				       round_jiffies(jiffies +
 						     dev->watchdog_timeo)))
@@ -477,6 +497,8 @@ void __netdev_watchdog_up(struct net_device *dev)
 	if (dev->netdev_ops->ndo_tx_timeout) {
 		if (dev->watchdog_timeo <= 0)
 			dev->watchdog_timeo = 5*HZ;
+
+		/*启动看门狗定时器*/
 		if (!mod_timer(&dev->watchdog_timer,
 			       round_jiffies(jiffies + dev->watchdog_timeo)))
 			dev_hold(dev);
@@ -485,6 +507,7 @@ void __netdev_watchdog_up(struct net_device *dev)
 
 static void dev_watchdog_up(struct net_device *dev)
 {
+	/*激活看门狗定时器*/
 	__netdev_watchdog_up(dev);
 }
 
@@ -806,6 +829,8 @@ struct Qdisc *qdisc_alloc(struct netdev_queue *dev_queue,
 {
 	void *p;
 	struct Qdisc *sch;
+
+	/*计算要分配内存的大小，包括qdisk数据结构本身加上ops的私有数据*/
 	unsigned int size = QDISC_ALIGN(sizeof(*sch)) + ops->priv_size;
 	int err = -ENOBUFS;
 	struct net_device *dev;
@@ -817,6 +842,8 @@ struct Qdisc *qdisc_alloc(struct netdev_queue *dev_queue,
 	}
 
 	dev = dev_queue->dev;
+
+	/*分配对应计算后的内存，并把该内存指针强制转换为qdisk对象指针*/
 	p = kzalloc_node(size, GFP_KERNEL,
 			 netdev_queue_numa_node_read(dev_queue));
 
@@ -864,14 +891,18 @@ struct Qdisc *qdisc_alloc(struct netdev_queue *dev_queue,
 	lockdep_set_class(&sch->running,
 			  dev->qdisc_running_key ?: &qdisc_running_key);
 
+	/*把传入的ops赋值给qdisk*/
 	sch->ops = ops;
 	sch->flags = ops->static_flags;
 	sch->enqueue = ops->enqueue;
 	sch->dequeue = ops->dequeue;
+
+	/*该qdisk关联的发送队列*/
 	sch->dev_queue = dev_queue;
 	dev_hold(dev);
 	refcount_set(&sch->refcnt, 1);
 
+	/*返回分配的qdisk对象指针*/
 	return sch;
 errout1:
 	kfree(p);
@@ -891,6 +922,7 @@ struct Qdisc *qdisc_create_dflt(struct netdev_queue *dev_queue,
 		return NULL;
 	}
 
+	/*调用qdisc_alloc分配一个新的qdisc对象*/
 	sch = qdisc_alloc(dev_queue, ops, extack);
 	if (IS_ERR(sch)) {
 		module_put(ops->owner);
@@ -898,7 +930,9 @@ struct Qdisc *qdisc_create_dflt(struct netdev_queue *dev_queue,
 	}
 	sch->parent = parentid;
 
+	/*如果有初始化函数，则调用该qdisc的初始化函数，初始化三个发送通道的链表结构*/
 	if (!ops->init || ops->init(sch, NULL, extack) == 0)
+		/*返回该qdisc的指针*/
 		return sch;
 
 	qdisc_destroy(sch);
@@ -1005,18 +1039,26 @@ static void attach_one_default_qdisc(struct net_device *dev,
 				     void *_unused)
 {
 	struct Qdisc *qdisc;
+
+	/*默认的qdisk的Qdisc_ops为pfifo_fast_ops*/
 	const struct Qdisc_ops *ops = default_qdisc_ops;
 
 	if (dev->priv_flags & IFF_NO_QUEUE)
 		ops = &noqueue_qdisc_ops;
 
+	/*该函数调用qdisc_alloc分配一个新的qdisc对象*/
 	qdisc = qdisc_create_dflt(dev_queue, ops, TC_H_ROOT, NULL);
 	if (!qdisc) {
 		netdev_info(dev, "activation failed\n");
 		return;
 	}
+
+	/*如果不是一个多队列设备，则设置qdisk对应的flag*/
 	if (!netif_is_multiqueue(dev))
 		qdisc->flags |= TCQ_F_ONETXQUEUE | TCQ_F_NOPARENT;
+
+    /*由__dev_open引发的设备激活过程中，设备的链路未必就绪:netif_carrier_ok(dev)!=true. 这种情况下，先用qdisc_sleeping
+    来记录新分配的qdisc对象，等将来设备的netif_carrier_ok(dev)时，才真正将sleeping qdisc对象赋予dev->_tx[]*/
 	dev_queue->qdisc_sleeping = qdisc;
 }
 
@@ -1025,10 +1067,14 @@ static void attach_default_qdiscs(struct net_device *dev)
 	struct netdev_queue *txq;
 	struct Qdisc *qdisc;
 
+	/*获取索引为0的发送队列*/
 	txq = netdev_get_tx_queue(dev, 0);
 
+	/*如果该设备不是一个多队列设备或者该设备有不使用队列标志*/
 	if (!netif_is_multiqueue(dev) ||
 	    dev->priv_flags & IFF_NO_QUEUE) {
+
+		/*调用attach_one_default_qdisc初始化该设备的tx队列*/
 		netdev_for_each_tx_queue(dev, attach_one_default_qdisc, NULL);
 		dev->qdisc = txq->qdisc_sleeping;
 		qdisc_refcount_inc(dev->qdisc);
@@ -1055,7 +1101,10 @@ static void transition_one_qdisc(struct net_device *dev,
 	if (!(new_qdisc->flags & TCQ_F_BUILTIN))
 		clear_bit(__QDISC_STATE_DEACTIVATED, &new_qdisc->state);
 
+	/*qdisc_sleeping赋值给qdisc*/
 	rcu_assign_pointer(dev_queue->qdisc, new_qdisc);
+
+	/*设置看门狗*/
 	if (need_watchdog_p) {
 		dev_queue->trans_start = 0;
 		*need_watchdog_p = 1;
@@ -1071,20 +1120,31 @@ void dev_activate(struct net_device *dev)
 	 * and noqueue_qdisc for virtual interfaces
 	 */
 
+	/*如果该设备的qdisk为noop_qdisc,则为设备的发送队列设置一个缺省的Qdisc(queueing discipline)对象"pfifo_fast"*/
 	if (dev->qdisc == &noop_qdisc)
+		/*为一个设备分配qdisc对象可分为两个阶段：第一阶段是attach_default_qdiscs*/
 		attach_default_qdiscs(dev);
 
+	/*如果链路不okay，则直接返回*/
 	if (!netif_carrier_ok(dev))
 		/* Delay activation until next carrier-on event */
 		return;
 
 	need_watchdog = 0;
+
+	/*transition_one_qdisc()的主要工作就是将sleeping qdisc对象赋值给dev->_tx[]*/
 	netdev_for_each_tx_queue(dev, transition_one_qdisc, &need_watchdog);
 	if (dev_ingress_queue(dev))
 		transition_one_qdisc(dev, dev_ingress_queue(dev), NULL);
 
 	if (need_watchdog) {
+
+		/*设置发送队列的发送时间*/
 		netif_trans_update(dev);
+
+		/*启动设备的watch dog，这之后该定时器函数dev_watchdog 将按照设备对象dev中watchdog_timeo成员所设定的频率运行例如如果
+	    dev->watchdog_timeo=6*HZ，那么dev_watchdog()将每隔6秒被调用一次，如果驱动程序没有为dev->watchdog_timeo准备一个确定
+	    的值，那么内核采用5*HZ作为其缺省值*/
 		dev_watchdog_up(dev);
 	}
 }

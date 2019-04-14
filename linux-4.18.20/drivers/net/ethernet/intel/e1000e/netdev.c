@@ -653,16 +653,24 @@ static void e1000_alloc_rx_buffers(struct e1000_ring *rx_ring,
 	unsigned int i;
 	unsigned int bufsz = adapter->rx_buffer_len;
 
+	/*初始化的时候next_to_use为0，该变量表明下次要初始化的关联buffer的描述符的位置*/
 	i = rx_ring->next_to_use;
+
+	/*取出对应索引的buffer_info*/
 	buffer_info = &rx_ring->buffer_info[i];
 
 	while (cleaned_count--) {
+
+		/*取出该buffer_info中的skb指针*/
 		skb = buffer_info->skb;
+
+		/*如果该skb不为空，表示已经分配，直接进行map*/
 		if (skb) {
 			skb_trim(skb, 0);
 			goto map_skb;
 		}
 
+		/*如果为空，则分配一个skb*/
 		skb = __netdev_alloc_skb_ip_align(netdev, bufsz, gfp);
 		if (!skb) {
 			/* Better luck next round */
@@ -670,8 +678,11 @@ static void e1000_alloc_rx_buffers(struct e1000_ring *rx_ring,
 			break;
 		}
 
+		/*把skb关联到对应的buffer_info上*/
 		buffer_info->skb = skb;
 map_skb:
+		/*映射该skb->data，方向是从设备接收数据，其中skb->data是该dma映射的虚拟地址，返回的地址是dma
+        总线地址,rx_buffer_len指明当前流式映射的空间范围*/
 		buffer_info->dma = dma_map_single(&pdev->dev, skb->data,
 						  adapter->rx_buffer_len,
 						  DMA_FROM_DEVICE);
@@ -681,7 +692,10 @@ map_skb:
 			break;
 		}
 
+		/*获取对应索引的接收描述符*/
 		rx_desc = E1000_RX_DESC_EXT(*rx_ring, i);
+
+		/*最终映射的dma地址放入描述符的rx_desc->read.buffer_addr中，让dma引擎使用*/
 		rx_desc->read.buffer_addr = cpu_to_le64(buffer_info->dma);
 
 		if (unlikely(!(i & (E1000_RX_BUFFER_WRITE - 1)))) {
@@ -696,9 +710,13 @@ map_skb:
 			else
 				writel(i, rx_ring->tail);
 		}
+
+		/*更新索引*/
 		i++;
 		if (i == rx_ring->count)
 			i = 0;
+
+		/*取出下一个对应索引的buffer_info结构体,以便进行初始化*/
 		buffer_info = &rx_ring->buffer_info[i];
 	}
 
@@ -2176,6 +2194,7 @@ static int e1000_request_irq(struct e1000_adapter *adapter)
 		adapter->int_mode = E1000E_INT_MODE_LEGACY;
 	}
 
+	/*安装e1000e中断处理函数*/
 	err = request_irq(adapter->pdev->irq, e1000_intr, IRQF_SHARED,
 			  netdev->name, netdev);
 	if (err)
@@ -2305,6 +2324,8 @@ static int e1000_alloc_ring_dma(struct e1000_adapter *adapter,
 {
 	struct pci_dev *pdev = adapter->pdev;
 
+	/*分配一致性dma内存，其中分配的dma总线地址由ring->dma带回，函数
+    返回的地址则是映射到dma缓冲区的虚拟地址，赋值给ring->desc*/
 	ring->desc = dma_zalloc_coherent(&pdev->dev, ring->size, &ring->dma,
 					 GFP_KERNEL);
 	if (!ring->desc)
@@ -2324,19 +2345,25 @@ int e1000e_setup_tx_resources(struct e1000_ring *tx_ring)
 	struct e1000_adapter *adapter = tx_ring->adapter;
 	int err = -ENOMEM, size;
 
+	/*每个描述符都需要一个struct e1000_buffer结构体进行关联*/
 	size = sizeof(struct e1000_buffer) * tx_ring->count;
+
+	/*分配需要的buffer内存大小*/
 	tx_ring->buffer_info = vzalloc(size);
 	if (!tx_ring->buffer_info)
 		goto err;
 
+	/*计算要分配的tx_ring包含的描述符个数所占内存总大小，并进行4k对齐处理*/
 	/* round up to nearest 4K */
 	tx_ring->size = tx_ring->count * sizeof(struct e1000_tx_desc);
 	tx_ring->size = ALIGN(tx_ring->size, 4096);
 
+	/*为tx_ring分配对应的dma内存*/
 	err = e1000_alloc_ring_dma(adapter, tx_ring);
 	if (err)
 		goto err;
 
+	/*把该ring的两个索引都初始化为0*/
 	tx_ring->next_to_use = 0;
 	tx_ring->next_to_clean = 0;
 
@@ -2359,11 +2386,15 @@ int e1000e_setup_rx_resources(struct e1000_ring *rx_ring)
 	struct e1000_buffer *buffer_info;
 	int i, size, desc_len, err = -ENOMEM;
 
+	/*每个描述符都需要一个struct e1000_buffer结构体进行关联*/
 	size = sizeof(struct e1000_buffer) * rx_ring->count;
+
+	/*分配所需的内存大小*/
 	rx_ring->buffer_info = vzalloc(size);
 	if (!rx_ring->buffer_info)
 		goto err;
 
+	/*初始化该buffer_info结构体的ps_pages变量*/
 	for (i = 0; i < rx_ring->count; i++) {
 		buffer_info = &rx_ring->buffer_info[i];
 		buffer_info->ps_pages = kcalloc(PS_PAGE_BUFFERS,
@@ -2373,16 +2404,20 @@ int e1000e_setup_rx_resources(struct e1000_ring *rx_ring)
 			goto err_pages;
 	}
 
+	/*计算一个接收描述符的大小*/
 	desc_len = sizeof(union e1000_rx_desc_packet_split);
 
+	/*计算所需dma内存的大小，并进行4k对齐*/
 	/* Round up to nearest 4K */
 	rx_ring->size = rx_ring->count * desc_len;
 	rx_ring->size = ALIGN(rx_ring->size, 4096);
 
+	/*为rx_ring中的描述符数组分配对应的dma内存*/
 	err = e1000_alloc_ring_dma(adapter, rx_ring);
 	if (err)
 		goto err_pages;
 
+	/*把rx_ring中的对应成员初始化为0*/
 	rx_ring->next_to_clean = 0;
 	rx_ring->next_to_use = 0;
 	rx_ring->rx_skb_top = NULL;
@@ -2910,18 +2945,27 @@ static void e1000_init_manageability_pt(struct e1000_adapter *adapter)
 static void e1000_configure_tx(struct e1000_adapter *adapter)
 {
 	struct e1000_hw *hw = &adapter->hw;
+
+	/*取出对应adapter的rx_ring*/
 	struct e1000_ring *tx_ring = adapter->tx_ring;
 	u64 tdba;
 	u32 tdlen, tctl, tarc;
 
+	/*取出环中描述符的dma地址*/
 	/* Setup the HW Tx Head and Tail descriptor pointers */
 	tdba = tx_ring->dma;
+
+	/*计算描述符数组的总长度*/
 	tdlen = tx_ring->count * sizeof(struct e1000_tx_desc);
+
+	/*设置描述符数组的dma内存的地址和长度到网卡硬件中，以便后续进行dma传输，dma引擎会遍历该描述符数组*/
 	ew32(TDBAL(0), (tdba & DMA_BIT_MASK(32)));
 	ew32(TDBAH(0), (tdba >> 32));
 	ew32(TDLEN(0), tdlen);
 	ew32(TDH(0), 0);
 	ew32(TDT(0), 0);
+
+	/*设置tx_ring的head和tail成员跟硬件逻辑的关联,操作head和tail相当于操作应该*/
 	tx_ring->head = adapter->hw.hw_addr + E1000_TDH(0);
 	tx_ring->tail = adapter->hw.hw_addr + E1000_TDT(0);
 
@@ -3182,6 +3226,8 @@ static void e1000_setup_rctl(struct e1000_adapter *adapter)
 static void e1000_configure_rx(struct e1000_adapter *adapter)
 {
 	struct e1000_hw *hw = &adapter->hw;
+
+	/*取出对应adapter的rx_ring*/
 	struct e1000_ring *rx_ring = adapter->rx_ring;
 	u64 rdba;
 	u32 rdlen, rctl, rxcsum, ctrl_ext;
@@ -3197,7 +3243,10 @@ static void e1000_configure_rx(struct e1000_adapter *adapter)
 		adapter->clean_rx = e1000_clean_jumbo_rx_irq;
 		adapter->alloc_rx_buf = e1000_alloc_jumbo_rx_buffers;
 	} else {
+		/*计算描述符数组的总长度*/
 		rdlen = rx_ring->count * sizeof(union e1000_rx_desc_extended);
+
+		/*设置回调函数处理分配和回收rx环中的描述符*/
 		adapter->clean_rx = e1000_clean_rx_irq;
 		adapter->alloc_rx_buf = e1000_alloc_rx_buffers;
 	}
@@ -3237,6 +3286,7 @@ static void e1000_configure_rx(struct e1000_adapter *adapter)
 	ew32(CTRL_EXT, ctrl_ext);
 	e1e_flush();
 
+	/*把环中的描述符数组的dma地址和长度与硬件关联起来*/
 	/* Setup the HW Rx Head and Tail Descriptor Pointers and
 	 * the Base and Length of the Rx Descriptor Ring
 	 */
@@ -3285,6 +3335,7 @@ static void e1000_configure_rx(struct e1000_adapter *adapter)
 				      PM_QOS_DEFAULT_VALUE);
 	}
 
+	/*开启接收使能*/
 	/* Enable Receives */
 	ew32(RCTL, rctl);
 }
@@ -3747,12 +3798,17 @@ static void e1000_configure(struct e1000_adapter *adapter)
 	e1000_restore_vlan(adapter);
 	e1000_init_manageability_pt(adapter);
 
+	/*配置发送队列处理函数*/
 	e1000_configure_tx(adapter);
 
 	if (adapter->netdev->features & NETIF_F_RXHASH)
 		e1000e_setup_rss_hash(adapter);
 	e1000_setup_rctl(adapter);
+
+	/*配置接收队列处理函数*/
 	e1000_configure_rx(adapter);
+
+	/*参数ring为没有使用的描述符个数，该回调函数为e1000_alloc_rx_buffers*/
 	adapter->alloc_rx_buf(rx_ring, e1000_desc_unused(rx_ring), GFP_KERNEL);
 }
 
@@ -4572,6 +4628,7 @@ static int e1000_test_msi(struct e1000_adapter *adapter)
  **/
 int e1000e_open(struct net_device *netdev)
 {
+	/*由net_device获得私有结构体struct e1000_adapter*/
 	struct e1000_adapter *adapter = netdev_priv(netdev);
 	struct e1000_hw *hw = &adapter->hw;
 	struct pci_dev *pdev = adapter->pdev;
@@ -4585,11 +4642,13 @@ int e1000e_open(struct net_device *netdev)
 
 	netif_carrier_off(netdev);
 
+	/*给tx bd分配一致性dma内存*/
 	/* allocate transmit descriptors */
 	err = e1000e_setup_tx_resources(adapter->tx_ring);
 	if (err)
 		goto err_setup_tx;
 
+	/*给rx bd分配一致性dma内存*/
 	/* allocate receive descriptors */
 	err = e1000e_setup_rx_resources(adapter->rx_ring);
 	if (err)
@@ -4618,8 +4677,10 @@ int e1000e_open(struct net_device *netdev)
 	 * as soon as we call pci_request_irq, so we have to setup our
 	 * clean_rx handler before we do so.
 	 */
+	/*配置e1000的发送接/收队列和dma引擎的关联*/
 	e1000_configure(adapter);
 
+	/*安装该网卡的中断处理函数*/
 	err = e1000_request_irq(adapter);
 	if (err)
 		goto err_req_irq;
@@ -4639,11 +4700,15 @@ int e1000e_open(struct net_device *netdev)
 	/* From here on the code is the same as e1000e_up() */
 	clear_bit(__E1000_DOWN, &adapter->state);
 
+	/*清楚napi的状态位:NAPI_STATE_SCHED*/
 	napi_enable(&adapter->napi);
 
+	/*操作硬件寄存器使能网卡中断*/
 	e1000_irq_enable(adapter);
 
 	adapter->tx_hang_recheck = false;
+
+	/*打开流控位__QUEUE_STATE_DRV_XOFF*/
 	netif_start_queue(netdev);
 
 	hw->mac.get_link_status = true;
@@ -6988,6 +7053,7 @@ static int e1000_set_features(struct net_device *netdev,
 	return 0;
 }
 
+/*e1000e网络设备操作函数*/
 static const struct net_device_ops e1000e_netdev_ops = {
 	.ndo_open		= e1000e_open,
 	.ndo_stop		= e1000e_close,

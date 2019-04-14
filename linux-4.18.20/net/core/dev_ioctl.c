@@ -224,6 +224,8 @@ static int net_hwtstamp_validate(struct ifreq *ifr)
 static int dev_ifsioc(struct net *net, struct ifreq *ifr, unsigned int cmd)
 {
 	int err;
+
+	/*由接口名获取对应的网络设备结构体*/
 	struct net_device *dev = __dev_get_by_name(net, ifr->ifr_name);
 	const struct net_device_ops *ops;
 
@@ -234,6 +236,7 @@ static int dev_ifsioc(struct net *net, struct ifreq *ifr, unsigned int cmd)
 
 	switch (cmd) {
 	case SIOCSIFFLAGS:	/* Set interface flags */
+		/*打开网络接口up,走该流程*/
 		return dev_change_flags(dev, ifr->ifr_flags);
 
 	case SIOCSIFMETRIC:	/* Set the metric on the interface
@@ -379,6 +382,7 @@ EXPORT_SYMBOL(dev_load);
  *	positive or a negative errno code on error.
  */
 
+/*当我们在命令行执行"ifconfig eth0 up",会调用到该函数*/
 int dev_ioctl(struct net *net, unsigned int cmd, struct ifreq *ifr, bool *need_copyout)
 {
 	int ret;
@@ -467,6 +471,7 @@ int dev_ioctl(struct net *net, unsigned int cmd, struct ifreq *ifr, bool *need_c
 	 *	- require strict serialization.
 	 *	- do not return a value
 	 */
+	/*使用SIOCSIFFLAGS命令和内核交互*/
 	case SIOCSIFFLAGS:
 	case SIOCSIFMETRIC:
 	case SIOCSIFMTU:
@@ -490,6 +495,8 @@ int dev_ioctl(struct net *net, unsigned int cmd, struct ifreq *ifr, bool *need_c
 	case SIOCBONDINFOQUERY:
 		dev_load(net, ifr->ifr_name);
 		rtnl_lock();
+		
+		/*调用该函数进行处理*/
 		ret = dev_ifsioc(net, ifr, cmd);
 		rtnl_unlock();
 		if (need_copyout)

@@ -2967,6 +2967,7 @@ static __always_inline void netif_tx_start_queue(struct netdev_queue *dev_queue)
  */
 static inline void netif_start_queue(struct net_device *dev)
 {
+	/*清除流控状态位:__QUEUE_STATE_DRV_XOFF*/
 	netif_tx_start_queue(netdev_get_tx_queue(dev, 0));
 }
 
@@ -3516,6 +3517,7 @@ void linkwatch_forget_dev(struct net_device *dev);
  */
 static inline bool netif_carrier_ok(const struct net_device *dev)
 {
+	/*如果被测试位的值为0，就返回0;如果被测试位的值为1，就返回非0*/
 	return !test_bit(__LINK_STATE_NOCARRIER, &dev->state);
 }
 
