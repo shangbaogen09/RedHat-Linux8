@@ -1957,6 +1957,8 @@ static inline int deliver_skb(struct sk_buff *skb,
 	if (unlikely(skb_orphan_frags_rx(skb, GFP_ATOMIC)))
 		return -ENOMEM;
 	refcount_inc(&skb->users);
+
+	/*调用对应的协议，针对ip协议为ip_rcv*/
 	return pt_prev->func(skb, skb->dev, pt_prev, orig_dev);
 }
 
@@ -3743,7 +3745,10 @@ int dev_tx_weight __read_mostly = 64;
 static inline void ____napi_schedule(struct softnet_data *sd,
 				     struct napi_struct *napi)
 {
+	/*把napi添加到该链表中*/
 	list_add_tail(&napi->poll_list, &sd->poll_list);
+
+	/*触发接收软中断，在软中断中调用该napi的poll函数*/
 	__raise_softirq_irqoff(NET_RX_SOFTIRQ);
 }
 
@@ -3950,6 +3955,7 @@ static void rps_trigger_softirq(void *data)
 {
 	struct softnet_data *sd = data;
 
+	/*把对应的softnet_data的napi加入到softnet_data pool list链表*/
 	____napi_schedule(sd, &sd->backlog);
 	sd->received_rps++;
 }
@@ -3964,12 +3970,17 @@ static void rps_trigger_softirq(void *data)
 static int rps_ipi_queued(struct softnet_data *sd)
 {
 #ifdef CONFIG_RPS
+	/*取出当前cpu实际运行的softnet_data*/
 	struct softnet_data *mysd = this_cpu_ptr(&softnet_data);
 
+	/*判断二者的sd是否相等*/
 	if (sd != mysd) {
+
+		/*如果不等的话，则把当前cpu的sd->rps_ipi_list，指向rps hash机制关联cpu的softnet_data*/
 		sd->rps_ipi_next = mysd->rps_ipi_list;
 		mysd->rps_ipi_list = sd;
 
+		/*触发软中断*/
 		__raise_softirq_irqoff(NET_RX_SOFTIRQ);
 		return 1;
 	}
@@ -4028,6 +4039,7 @@ static int enqueue_to_backlog(struct sk_buff *skb, int cpu,
 	unsigned long flags;
 	unsigned int qlen;
 
+	/*取出参数中对应cpu的softnet_data*/
 	sd = &per_cpu(softnet_data, cpu);
 
 	local_irq_save(flags);
@@ -4036,23 +4048,36 @@ static int enqueue_to_backlog(struct sk_buff *skb, int cpu,
 	if (!netif_running(skb->dev))
 		goto drop;
 	qlen = skb_queue_len(&sd->input_pkt_queue);
+
+	/*定义input_pkt_queue队列的最大长度为1000，如果队列的长度超过该值，则直接丢弃*/
 	if (qlen <= netdev_max_backlog && !skb_flow_limit(skb, qlen)) {
+		/*如果该队列不为空*/
 		if (qlen) {
 enqueue:
+			/*把该skb加入到队列的尾部*/
 			__skb_queue_tail(&sd->input_pkt_queue, skb);
 			input_queue_tail_incr_save(sd, qtail);
 			rps_unlock(sd);
 			local_irq_restore(flags);
+
+			/*返回接收成功*/
 			return NET_RX_SUCCESS;
 		}
 
 		/* Schedule NAPI for backlog device
 		 * We can use non atomic operation since we own the queue lock
 		 */
+		/*如果该分组在尚未加入队列前，该队列为空且sd[cpu]->backlog.state上也没有
+		  设置NAPI_STATE_SCHED标志位，则设置该标记NAPI_STATE_SCHED*/
 		if (!__test_and_set_bit(NAPI_STATE_SCHED, &sd->backlog.state)) {
+
+			/*判断rps通过hash获得的cpu是否是当前cpu，如果没有配置rps，则该判断为真*/
 			if (!rps_ipi_queued(sd))
+				/*把sd[cpu]->backlog这个napi对象加入到由参数cpu指定的处理器poll_list链表中*/
 				____napi_schedule(sd, &sd->backlog);
 		}
+
+		/*重新把skb加到队列中*/
 		goto enqueue;
 	}
 
@@ -4276,10 +4301,12 @@ static int netif_rx_internal(struct sk_buff *skb)
 		preempt_disable();
 		rcu_read_lock();
 
+		/*通过hash计算出数据包skb应该送到的cpu编号*/
 		cpu = get_rps_cpu(skb->dev, skb, &rflow);
 		if (cpu < 0)
 			cpu = smp_processor_id();
 
+		/*把该数据包skb放入backlog的队列*/
 		ret = enqueue_to_backlog(skb, cpu, &rflow->last_qtail);
 
 		rcu_read_unlock();
@@ -4289,6 +4316,7 @@ static int netif_rx_internal(struct sk_buff *skb)
 	{
 		unsigned int qtail;
 
+		/*把该skb放入backlog队列中*/
 		ret = enqueue_to_backlog(skb, get_cpu(), &qtail);
 		put_cpu();
 	}
@@ -4310,10 +4338,15 @@ static int netif_rx_internal(struct sk_buff *skb)
  *
  */
 
+/*netif_rx基本的工作原理是，网卡每接到一个数据分组，都产生一个中断，在驱动程序实现的hardirq部分，会调用
+  netif_rx将该分组放置到当前处理器(假设为cpu1)的input_pkt_queue队列，也即sd[cpu1]->input_pkt_queue， 
+  然后到了softirq阶段,由net_rx_action来处理sd[cpu1]->input_pkt_queue上的分组，最终调用__netif_receive_skb
+  将从队列中取出的skb交给上层*/
 int netif_rx(struct sk_buff *skb)
 {
 	trace_netif_rx_entry(skb);
 
+	/*跟踪调用链*/
 	return netif_rx_internal(skb);
 }
 EXPORT_SYMBOL(netif_rx);
@@ -4597,8 +4630,10 @@ static int __netif_receive_skb_core(struct sk_buff *skb, bool pfmemalloc)
 
 	trace_netif_receive_skb(skb);
 
+	/*取出接收skb的设备*/
 	orig_dev = skb->dev;
 
+	/*初始化数据包的网络层首部，传输层首部，以及二层的mac的首部的长度*/
 	skb_reset_network_header(skb);
 	if (!skb_transport_header_was_set(skb))
 		skb_reset_transport_header(skb);
@@ -4624,7 +4659,9 @@ another_round:
 	if (pfmemalloc)
 		goto skip_taps;
 
+	/*根据数据包的类型，遍历对应的处理函数*/
 	list_for_each_entry_rcu(ptype, &ptype_all, list) {
+		/*调用对应的deliver skb向上层传递数据包*/
 		if (pt_prev)
 			ret = deliver_skb(skb, pt_prev, orig_dev);
 		pt_prev = ptype;
@@ -4777,6 +4814,8 @@ static int __netif_receive_skb(struct sk_buff *skb)
 		 * context down to all allocation sites.
 		 */
 		noreclaim_flag = memalloc_noreclaim_save();
+		
+		/*跟踪调用链表*/
 		ret = __netif_receive_skb_core(skb, true);
 		memalloc_noreclaim_restore(noreclaim_flag);
 	} else
@@ -4854,6 +4893,7 @@ static int netif_receive_skb_internal(struct sk_buff *skb)
 		}
 	}
 #endif
+	/*委托给该函数来完成*/
 	ret = __netif_receive_skb(skb);
 	rcu_read_unlock();
 	return ret;
@@ -5215,6 +5255,7 @@ static void napi_skb_free_stolen_head(struct sk_buff *skb)
 static gro_result_t napi_skb_finish(gro_result_t ret, struct sk_buff *skb)
 {
 	switch (ret) {
+	/*跟踪通用调用链表*/
 	case GRO_NORMAL:
 		if (netif_receive_skb_internal(skb))
 			ret = GRO_DROP;
@@ -5247,6 +5288,7 @@ gro_result_t napi_gro_receive(struct napi_struct *napi, struct sk_buff *skb)
 
 	skb_gro_reset_offset(skb);
 
+	/*余下的工作主要委托给该函数来完成*/
 	return napi_skb_finish(dev_gro_receive(napi, skb), skb);
 }
 EXPORT_SYMBOL(napi_gro_receive);
@@ -5400,9 +5442,11 @@ EXPORT_SYMBOL(__skb_gro_checksum_complete);
 static void net_rps_send_ipi(struct softnet_data *remsd)
 {
 #ifdef CONFIG_RPS
+	/*循环处理要迁移的链表*/
 	while (remsd) {
 		struct softnet_data *next = remsd->rps_ipi_next;
 
+		/*判断要迁移的cpu是否在线，如果在线，则向该cpu发送ipi中断，指向处理函数rps_trigger_softirq*/
 		if (cpu_online(remsd->cpu))
 			smp_call_function_single_async(remsd->cpu, &remsd->csd);
 		remsd = next;
@@ -5417,6 +5461,7 @@ static void net_rps_send_ipi(struct softnet_data *remsd)
 static void net_rps_action_and_irq_enable(struct softnet_data *sd)
 {
 #ifdef CONFIG_RPS
+	/*取出要迁移到rps的cpu对应的softnet_data，并使用remsd指针指向该成员*/
 	struct softnet_data *remsd = sd->rps_ipi_list;
 
 	if (remsd) {
@@ -5424,6 +5469,7 @@ static void net_rps_action_and_irq_enable(struct softnet_data *sd)
 
 		local_irq_enable();
 
+		/*向对应的处理器发送ipi中断*/
 		/* Send pending IPI's to kick RPS processing on remote cpus. */
 		net_rps_send_ipi(remsd);
 	} else
@@ -5440,8 +5486,10 @@ static bool sd_has_rps_ipi_waiting(struct softnet_data *sd)
 #endif
 }
 
+/*传统的处理方式接收数据包使用的napi处理函数*/
 static int process_backlog(struct napi_struct *napi, int quota)
 {
+	/*取出对应napi的softnet_data对象*/
 	struct softnet_data *sd = container_of(napi, struct softnet_data, backlog);
 	bool again = true;
 	int work = 0;
@@ -5449,20 +5497,29 @@ static int process_backlog(struct napi_struct *napi, int quota)
 	/* Check if we have pending ipi, its better to send them now,
 	 * not waiting net_rx_action() end.
 	 */
+	/*如果rps发生交叉情况成立，则该函数为真*/
 	if (sd_has_rps_ipi_waiting(sd)) {
 		local_irq_disable();
+
+		/*在poll函数中处理rps的情况*/
 		net_rps_action_and_irq_enable(sd);
 	}
 
+	/*重新更新napi的权重*/
 	napi->weight = dev_rx_weight;
 	while (again) {
 		struct sk_buff *skb;
 
+		/*从该sd的process_queue中取出要处理的数据包*/
 		while ((skb = __skb_dequeue(&sd->process_queue))) {
 			rcu_read_lock();
+
+			/*向协议栈上层传送该skb*/
 			__netif_receive_skb(skb);
 			rcu_read_unlock();
 			input_queue_head_incr(sd);
+
+			/*如果累加后处理数据包的个数大于配额，则返回处理的数据包个数*/
 			if (++work >= quota)
 				return work;
 
@@ -5470,6 +5527,8 @@ static int process_backlog(struct napi_struct *napi, int quota)
 
 		local_irq_disable();
 		rps_lock(sd);
+
+		/*如果该队列长度大于0，则把该队列要处理的skb，转放到process_queue中*/
 		if (skb_queue_empty(&sd->input_pkt_queue)) {
 			/*
 			 * Inline a custom version of __napi_complete().
@@ -5482,6 +5541,7 @@ static int process_backlog(struct napi_struct *napi, int quota)
 			napi->state = 0;
 			again = false;
 		} else {
+			/*把该队列要处理的skb，转放到process_queue中*/
 			skb_queue_splice_tail_init(&sd->input_pkt_queue,
 						   &sd->process_queue);
 		}
@@ -5503,6 +5563,7 @@ void __napi_schedule(struct napi_struct *n)
 {
 	unsigned long flags;
 
+	/*napi添加到当前cpu的poll列表*/
 	local_irq_save(flags);
 	____napi_schedule(this_cpu_ptr(&softnet_data), n);
 	local_irq_restore(flags);
@@ -5855,10 +5916,12 @@ static int napi_poll(struct napi_struct *n, struct list_head *repoll)
 	void *have;
 	int work, weight;
 
+	/*把该napi从链表中摘除*/
 	list_del_init(&n->poll_list);
 
 	have = netpoll_poll_lock(n);
 
+	/*得到该网卡的权重，其意义一般为该次poll在这个网卡上可以接收几个数据包*/
 	weight = n->weight;
 
 	/* This NAPI_STATE_SCHED test is for avoiding a race
@@ -5868,13 +5931,18 @@ static int napi_poll(struct napi_struct *n, struct list_head *repoll)
 	 * accidentally calling ->poll() when NAPI is not scheduled.
 	 */
 	work = 0;
+
+	/*如果正在轮询的napi状态state为NAPI_STATE_SCHED，则调用对应的poll函数*/
 	if (test_bit(NAPI_STATE_SCHED, &n->state)) {
+
+		/*返回处理的包的个数*/
 		work = n->poll(n, weight);
 		trace_napi_poll(n, work, weight);
 	}
 
 	WARN_ON_ONCE(work > weight);
 
+	/*本次没有读完到预期的数据包个数，这种情况在驱动的poll函数中已经退出polling模式*/
 	if (likely(work < weight))
 		goto out_unlock;
 
@@ -5883,7 +5951,9 @@ static int napi_poll(struct napi_struct *n, struct list_head *repoll)
 	 * still "owns" the NAPI instance and therefore can
 	 * move the instance around on the list at-will.
 	 */
+	/*如果是work==weight，但该网卡的napi被禁用了，也需要退出polling模式*/
 	if (unlikely(napi_disable_pending(n))) {
+		/*若napi已经被禁用，则执行NAPI的完成处理，让驱动退出polling模式*/
 		napi_complete(n);
 		goto out_unlock;
 	}
@@ -5904,43 +5974,68 @@ static int napi_poll(struct napi_struct *n, struct list_head *repoll)
 		goto out_unlock;
 	}
 
+	/*走到这里说明work==weight，即该网络本次的配额已经使用完毕,但不会退出polling模式，
+	下次继续poll收获的可能性比较大，所以把该napi重新加入到repoll链表*/
 	list_add_tail(&n->poll_list, repoll);
 
 out_unlock:
 	netpoll_poll_unlock(have);
 
+	/*返回已经处理的软件包个数*/
 	return work;
 }
 
+/*触发软中断处理函数*/
 static __latent_entropy void net_rx_action(struct softirq_action *h)
 {
+	/*当前cpu接收数据包的per cpu的softnet_data*/
 	struct softnet_data *sd = this_cpu_ptr(&softnet_data);
+
+	/*本次软中断处理时间最长允许2个jiffies*/
 	unsigned long time_limit = jiffies +
 		usecs_to_jiffies(netdev_budget_usecs);
+
+	/*在这里定义了一次软中断net_rx_action处理skb的数目，系统定义为300*/
 	int budget = netdev_budget;
+
+	/*定义了两个链表变量*/
+	/*#define LIST_HEAD_INIT(name) { &(name), &(name) }
+	  #define LIST_HEAD(name) \
+	struct list_head name = LIST_HEAD_INIT(name)*/
 	LIST_HEAD(list);
 	LIST_HEAD(repoll);
 
 	local_irq_disable();
+
+	/*把sd->poll_list链表中的成员转移到list中，然后重新初始化sd->poll_list*/
 	list_splice_init(&sd->poll_list, &list);
 	local_irq_enable();
 
 	for (;;) {
 		struct napi_struct *n;
 
+		/*list遍历完成*/
 		if (list_empty(&list)) {
+
+			/*如果没有配置rps特性，并且repoll链表也为空，则直接退出net_rx_action函数，*/
 			if (!sd_has_rps_ipi_waiting(sd) && list_empty(&repoll))
 				goto out;
+
+			/*如果配置了支持rps特性后，sd的rps_ipi_list不为空或者repoll链表也不为空，则跳出该for循环*/
 			break;
 		}
 
+		/*从list中取出对应的napi struct*/
 		n = list_first_entry(&list, struct napi_struct, poll_list);
+
+		/*调用对应的poll函数,并更新预算budget，即本次循环还可以读取数据包的个数*/
 		budget -= napi_poll(n, &repoll);
 
 		/* If softirq window is exhausted then punt.
 		 * Allow this to run for 2 jiffies since which will allow
 		 * an average latency of 1.5/HZ.
 		 */
+		/*如果预算的数据包已经用完，或者超出规定的2个jiffies，则跳出本次循环*/
 		if (unlikely(budget <= 0 ||
 			     time_after_eq(jiffies, time_limit))) {
 			sd->time_squeeze++;
@@ -5950,12 +6045,20 @@ static __latent_entropy void net_rx_action(struct softirq_action *h)
 
 	local_irq_disable();
 
+	/*把该cpu的sd->poll_list成员转移到list链表，并重新初始化poll_list*/
 	list_splice_tail_init(&sd->poll_list, &list);
+
+	/*2个链表合并为1个链表, @repoll中的所有节点加入到list之前*/
 	list_splice_tail(&repoll, &list);
+
+	/*将2个链表合并为1个链表, @list中的所有节点(不包括list)加入到sd->poll_list之后*/
 	list_splice(&list, &sd->poll_list);
+
+	/*如果sd->poll_list不为空，则重新触发软中断NET_RX_SOFTIRQ，进行下一次轮询*/
 	if (!list_empty(&sd->poll_list))
 		__raise_softirq_irqoff(NET_RX_SOFTIRQ);
 
+	/*最后处理rps*/
 	net_rps_action_and_irq_enable(sd);
 out:
 	__kfree_skb_flush();
@@ -9220,6 +9323,7 @@ static struct pernet_operations __net_initdata default_device_ops = {
  *       This is called single threaded during boot, so no need
  *       to take the rtnl semaphore.
  */
+/*系统的网络初始化*/
 static int __init net_dev_init(void)
 {
 	int i, rc = -ENOMEM;
@@ -9244,13 +9348,14 @@ static int __init net_dev_init(void)
 	/*
 	 *	Initialise the packet receive queues.
 	 */
-
+	/*系统中每个cpu都拥有一个struct softnet_data类型的实例sd*/
 	for_each_possible_cpu(i) {
 		struct work_struct *flush = per_cpu_ptr(&flush_works, i);
 		struct softnet_data *sd = &per_cpu(softnet_data, i);
 
 		INIT_WORK(flush, flush_backlog);
 
+		/*针对传统的net_rx处理方式*/
 		skb_queue_head_init(&sd->input_pkt_queue);
 		skb_queue_head_init(&sd->process_queue);
 #ifdef CONFIG_XFRM_OFFLOAD
@@ -9258,14 +9363,17 @@ static int __init net_dev_init(void)
 #endif
 		INIT_LIST_HEAD(&sd->poll_list);
 		sd->output_queue_tailp = &sd->output_queue;
+
+		/*初始化对应cpu上的rps处理器间中断回调函数*/
 #ifdef CONFIG_RPS
 		sd->csd.func = rps_trigger_softirq;
 		sd->csd.info = sd;
 		sd->cpu = i;
 #endif
 
+		/*每个sd都有一个struct napi_struct实例backlog，该backlog对象的poll函数为process_backlog*/
 		sd->backlog.poll = process_backlog;
-		sd->backlog.weight = weight_p;
+		sd->backlog.weight = weight_p;/*该weight为64*/
 	}
 
 	dev_boot_phase = 0;
@@ -9285,6 +9393,7 @@ static int __init net_dev_init(void)
 	if (register_pernet_device(&default_device_ops))
 		goto out;
 
+	/*设置发送/接收软中断处理函数*/
 	open_softirq(NET_TX_SOFTIRQ, net_tx_action);
 	open_softirq(NET_RX_SOFTIRQ, net_rx_action);
 

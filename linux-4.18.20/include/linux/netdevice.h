@@ -2921,6 +2921,8 @@ struct softnet_data {
 	unsigned int		input_queue_tail;
 #endif
 	unsigned int		dropped;
+
+	/*不使用napi方式处理时，skb的接收队列*/
 	struct sk_buff_head	input_pkt_queue;
 	struct napi_struct	backlog;
 

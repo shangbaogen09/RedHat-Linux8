@@ -1356,6 +1356,7 @@ static void busylock_release(spinlock_t *busy)
 
 int __udp_enqueue_schedule_skb(struct sock *sk, struct sk_buff *skb)
 {
+	/*该sock的接收队列链表*/
 	struct sk_buff_head *list = &sk->sk_receive_queue;
 	int rmem, delta, amt, err = -ENOMEM;
 	spinlock_t *busy = NULL;
@@ -1409,9 +1410,11 @@ int __udp_enqueue_schedule_skb(struct sock *sk, struct sk_buff *skb)
 	 */
 	sock_skb_set_dropcount(sk, skb);
 
+	/*把该skb加入链表的尾部*/
 	__skb_queue_tail(list, skb);
 	spin_unlock(&list->lock);
 
+	/*通知socket有数据就绪可以读了,这个函数对应sock_def_readable，这个函数的功能就是唤醒在sk->sk_sleep上睡眠的进程*/
 	if (!sock_flag(sk, SOCK_DEAD))
 		sk->sk_data_ready(sk);
 
@@ -1876,6 +1879,7 @@ static int __udp_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 		sk_mark_napi_id_once(sk, skb);
 	}
 
+	/*调用该函数进行实际的入队处理*/
 	rc = __udp_enqueue_schedule_skb(sk, skb);
 	if (rc < 0) {
 		int is_udplite = IS_UDPLITE(sk);
@@ -2000,6 +2004,8 @@ static int udp_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 	udp_csum_pull_header(skb);
 
 	ipv4_pktinfo_prepare(sk, skb);
+
+	/*将skb添加到sk->sk_receive_queue队列上*/
 	return __udp_queue_rcv_skb(sk, skb);
 
 csum_error:
@@ -2156,6 +2162,7 @@ static int udp_unicast_rcv_skb(struct sock *sk, struct sk_buff *skb,
 		skb_checksum_try_convert(skb, IPPROTO_UDP, uh->check,
 					 inet_compute_pseudo);
 
+	/*将skb加入到接收队列*/
 	ret = udp_queue_rcv_skb(sk, skb);
 
 	/* a return value > 0 means to resubmit the input, but
@@ -2186,7 +2193,10 @@ int __udp4_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
 	if (!pskb_may_pull(skb, sizeof(struct udphdr)))
 		goto drop;		/* No space for header. */
 
+	/*得到udp首部指针*/
 	uh   = udp_hdr(skb);
+
+	/*得到数据包的长度，源地址，目的地址*/
 	ulen = ntohs(uh->len);
 	saddr = ip_hdr(skb)->saddr;
 	daddr = ip_hdr(skb)->daddr;
@@ -2204,6 +2214,7 @@ int __udp4_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
 	if (udp4_csum_init(skb, uh, proto))
 		goto csum_error;
 
+	/*判断该skb是否已有关联的socket*/
 	sk = skb_steal_sock(skb);
 	if (sk) {
 		struct dst_entry *dst = skb_dst(skb);
@@ -2212,6 +2223,7 @@ int __udp4_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
 		if (unlikely(sk->sk_rx_dst != dst))
 			udp_sk_rx_dst_set(sk, dst);
 
+		/*如果有则直接调用该函数进行处理，不需要再查找*/
 		ret = udp_unicast_rcv_skb(sk, skb, uh);
 		sock_put(sk);
 		return ret;
@@ -2221,8 +2233,13 @@ int __udp4_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
 		return __udp4_lib_mcast_deliver(net, skb, uh,
 						saddr, daddr, udptable, proto);
 
+    /* 接收udp包的上层应用对应的sock都组织在udptable这个以注册端口为关键字的
+     * 哈希表中，该函数遍历哈希槽找最满足匹配条件的sock并返回它，匹配的字段包括
+     * 地址域是否是PF_INET，源、目的地址是否匹配，端口是否匹配，绑定的外出接口
+     * 设备是否匹配。匹配项最多的获胜*/
 	sk = __udp4_lib_lookup_skb(skb, uh->source, uh->dest, udptable);
 	if (sk)
+		/*将数据包加入udp的接收队列*/
 		return udp_unicast_rcv_skb(sk, skb, uh);
 
 	if (!xfrm4_policy_check(NULL, XFRM_POLICY_IN, skb))
@@ -2393,6 +2410,7 @@ int udp_v4_early_demux(struct sk_buff *skb)
 
 int udp_rcv(struct sk_buff *skb)
 {
+	/*跟进调用链*/
 	return __udp4_lib_rcv(skb, &udp_table, IPPROTO_UDP);
 }
 

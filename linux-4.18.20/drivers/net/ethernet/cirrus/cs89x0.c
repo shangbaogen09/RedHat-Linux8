@@ -667,6 +667,7 @@ detect_aui(struct net_device *dev)
 }
 
 /* We have a good packet(s), get it/them out of the buffers. */
+/*接收数据包流程调用链*/
 static void
 net_rx(struct net_device *dev)
 {
@@ -675,6 +676,8 @@ net_rx(struct net_device *dev)
 	int status, length;
 
 	status = ioread16(lp->virt_addr + RX_FRAME_PORT);
+
+	/*读取本次接收的数据长度*/
 	length = ioread16(lp->virt_addr + RX_FRAME_PORT);
 
 	if ((status & RX_OK) == 0) {
@@ -682,6 +685,7 @@ net_rx(struct net_device *dev)
 		return;
 	}
 
+	/*分配skb结构体以及对应的数据空间*/
 	/* Malloc up new buffer. */
 	skb = netdev_alloc_skb(dev, length + 2);
 	if (skb == NULL) {
@@ -690,6 +694,7 @@ net_rx(struct net_device *dev)
 	}
 	skb_reserve(skb, 2);	/* longword align L3 header */
 
+	/*从设备中读取数据填充到缓存区中*/
 	readwords(lp, RX_FRAME_PORT, skb_put(skb, length), length >> 1);
 	if (length & 1)
 		skb->data[length-1] = ioread16(lp->virt_addr + RX_FRAME_PORT);
@@ -700,7 +705,11 @@ net_rx(struct net_device *dev)
 		 skb->data[ETH_ALEN + ETH_ALEN + 1]);
 
 	skb->protocol = eth_type_trans(skb, dev);
+
+	/*调用netif_rx向上层协议族传递数据包*/
 	netif_rx(skb);
+
+	/*更新统计信息*/
 	dev->stats.rx_packets++;
 	dev->stats.rx_bytes += length;
 }
@@ -709,13 +718,17 @@ net_rx(struct net_device *dev)
  * Handle the network interface interrupts.
  */
 
+/*传统的netif_rx方式,以cs8900为例*/
+/*cs8900网卡的中断处理函数*/
 static irqreturn_t net_interrupt(int irq, void *dev_id)
 {
+	/*传入的参数dev_id为net_device*/
 	struct net_device *dev = dev_id;
 	struct net_local *lp;
 	int status;
 	int handled = 0;
 
+	/*取出该net device的私有数据结构*/
 	lp = netdev_priv(dev);
 
 	/* we MUST read all the events out of the ISQ, otherwise we'll never
@@ -726,12 +739,17 @@ static irqreturn_t net_interrupt(int irq, void *dev_id)
 	 * faster than you can read them off, you're screwed.  Hasta la
 	 * vista, baby!
 	 */
+	/*读回中断状态寄存器的值*/
 	while ((status = ioread16(lp->virt_addr + ISQ_PORT))) {
 		cs89_dbg(4, debug, "%s: event=%04x\n", dev->name, status);
 		handled = 1;
+
+		/*根据状态寄存器的值来判断发生了什么中断*/
 		switch (status & ISQ_EVENT_MASK) {
+		/*接收了一个数据包*/
 		case ISQ_RECEIVER_EVENT:
 			/* Got a packet(s). */
+			/*调用接收数据包函数*/
 			net_rx(dev);
 			break;
 		case ISQ_TRANSMITTER_EVENT:

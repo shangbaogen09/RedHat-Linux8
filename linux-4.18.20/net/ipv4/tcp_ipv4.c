@@ -1514,10 +1514,12 @@ static struct sock *tcp_v4_cookie_check(struct sock *sk, struct sk_buff *skb)
  * This is because we cannot sleep with the original spinlock
  * held.
  */
+/*会把该数据包直接加入received队列*/
 int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
 	struct sock *rsk;
 
+	/*处理已连接的数据包流程*/
 	if (sk->sk_state == TCP_ESTABLISHED) { /* Fast path */
 		struct dst_entry *dst = sk->sk_rx_dst;
 
@@ -1530,6 +1532,8 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 				sk->sk_rx_dst = NULL;
 			}
 		}
+
+		/*主要的目的是将skb加入到receive_queue队列中*/
 		tcp_rcv_established(sk, skb);
 		return 0;
 	}
@@ -1688,6 +1692,7 @@ static void tcp_v4_fill_cb(struct sk_buff *skb, const struct iphdr *iph,
  *	From tcp_input.c
  */
 
+/*针对tcp接收处理函数如下*/
 int tcp_v4_rcv(struct sk_buff *skb)
 {
 	struct net *net = dev_net(skb->dev);
@@ -1707,6 +1712,7 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	if (!pskb_may_pull(skb, sizeof(struct tcphdr)))
 		goto discard_it;
 
+	/*获得tcp首部*/
 	th = (const struct tcphdr *)skb->data;
 
 	if (unlikely(th->doff < sizeof(struct tcphdr) / 4))
@@ -1725,6 +1731,7 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	th = (const struct tcphdr *)skb->data;
 	iph = ip_hdr(skb);
 lookup:
+	/*查找匹配的tcp套接字*/
 	sk = __inet_lookup_skb(&tcp_hashinfo, skb, __tcp_hdrlen(th), th->source,
 			       th->dest, sdif, &refcounted);
 	if (!sk)
@@ -1822,8 +1829,9 @@ process:
 	tcp_segs_in(tcp_sk(sk), skb);
 	ret = 0;
 	if (!sock_owned_by_user(sk)) {
+		/*调用tcp_v4_do_rcv处理这个skb(其实也就是直接放到receive_queue中)*/
 		ret = tcp_v4_do_rcv(sk, skb);
-	} else if (tcp_add_backlog(sk, skb)) {
+	} else if (tcp_add_backlog(sk, skb)) {/*如果该sock被使用，则暂时放入backlog队列*/
 		goto discard_and_relse;
 	}
 	bh_unlock_sock(sk);

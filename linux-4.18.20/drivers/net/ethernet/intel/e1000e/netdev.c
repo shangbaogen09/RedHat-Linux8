@@ -561,6 +561,7 @@ static void e1000_receive_skb(struct e1000_adapter *adapter,
 	if (staterr & E1000_RXD_STAT_VP)
 		__vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q), tag);
 
+	/*调用该函数进行处理*/
 	napi_gro_receive(&adapter->napi, skb);
 }
 
@@ -922,6 +923,7 @@ static inline void e1000_rx_hash(struct net_device *netdev, __le32 rss,
  * the return value indicates whether actual cleaning was done, there
  * is no guarantee that everything was cleaned
  **/
+/*e1000e真正接收数据包的处理函数*/
 static bool e1000_clean_rx_irq(struct e1000_ring *rx_ring, int *work_done,
 			       int work_to_do)
 {
@@ -937,38 +939,57 @@ static bool e1000_clean_rx_irq(struct e1000_ring *rx_ring, int *work_done,
 	bool cleaned = false;
 	unsigned int total_rx_bytes = 0, total_rx_packets = 0;
 
+	/*从索引为next_to_clean开始取数据*/
 	i = rx_ring->next_to_clean;
+
+	/*取出对应的接收描述符*/
 	rx_desc = E1000_RX_DESC_EXT(*rx_ring, i);
+
+	/*从描述符中读取接收状态*/
 	staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
+
+	/*同时取出对应的buffer_info*/
 	buffer_info = &rx_ring->buffer_info[i];
 
+	/*如果状态为接收完成*/
 	while (staterr & E1000_RXD_STAT_DD) {
 		struct sk_buff *skb;
 
+		/*判断是否处理的数据包个数超过了预定的配额*/
 		if (*work_done >= work_to_do)
 			break;
+
+		/*统计完成的数据包个数*/
 		(*work_done)++;
 		dma_rmb();	/* read descriptor and rx_buffer_info after status DD */
 
+		/*取出对应的skb，其中skb->data的数据已经接收到了内存中*/
 		skb = buffer_info->skb;
 		buffer_info->skb = NULL;
 
 		prefetch(skb->data - NET_IP_ALIGN);
 
+		/*更新索引为下一个包的接收做准备*/
 		i++;
 		if (i == rx_ring->count)
 			i = 0;
 		next_rxd = E1000_RX_DESC_EXT(*rx_ring, i);
 		prefetch(next_rxd);
 
+		/*取出下一个buffer_info*/
 		next_buffer = &rx_ring->buffer_info[i];
 
 		cleaned = true;
+
+		/*统计没有关联buffer的描述符*/
 		cleaned_count++;
+
+		/*把该skb->data对应的内存解除dma映射*/
 		dma_unmap_single(&pdev->dev, buffer_info->dma,
 				 adapter->rx_buffer_len, DMA_FROM_DEVICE);
 		buffer_info->dma = 0;
 
+		/*从描述符中读取接收的数据长度*/
 		length = le16_to_cpu(rx_desc->wb.upper.length);
 
 		/* !EOP means multiple descriptors were used to store a single
@@ -1009,7 +1030,10 @@ static bool e1000_clean_rx_irq(struct e1000_ring *rx_ring, int *work_done,
 				length -= 4;
 		}
 
+		/*更新总的接收字节数*/
 		total_rx_bytes += length;
+
+		/*更新总的接收包的个数*/
 		total_rx_packets++;
 
 		/* code added for copybreak, this should improve
@@ -1040,14 +1064,19 @@ static bool e1000_clean_rx_irq(struct e1000_ring *rx_ring, int *work_done,
 
 		e1000_rx_hash(netdev, rx_desc->wb.lower.hi_dword.rss, skb);
 
+		/*把该skb向上层协议栈传递*/
 		e1000_receive_skb(adapter, netdev, skb, staterr,
 				  rx_desc->wb.upper.vlan);
 
 next_desc:
+		/*清空描述符的状态位*/
 		rx_desc->wb.upper.status_error &= cpu_to_le32(~0xFF);
 
+		/*如果clean的数值大于16，说明有太多的描述符没有关联对应的内存buffer_info*/
 		/* return some buffers to hardware, one at a time is too slow */
 		if (cleaned_count >= E1000_RX_BUFFER_WRITE) {
+
+			/*执行完该函数后，cleaned_count的数量为0，也就是说所有的描述符都关联了对应的buffer*/
 			adapter->alloc_rx_buf(rx_ring, cleaned_count,
 					      GFP_ATOMIC);
 			cleaned_count = 0;
@@ -1057,14 +1086,21 @@ next_desc:
 		rx_desc = next_rxd;
 		buffer_info = next_buffer;
 
+		/*取出下一个描述符的状态位，来决定是否进入下次循环*/
 		staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
 	}
+
+	/*记录下次要接着数据包处理的位置*/
 	rx_ring->next_to_clean = i;
 
+	/*计算还有多少空闲的描述符*/
 	cleaned_count = e1000_desc_unused(rx_ring);
+
+	/*如果空闲的描述符不等于0，则初始化时该空闲描述符*/
 	if (cleaned_count)
 		adapter->alloc_rx_buf(rx_ring, cleaned_count, GFP_ATOMIC);
 
+	/*统计该网卡接收的数据包总数和接收数据总字节数*/
 	adapter->total_rx_bytes += total_rx_bytes;
 	adapter->total_rx_packets += total_rx_packets;
 	return cleaned;
@@ -1883,6 +1919,8 @@ static irqreturn_t e1000_intr(int __always_unused irq, void *data)
 			ew32(RCTL, rctl & ~E1000_RCTL_EN);
 			adapter->flags |= FLAG_RESTART_NOW;
 		}
+
+		/* 如果网络的状态不为down，则启动一个watchdog监测 */
 		/* guard against interrupt when we're going down */
 		if (!test_bit(__E1000_DOWN, &adapter->state))
 			mod_timer(&adapter->watchdog_timer, jiffies + 1);
@@ -1905,7 +1943,7 @@ static irqreturn_t e1000_intr(int __always_unused irq, void *data)
 		return IRQ_HANDLED;
 	}
 
-	/*先判断是否可以进行调度*/
+	/*先判断是否可以进行调度，当前napi没有disable，并且没有设置NAPI_STATE_SCHED为，但判断后就设置上了*/
 	if (napi_schedule_prep(&adapter->napi)) {
 
 		/*如果可以调度，则把各个的统计值设置为0*/
@@ -2700,11 +2738,15 @@ err:
  * @napi: struct associated with this polling callback
  * @weight: number of packets driver is allowed to process this poll
  **/
+/*在软中断处理函数中会调用到napi的poll函数e1000e_poll*/
 static int e1000e_poll(struct napi_struct *napi, int weight)
 {
+	/*由napi获得对应的adapter结构体*/
 	struct e1000_adapter *adapter = container_of(napi, struct e1000_adapter,
 						     napi);
 	struct e1000_hw *hw = &adapter->hw;
+
+	/*由adapter结构体获取要poll的net device*/
 	struct net_device *poll_dev = adapter->netdev;
 	int tx_cleaned = 1, work_done = 0;
 
@@ -2715,20 +2757,27 @@ static int e1000e_poll(struct napi_struct *napi, int weight)
 	    (adapter->rx_ring->ims_val & adapter->tx_ring->ims_val))
 		tx_cleaned = e1000_clean_tx_irq(adapter->tx_ring);
 
+	/*调用adapter->clean_rx函数e1000_clean_rx_irq，其中weight是本次poll能完成的最大配额*/
 	adapter->clean_rx(adapter->rx_ring, &work_done, weight);
 
 	if (!tx_cleaned)
 		work_done = weight;
 
+	/*表示该NIC并没有用完给定的配额，这背后暗含的意思是要么这是个"能量"不是很大的网卡，内部一次能容纳的分组数量比较小(比给定的配额还小)，
+      要么这个NIC在接收方向的数据流量并不很大。基于此，网卡的驱动程序在这种情况下通常会调用napi_complete()将其对应的napi对象从 
+      sd->poll_list中摘除，同时清除npai->state上的NAPI_STATE_SCHED比特位，也就是让驱动退出polling模式*/
 	/* If weight not fully consumed, exit the polling mode */
 	if (work_done < weight) {
 		if (adapter->itr_setting & 3)
 			e1000_set_itr(adapter);
+
+		/*退出polling模式*/
 		napi_complete_done(napi, work_done);
 		if (!test_bit(__E1000_DOWN, &adapter->state)) {
 			if (adapter->msix_entries)
 				ew32(IMS, adapter->rx_ring->ims_val);
 			else
+				/*退出polling模式时打开网卡的中断*/
 				e1000_irq_enable(adapter);
 		}
 	}

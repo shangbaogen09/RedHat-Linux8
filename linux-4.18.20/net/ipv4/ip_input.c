@@ -190,10 +190,12 @@ bool ip_call_ra_chain(struct sk_buff *skb)
 
 static int ip_local_deliver_finish(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
+	/*取走网络层报文首部，因为马上就要脱离ip层，进入传输层了*/
 	__skb_pull(skb, skb_network_header_len(skb));
 
 	rcu_read_lock();
 	{
+		/*得到传输层协议*/
 		int protocol = ip_hdr(skb)->protocol;
 		const struct net_protocol *ipprot;
 		int raw;
@@ -201,6 +203,7 @@ static int ip_local_deliver_finish(struct net *net, struct sock *sk, struct sk_b
 	resubmit:
 		raw = raw_local_deliver(skb, protocol);
 
+		/*根据传输协议确定对应的inet协议*/
 		ipprot = rcu_dereference(inet_protos[protocol]);
 		if (ipprot) {
 			int ret;
@@ -212,6 +215,8 @@ static int ip_local_deliver_finish(struct net *net, struct sock *sk, struct sk_b
 				}
 				nf_reset(skb);
 			}
+
+			/*将数据包传输给传输层处理，针对udp传输协议为udp_rcv,针对tcp为tcp_v4_rcv*/
 			ret = ipprot->handler(skb);
 			if (ret < 0) {
 				protocol = -ret;
@@ -248,11 +253,14 @@ int ip_local_deliver(struct sk_buff *skb)
 	 */
 	struct net *net = dev_net(skb->dev);
 
+	/*该数据包是一个ip分片*/
 	if (ip_is_fragment(ip_hdr(skb))) {
+		/*进行ip分片重组处理*/
 		if (ip_defrag(net, skb, IP_DEFRAG_LOCAL_DELIVER))
 			return 0;
 	}
 
+	/*遍历netfileter的NF_INET_LOCAL_IN规则，如未丢弃，则进入ip_local_deliver_finish*/
 	return NF_HOOK(NFPROTO_IPV4, NF_INET_LOCAL_IN,
 		       net, NULL, skb, skb->dev, NULL,
 		       ip_local_deliver_finish);
@@ -309,6 +317,7 @@ drop:
 
 static int ip_rcv_finish(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
+	/*获得ip头部指针*/
 	const struct iphdr *iph = ip_hdr(skb);
 	int (*edemux)(struct sk_buff *skb);
 	struct net_device *dev = skb->dev;
@@ -343,7 +352,9 @@ static int ip_rcv_finish(struct net *net, struct sock *sk, struct sk_buff *skb)
 	 *	Initialise the virtual path cache for the packet. It describes
 	 *	how the packet travels inside Linux networking.
 	 */
+	/*如果数据包没有设置路由信息，则进行路由查询*/
 	if (!skb_valid_dst(skb)) {
+		/*根据ip头进行路由查询*/
 		err = ip_route_input_noref(skb, iph->daddr, iph->saddr,
 					   iph->tos, dev);
 		if (unlikely(err))
@@ -393,6 +404,7 @@ static int ip_rcv_finish(struct net *net, struct sock *sk, struct sk_buff *skb)
 			goto drop;
 	}
 
+	/*调用路由的输入函数*/
 	return dst_input(skb);
 
 drop:
@@ -433,6 +445,7 @@ int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt, 
 	if (!pskb_may_pull(skb, sizeof(struct iphdr)))
 		goto inhdr_error;
 
+	/*得到ip首部地址*/
 	iph = ip_hdr(skb);
 
 	/*
@@ -461,6 +474,7 @@ int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt, 
 
 	iph = ip_hdr(skb);
 
+	/*检查ipv4的校验和*/
 	if (unlikely(ip_fast_csum((u8 *)iph, iph->ihl)))
 		goto csum_error;
 
@@ -489,6 +503,7 @@ int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt, 
 	/* Must drop socket now because of tproxy. */
 	skb_orphan(skb);
 
+	/*遍历netfileter在NF_INET_PRE_ROUTING的规则，如果数据包没丢弃，则进入ip_rcv_finish*/
 	return NF_HOOK(NFPROTO_IPV4, NF_INET_PRE_ROUTING,
 		       net, NULL, skb, dev, NULL,
 		       ip_rcv_finish);
