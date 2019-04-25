@@ -961,6 +961,18 @@ struct pci_dev *pci_get_domain_bus_and_slot(int domain, unsigned int bus,
 struct pci_dev *pci_get_class(unsigned int class, struct pci_dev *from);
 int pci_dev_present(const struct pci_device_id *ids);
 
+/*
+在PCI子系统工作过程中，驱动可以使用下列接口访问指定PCI总线上给定设备/功能编号的PCI设备的配置空间
+●　int pci_bus_read_config_byte (struct pci_bus *, unsigned int, int, u8 *)
+●　int pci_bus_read_config_word (struct pci_bus *, unsigned int, int, u16 *)
+●　int pci_bus_read_config_dword (struct pci_bus *, unsigned int, int, u32 *)
+●　int pci_bus_write_config_byte (struct pci_bus *, unsigned int, int, u8) 
+●　int pci_bus_write_config_word (struct pci_bus *, unsigned int, int, u16)
+●　int pci_bus_write_config_dword (struct pci_bus *, unsigned int, int, u32)
+第一个参数为指向PCI总线的指针，第二个参数为设备/功能编号，第三个参数为要访问的
+配置空间位置，第四个参数对于读用来返回已读出的数据，对于写用来传递要写入的数据                                                                             
+*/
+
 int pci_bus_read_config_byte(struct pci_bus *bus, unsigned int devfn,
 			     int where, u8 *val);
 int pci_bus_read_config_word(struct pci_bus *bus, unsigned int devfn,
@@ -985,6 +997,9 @@ int pci_generic_config_write32(struct pci_bus *bus, unsigned int devfn,
 
 struct pci_ops *pci_bus_set_ops(struct pci_bus *bus, struct pci_ops *ops);
 
+/*在PCI子系统工作过程中，驱动可以使用下列接口访问指定PCI设备的配置空间,参数的解释是：
+  第一个参数为指向PCI设备的指针，第二个参数为要访问的配置空间位置，
+  第三个参数对于读用来返回已读出的数据，对于写用来传递要写入的数据*/
 int pci_read_config_byte(const struct pci_dev *dev, int where, u8 *val);
 int pci_read_config_word(const struct pci_dev *dev, int where, u16 *val);
 int pci_read_config_dword(const struct pci_dev *dev, int where, u32 *val);

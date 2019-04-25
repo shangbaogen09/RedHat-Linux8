@@ -197,6 +197,7 @@ static int __init pci_sanity_check(const struct pci_raw_ops *o)
 	u32 x = 0;
 	int devfn;
 
+	/*如果支持不检查，则直接向上层返回1*/
 	if (pci_probe & PCI_NO_CHECKS)
 		return 1;
 	/* Assume Type 1 works for newer systems.
@@ -204,14 +205,19 @@ static int __init pci_sanity_check(const struct pci_raw_ops *o)
 	if (dmi_get_bios_year() >= 2001)
 		return 1;
 
+	/*它遍历总线0上的256个功能（逻辑设备）*/
 	for (devfn = 0; devfn < 0x100; devfn++) {
 		if (o->read(0, 0, devfn, PCI_CLASS_DEVICE, 2, &x))
 			continue;
+
+		/*一定有某个设备在PCI配置空间中设置的所属类代码为PCI_CLASS_BRIDGE_HOST和PCI_CLASS_DISPLAY_VGA这两者之一*/ 
 		if (x == PCI_CLASS_BRIDGE_HOST || x == PCI_CLASS_DISPLAY_VGA)
 			return 1;
 
 		if (o->read(0, 0, devfn, PCI_VENDOR_ID, 2, &x))
 			continue;
+
+		/*唯一的例外是Intel或Compaq制造的主桥芯片，我们假设它们是支持机制#1的*/
 		if (x == PCI_VENDOR_ID_INTEL || x == PCI_VENDOR_ID_COMPAQ)
 			return 1;
 	}
@@ -229,14 +235,21 @@ static int __init pci_check_type1(void)
 	local_irq_save(flags);
 
 	outb(0x01, 0xCFB);
+
+	/*保存端口0xCF8的值*/
 	tmp = inl(0xCF8);
+
+	/*向0xCF8写入一个值（0x80000000），然后读回，验证两者相同*/
 	outl(0x80000000, 0xCF8);
 	if (inl(0xCF8) == 0x80000000 && pci_sanity_check(&pci_direct_conf1)) {
 		works = 1;
 	}
+	
+	/*恢复端口0xCF8的值*/
 	outl(tmp, 0xCF8);
 	local_irq_restore(flags);
 
+	/*如果端口好用，则向上层返回1*/
 	return works;
 }
 
@@ -266,6 +279,8 @@ void __init pci_direct_init(int type)
 		return;
 	printk(KERN_INFO "PCI: Using configuration type %d for base access\n",
 		 type);
+
+	/*系统默认会使用type 1,把raw_pci_ops和raw_pci_ext_ops都设置为默认的pci_direct_conf１*/
 	if (type == 1) {
 		raw_pci_ops = &pci_direct_conf1;
 		if (raw_pci_ext_ops)
@@ -282,14 +297,23 @@ void __init pci_direct_init(int type)
 
 int __init pci_direct_probe(void)
 {
+	/*系统默认支持PCI_PROBE_CONF1方式*/
 	if ((pci_probe & PCI_PROBE_CONF1) == 0)
 		goto type2;
+
+	/*调用request_region函数，这是因为，机制#1需要使用0xCF8和0xCFC共8个字节
+      的地址资源（I/O空间），必须确保没有其他的设备正在使用这些地址资源*/
 	if (!request_region(0xCF8, 8, "PCI conf1"))
 		goto type2;
 
+	/*调用pci_check_type1实际探测机制#1*/
 	if (pci_check_type1()) {
+
+		/*如果机制#1验证通过，将pci_direct_conf1的地址保存在raw_pci_ops*/
 		raw_pci_ops = &pci_direct_conf1;
 		port_cf9_safe = true;
+
+		/*向上层调用返回1*/
 		return 1;
 	}
 	release_region(0xCF8, 8);

@@ -1655,6 +1655,7 @@ struct bus_type pcie_port_bus_type = {
 EXPORT_SYMBOL_GPL(pcie_port_bus_type);
 #endif
 
+/*作为Linux驱动模型的一个主要实例，PCI核心定义了一个名字为pci的总线类型*/
 static int __init pci_driver_init(void)
 {
 	int ret;

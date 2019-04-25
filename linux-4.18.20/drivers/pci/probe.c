@@ -106,8 +106,11 @@ static struct class pcibus_class = {
 	.dev_groups	= pcibus_groups,
 };
 
+/*初始化PCI总线类,这将在sys/class/下创建一个pci_bus目录。后续的PCI核心代码将在该目录
+下为每条PCI总线创建一个子目录，目录名格式为####:##，对应总线域编号和总线编号*/
 static int __init pcibus_class_init(void)
 {
+	/*调用Linux驱动模型中的class_register注册一个名字叫pci_bus的class*/
 	return class_register(&pcibus_class);
 }
 postcore_initcall(pcibus_class_init);
