@@ -137,6 +137,7 @@ getname_flags(const char __user *filename, int flags, int *empty)
 	if (result)
 		return result;
 
+	/*从names_cachep slab中分配struct filename结构体内存*/
 	result = __getname();
 	if (unlikely(!result))
 		return ERR_PTR(-ENOMEM);
@@ -145,9 +146,11 @@ getname_flags(const char __user *filename, int flags, int *empty)
 	 * First, try to embed the struct filename inside the names_cache
 	 * allocation
 	 */
+	/*把要拷贝的名字放到该结构体的后面，并使用name指向*/
 	kname = (char *)result->iname;
 	result->name = kname;
 
+	/*拷贝用户态的文件路径到内核的结构体result->name指向的内存中*/
 	len = strncpy_from_user(kname, filename, EMBEDDED_NAME_MAX);
 	if (unlikely(len < 0)) {
 		__putname(result);
@@ -188,6 +191,7 @@ getname_flags(const char __user *filename, int flags, int *empty)
 		}
 	}
 
+	/*把该结构体的参考引用设置为1*/
 	result->refcnt = 1;
 	/* The empty path is special. */
 	if (unlikely(!len)) {
@@ -199,9 +203,12 @@ getname_flags(const char __user *filename, int flags, int *empty)
 		}
 	}
 
+	/*指向用户空间字符串的指针*/
 	result->uptr = filename;
 	result->aname = NULL;
 	audit_getname(result);
+
+	/*向上层调用返回初始化后的结构体*/
 	return result;
 }
 
@@ -2317,6 +2324,8 @@ static int filename_lookup(int dfd, struct filename *name, unsigned flags,
 		nd.root = *root;
 		flags |= LOOKUP_ROOT;
 	}
+
+	/*使用参数dfd和name初始化struct nameidata结构体*/
 	set_nameidata(&nd, dfd, name);
 	retval = path_lookupat(&nd, flags | LOOKUP_RCU, path);
 	if (unlikely(retval == -ECHILD))
@@ -2581,6 +2590,7 @@ int path_pts(struct path *path)
 int user_path_at_empty(int dfd, const char __user *name, unsigned flags,
 		 struct path *path, int *empty)
 {
+	/*跟踪调用链,getname_flags用来返回用户空间*/
 	return filename_lookup(dfd, getname_flags(name, flags, empty),
 			       flags, path, NULL);
 }

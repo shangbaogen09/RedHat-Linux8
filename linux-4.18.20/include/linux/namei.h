@@ -51,9 +51,11 @@ extern int path_pts(struct path *path);
 
 extern int user_path_at_empty(int, const char __user *, unsigned, struct path *, int *empty);
 
+/*dfd为要查找的name的起始路径值,name为要查找的文件名,flags为要查找标记lookup_flags = LOOKUP_FOLLOW|LOOKUP_AUTOMOUNT;,path存放查找结果*/
 static inline int user_path_at(int dfd, const char __user *name, unsigned flags,
 		 struct path *path)
 {
+	/*继续调用如下函数进行查找*/
 	return user_path_at_empty(dfd, name, flags, path, NULL);
 }
 
