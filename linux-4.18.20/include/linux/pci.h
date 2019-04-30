@@ -281,21 +281,39 @@ struct pci_ats;
 
 /* The pci_dev structure describes PCI devices */
 struct pci_dev {
+	/*pci设备也通过其pci_dev结构中的bus_list域链入其所在PCI总线的局部设备链表中，
+	  而对应的表头就在前面提到的pci_bus结构中的devices域*/
 	struct list_head bus_list;	/* Node in per-bus list */
+
+	/*指针bus指向这个PCI设备所桥接的主总线*/
 	struct pci_bus	*bus;		/* Bus this device is on */
+
+	/*指针subordinate指向这个PCI设备所桥接的次总线,仅对桥设备才有意义,
+	  对于一般的非桥PCI设备而言，subordinate指针域总是为NULL*/
 	struct pci_bus	*subordinate;	/* Bus this device bridges to */
 
 	void		*sysdata;	/* Hook for sys-specific extension */
 	struct proc_dir_entry *procent;	/* Device entry in /proc/bus/pci */
+
+	/*指向这个设备所在的物理插槽描述符的指针*/
 	struct pci_slot	*slot;		/* Physical slot this device is in */
 
+	/*PCI设备的devfn域是PCI设备在PCI总线上的编号，是将高5位为插槽号、低3位为功能号
+	  放在一起编码的结果，它们是在PCI总线扫描过程中配置的*/
 	unsigned int	devfn;		/* Encoded device & function index */
+
+	/*pci_dev结构中有很多域是PCI设备的配置空间内容在内存中的“副本”，它们在PCI子系统
+	  初始化过程中被读出，保存在内存中。内核和驱动对PCI的操作大体上直接在这些域上进
+	  行，除非发生修改，需要将修改后的数据更新到PCI设备的配置空间*/
 	unsigned short	vendor;
 	unsigned short	device;
 	unsigned short	subsystem_vendor;
 	unsigned short	subsystem_device;
 	unsigned int	class;		/* 3 bytes: (base,sub,prog-if) */
 	u8		revision;	/* PCI revision, low byte of class word */
+
+	/*hdr_type域对应从PCI设备配置寄存器中读取的头类型的低7位，第8位多功能标志已经被屏蔽。
+	  值00h表示描述符描述的是一个标准的PCI设备，值01h描述的是PCI-PCI桥设备*/
 	u8		hdr_type;	/* PCI header type (`multi' flag masked out) */
 #ifdef CONFIG_PCIEAER
 	u16		aer_cap;	/* AER capability offset */
@@ -304,12 +322,22 @@ struct pci_dev {
 	u8		msi_cap;	/* MSI capability offset */
 	u8		msix_cap;	/* MSI-X capability offset */
 	u8		pcie_mpss:3;	/* PCIe Max Payload Size Supported */
+
+	/*虽然标准PCI设备和PCI-PCI桥设备的配置空间中都含有ROM基地址寄存器，但是ROM基地址寄存器在这两种
+	  不同类型的PCI配置空间头部的位置是不一样的，对于类型0的配置空间布局，ROM基地址寄存器的起始位置
+	  是30h，而对于PCI-to-PCI桥所用的类型1配置空间布局，ROM基地址寄存器的起始位置是38h。rom_base_reg
+	  域记录下ROM基地址寄存器在PCI配置空间中的位置*/
 	u8		rom_base_reg;	/* Config register controlling ROM */
+
+	/*从pci配置寄存器中读出的中断引脚域*/
 	u8		pin;		/* Interrupt pin this device uses */
 	u16		pcie_flags_reg;	/* Cached PCIe Capabilities Register */
 	unsigned long	*dma_alias_mask;/* Mask of enabled devfn aliases */
 
+	/*指向这个pci设备所关联的pci_driver驱动结构的指针*/
 	struct pci_driver *driver;	/* Driver bound to this device */
+
+	/*pci设备的dma掩码，即它实现的总线地址位数*/
 	u64		dma_mask;	/* Mask of the bits of bus address this
 					   device implements.  Normally this is
 					   0xffffffff.  You only need to change
@@ -352,20 +380,27 @@ struct pci_dev {
 #endif
 
 	pci_channel_state_t error_state;	/* Current connectivity state */
+
+	/*内嵌的device设备对象，pci通过这个域链入pci总线类型(pci_bus_type)的设备链表*/
 	struct device	dev;			/* Generic device interface */
 
+	/*配置空间的长度，一般设备为256字节*/
 	int		cfg_size;		/* Size of config space */
 
 	/*
 	 * Instead of touching interrupt line and base address registers
 	 * directly, use the values stored here. They might be different!
 	 */
+	/*表示这个pci设备通过哪根irq输入线产生中断，一般为0-15之间的某个值*/
 	unsigned int	irq;
 	struct resource resource[DEVICE_COUNT_RESOURCE]; /* I/O and memory regions + expansion ROMs */
 
 	bool		match_driver;		/* Skip attaching driver */
 
 	unsigned int	transparent:1;		/* Subtractive decode bridge */
+
+	/*multifunction域则记录了PCI设备配置寄存器中的头类型域的高1位，即上面被
+	  屏蔽掉的多功能位，表示这个PCI逻辑设备是否是多功能设备的一部分。*/
 	unsigned int	multifunction:1;	/* Multi-function device */
 
 	unsigned int	is_busmaster:1;		/* Is busmaster */
@@ -535,38 +570,75 @@ struct pci_bus_resource {
 #define PCI_REGION_FLAG_MASK	0x0fU	/* These bits of resource flags tell us the PCI region flags */
 
 struct pci_bus {
+	/*对于根总线是链接到全局根总线链表的链接件，对于非根总线是链接到父总线的子总线链表的链接件*/
 	struct list_head node;		/* Node in list of buses */
+
+	/*指向该pci总线的父总线*/
 	struct pci_bus	*parent;	/* Parent bus this bridge is on */
+
+	/*这条pci总线的子总线链表头*/
 	struct list_head children;	/* List of child buses */
+
+	/*这条pci总线设备的链表表头*/
 	struct list_head devices;	/* List of devices on this bus */
+
+	/*对于非根总线，为指向引出这条pci总线桥设备的描述符，对于根pci总线该域为null*/
 	struct pci_dev	*self;		/* Bridge device as seen by parent */
+
+	/*这条pci总线的插槽链表的表头,pci_slot结构的list域为链入此链表的链接件*/
 	struct list_head slots;		/* List of slots on this bus;
 					   protected by pci_slot_mutex */
+
+	/*对于根pci总线，指向ioport_resource或iomem_resource,对于非根pci总线，指向引出这条总线的桥设备的代表资源窗口的resource数组*/
 	struct resource *resource[PCI_BRIDGE_RESOURCE_NUM];
 	struct list_head resources;	/* Address space routed to this bus */
 	struct resource busn_res;	/* Bus numbers routed to this bus */
 
+	/*这条pci总线所使用的配置空间访问函数*/
 	struct pci_ops	*ops;		/* Configuration access functions */
 	struct msi_controller *msi;	/* MSI controller */
 	void		*sysdata;	/* Hook for sys-specific extension */
+
+	/*这条总线在/proc/bus/pci中的目录项*/
 	struct proc_dir_entry *procdir;	/* Directory entry in /proc/bus/pci */
 
+	/*总线编号*/
 	unsigned char	number;		/* Bus number */
+
+	/*指向引出这条pci总线的桥设备的primary编号*/
 	unsigned char	primary;	/* Number of primary bridge */
+
+	/*最大总线速度*/
 	unsigned char	max_bus_speed;	/* enum pci_bus_speed */
+
+	/*当前总线速度*/
 	unsigned char	cur_bus_speed;	/* enum pci_bus_speed */
 #ifdef CONFIG_PCI_DOMAINS_GENERIC
 	int		domain_nr;
 #endif
 
+	/*总线的名字*/
 	char		name[48];
 
+	/*引出这条pci总线的桥设备的桥控制寄存器*/
 	unsigned short	bridge_ctl;	/* Manage NO_ISA/FBB/et al behaviors */
+
+	/*总线标志，用来标记引出这条总线的主桥设备在设计上的一些缺陷*/
 	pci_bus_flags_t bus_flags;	/* Inherited by child buses */
+
+	/*对于根pci总线，为指向新创建的虚拟的device的指针，对于非根总线，为指向引出这条pci总线的桥设备的内嵌的device指针*/
 	struct device		*bridge;
+
+	/*内嵌的类设备对象，pci总线通过这个域链入pci总线类(pcibud_class)的设备链表*/
 	struct device		dev;
+
+	/*用于在sysfs中为这条总线生成legacy I/O文件属性*/
 	struct bin_attribute	*legacy_io;	/* Legacy I/O for this bus */
+
+	 /*用于在sysfs中为这条总线生成legacy mem文件属性*/
 	struct bin_attribute	*legacy_mem;	/* Legacy mem */
+
+	/*如果为1，表示设备已经被添加到sysfs中，否则为0*/
 	unsigned int		is_added:1;
 };
 

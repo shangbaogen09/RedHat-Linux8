@@ -450,3 +450,9 @@ $make install
 $cd /tools/bin/
 $ln -sv gcc /tools/bin/cc
 -----------------------------------------------------------------------------------
+
+向系统增加用户的sudoer使用权限:
+## Allow root to run any commands anywhere 
+root	ALL=(ALL) 	ALL
+bshang  ALL=(ALL)       ALL
+root    ALL = NOPASSWD: /bin/yum
