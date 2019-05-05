@@ -942,5 +942,7 @@ void __init acpi_pci_link_init(void)
 			acpi_irq_balance = 0;
 	}
 	register_syscore_ops(&irqrouter_syscore_ops);
+
+	/*把pci_link_handler加入到全局链表*/
 	acpi_scan_add_handler(&pci_link_handler);
 }

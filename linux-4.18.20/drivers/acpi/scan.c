@@ -1744,6 +1744,7 @@ static struct acpi_scan_handler *acpi_scan_match_handler(const char *idstr,
 {
 	struct acpi_scan_handler *handler;
 
+	/*循环取出链表中的handlers处理*/
 	list_for_each_entry(handler, &acpi_scan_handlers_list, list_node)
 		if (acpi_scan_handler_matching(handler, idstr, matchid))
 			return handler;
@@ -1774,6 +1775,7 @@ static void acpi_scan_init_hotplug(struct acpi_device *adev)
 	list_for_each_entry(hwid, &adev->pnp.ids, list) {
 		struct acpi_scan_handler *handler;
 
+		/*跟踪调用链*/
 		handler = acpi_scan_match_handler(hwid->id, NULL);
 		if (handler) {
 			adev->flags.hotplug_notify = true;
@@ -1862,6 +1864,7 @@ static acpi_status acpi_bus_check_add(acpi_handle handle, u32 lvl_not_used,
 	if (!device)
 		return AE_CTRL_DEPTH;
 
+	/*跟踪调用链*/
 	acpi_scan_init_hotplug(device);
 	acpi_device_dep_initialize(device);
 
@@ -1919,6 +1922,7 @@ static int acpi_scan_attach_handler(struct acpi_device *device)
 		const struct acpi_device_id *devid;
 		struct acpi_scan_handler *handler;
 
+		/*匹配id寻找对应的handler*/
 		handler = acpi_scan_match_handler(hwid->id, &devid);
 		if (handler) {
 			if (!handler->attach) {
@@ -1926,6 +1930,8 @@ static int acpi_scan_attach_handler(struct acpi_device *device)
 				continue;
 			}
 			device->handler = handler;
+
+			/*针对主桥attach为acpi_pci_root_add*/
 			ret = handler->attach(device, devid);
 			if (ret > 0)
 				break;
@@ -1970,6 +1976,7 @@ static void acpi_bus_attach(struct acpi_device *device)
 		goto ok;
 	}
 
+	/*跟踪调用链*/
 	ret = acpi_scan_attach_handler(device);
 	if (ret < 0)
 		return;
@@ -2038,11 +2045,13 @@ int acpi_bus_scan(acpi_handle handle)
 {
 	void *device = NULL;
 
+	/*为系统中的所有设备建立struct acpi_devices*/
 	if (ACPI_SUCCESS(acpi_bus_check_add(handle, 0, NULL, &device)))
 		acpi_walk_namespace(ACPI_TYPE_ANY, handle, ACPI_UINT32_MAX,
 				    acpi_bus_check_add, NULL, NULL, &device);
 
 	if (device) {
+		/*跟踪调用链*/
 		acpi_bus_attach(device);
 		return 0;
 	}
@@ -2159,7 +2168,10 @@ int __init acpi_scan_init(void)
 	acpi_status status;
 	struct acpi_table_stao *stao_ptr;
 
+	/*把pci_root_handler注册到全局链表acpi_scan_handlers_list*/
 	acpi_pci_root_init();
+
+	/*把pci_link_handler注册到全局链表acpi_scan_handlers_list*/
 	acpi_pci_link_init();
 	acpi_processor_init();
 	acpi_lpss_init();
@@ -2196,6 +2208,7 @@ int __init acpi_scan_init(void)
 	/*
 	 * Enumerate devices in the ACPI namespace.
 	 */
+	/*扫描总线*/
 	result = acpi_bus_scan(ACPI_ROOT_OBJECT);
 	if (result)
 		goto out;
