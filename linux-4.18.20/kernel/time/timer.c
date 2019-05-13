@@ -184,6 +184,7 @@ EXPORT_SYMBOL(jiffies_64);
  */
 #define WHEEL_SIZE	(LVL_SIZE * LVL_DEPTH)
 
+/*默认定义CONFIG_NO_HZ_COMMON=y*/
 #ifdef CONFIG_NO_HZ_COMMON
 # define NR_BASES	2
 # define BASE_STD	0
@@ -196,8 +197,16 @@ EXPORT_SYMBOL(jiffies_64);
 
 struct timer_base {
 	raw_spinlock_t		lock;
+
+	/*指向当前cpu正在处理的定时器所对应的timer_list结构*/
 	struct timer_list	*running_timer;
+
+	/*表示当前cpu定时器所经历过的jiffies数，大多数情况下，该值和jiffies计数值相等，当cpu的idle状态连
+	续持续了多个jiffies时间时，当退出idle状态时，jiffies计数值就会大于该字段，在接下来的tick中断后，
+	定时器系统会让该字段的值追赶上jiffies值*/
 	unsigned long		clk;
+
+	/*指向该cpu下一个即将到期的定时器时间*/
 	unsigned long		next_expiry;
 	unsigned int		cpu;
 	bool			is_idle;
@@ -1922,6 +1931,7 @@ static void __init init_timer_cpu(int cpu)
 	struct timer_base *base;
 	int i;
 
+	/*初始化percpu变量的部分成员*/
 	for (i = 0; i < NR_BASES; i++) {
 		base = per_cpu_ptr(&timer_bases[i], cpu);
 		base->cpu = cpu;
@@ -1934,13 +1944,17 @@ static void __init init_timer_cpus(void)
 {
 	int cpu;
 
+	/*针对每个cpu变量进行初始化*/
 	for_each_possible_cpu(cpu)
 		init_timer_cpu(cpu);
 }
 
 void __init init_timers(void)
 {
+	/*初始化低精度定时器使用的基础设施*/
 	init_timer_cpus();
+
+	/*安装低精度定时器的软中断处理函数*/
 	open_softirq(TIMER_SOFTIRQ, run_timer_softirq);
 }
 

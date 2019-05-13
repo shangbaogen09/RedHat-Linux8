@@ -64,6 +64,7 @@ static u64 jiffies_read(struct clocksource *cs)
  * requested HZ value. It is also not recommended
  * for "tick-less" systems.
  */
+/*clocksource_jiffies,它的精度只有1/HZ秒，rating值为1*/
 static struct clocksource clocksource_jiffies = {
 	.name		= "jiffies",
 	.rating		= 1, /* lowest valid rating*/

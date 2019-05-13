@@ -86,11 +86,20 @@ struct tk_read_base {
  * used instead.
  */
 struct timekeeper {
-	struct tk_read_base	tkr_mono;
+    /*monotonic time，可以把它理解为自系统启动以来所经过的时间，该时间只能单调递增，可以理解为xtime虽
+    然正常情况下也是递增的，但是毕竟用户可以主动向前或向后调整墙上时间，从而修改xtime值。但是monotonic
+    时间不可以往后退，系统启动后只能不断递增*/
+   	struct tk_read_base	tkr_mono;
 	struct tk_read_base	tkr_raw;
+
+	/*系统xtime时间*/
 	u64			xtime_sec;
 	unsigned long		ktime_sec;
+
+	/*该值初始化的时候初始值为xtime的负值*/
 	struct timespec64	wall_to_monotonic;
+
+	/*该值为wall_to_monotonic的值取反*/
 	ktime_t			offs_real;
 	ktime_t			offs_boot;
 	ktime_t			offs_tai;

@@ -75,6 +75,7 @@
  * to reach a base using a clockid, hrtimer_clockid_to_base()
  * is used to convert from clockid to the proper hrtimer_base_type.
  */
+/*为每个cpu都定义了一个hrtimer_bases，该hrtimer_cpu_base维护了多个clock_base*/
 DEFINE_PER_CPU(struct hrtimer_cpu_base, hrtimer_bases) =
 {
 	.lock = __RAW_SPIN_LOCK_UNLOCKED(hrtimer_bases.lock),
@@ -1806,11 +1807,13 @@ int hrtimers_prepare_cpu(unsigned int cpu)
 	struct hrtimer_cpu_base *cpu_base = &per_cpu(hrtimer_bases, cpu);
 	int i;
 
+	/*初始化per cpu的hrtimer_cpu_base多个clock base成员*/
 	for (i = 0; i < HRTIMER_MAX_CLOCK_BASES; i++) {
 		cpu_base->clock_base[i].cpu_base = cpu_base;
 		timerqueue_init_head(&cpu_base->clock_base[i].active);
 	}
 
+	/*初始化struct hrtimer_cpu_base的结构体成员*/
 	cpu_base->cpu = cpu;
 	cpu_base->active_bases = 0;
 	cpu_base->hres_active = 0;
@@ -1903,7 +1906,10 @@ int hrtimers_dead_cpu(unsigned int scpu)
 
 void __init hrtimers_init(void)
 {
+	/*初始化当前cpu的hrtimer_cpu_base*/
 	hrtimers_prepare_cpu(smp_processor_id());
+
+	/*高精度定时器的软中断处理函数*/
 	open_softirq(HRTIMER_SOFTIRQ, hrtimer_run_softirq);
 }
 

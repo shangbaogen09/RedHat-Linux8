@@ -287,8 +287,12 @@ static void hpet_legacy_clockevent_register(void)
 	 * global after the IO_APIC has been initialized.
 	 */
 	hpet_clockevent.cpumask = cpumask_of(boot_cpu_data.cpu_index);
+
+	/*根据传入的参数继续初始化并注册该hpet_clockevent device*/
 	clockevents_config_and_register(&hpet_clockevent, hpet_freq,
 					HPET_MIN_PROG_DELTA, 0x7FFFFFFF);
+
+	/*全局变量global_clock_event指向当前使用的clock event device*/
 	global_clock_event = &hpet_clockevent;
 	printk(KERN_DEBUG "hpet clockevent registered\n");
 }
@@ -852,6 +856,7 @@ static u64 read_hpet(struct clocksource *cs)
 }
 #endif
 
+/*定义一个clock source对象，精度为250*/
 static struct clocksource clocksource_hpet = {
 	.name		= "hpet",
 	.rating		= 250,
@@ -866,9 +871,11 @@ static int hpet_clocksource_register(void)
 	u64 start, now;
 	u64 t1;
 
+	/*启动该计时器*/
 	/* Start the counter */
 	hpet_restart_counter();
 
+	/*验证该计时器是否工作*/
 	/* Verify whether hpet counter works */
 	t1 = hpet_readl(HPET_COUNTER);
 	start = rdtsc();
@@ -890,6 +897,7 @@ static int hpet_clocksource_register(void)
 		return -ENODEV;
 	}
 
+	/*向内核注册clock source对象clocksource_hpet*/
 	clocksource_register_hz(&clocksource_hpet, (u32)hpet_freq);
 	return 0;
 }
@@ -905,9 +913,11 @@ int __init hpet_enable(void)
 	u64 freq;
 	unsigned int i, last;
 
+	/*x64默认从该处返回*/
 	if (!is_hpet_capable())
 		return 0;
 
+	/*配置hpet硬件寄存器*/
 	hpet_set_mapping();
 
 	/*
@@ -993,9 +1003,11 @@ int __init hpet_enable(void)
 	}
 	hpet_print_config();
 
+	/*向内核注册clock source对象hpet*/
 	if (hpet_clocksource_register())
 		goto out_nohpet;
 
+	/*向内核注册hpet clock event device对象*/
 	if (id & HPET_ID_LEGSUP) {
 		hpet_legacy_clockevent_register();
 		return 1;

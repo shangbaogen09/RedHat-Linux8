@@ -644,10 +644,18 @@ asmlinkage __visible void __init start_kernel(void)
 	init_IRQ();
 	tick_init();
 	rcu_init_nohz();
+
+	/*低精度timer初始化*/
 	init_timers();
+
+	/*高精度timer的初始化*/
 	hrtimers_init();
 	softirq_init();
+
+	/*timer keeping的初始化*/
 	timekeeping_init();
+
+	/*针对x86的hpet初始化*/
 	time_init();
 	sched_clock_postinit();
 	printk_safe_init();

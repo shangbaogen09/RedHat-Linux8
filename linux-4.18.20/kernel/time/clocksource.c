@@ -584,6 +584,7 @@ static struct clocksource *clocksource_find_best(bool oneshot, bool skipcur)
 {
 	struct clocksource *cs;
 
+	/*选择一个合适的clock source,因为finished_booting变量为0，直接返回不会进行选择*/
 	if (!finished_booting || list_empty(&clocksource_list))
 		return NULL;
 
@@ -604,9 +605,11 @@ static struct clocksource *clocksource_find_best(bool oneshot, bool skipcur)
 
 static void __clocksource_select(bool skipcur)
 {
+	/*判断当前cpu的tick device是否采用oneshot模式*/
 	bool oneshot = tick_oneshot_mode_active();
 	struct clocksource *best, *cs;
 
+	/*寻找最好的时钟源*/
 	/* Find the best suitable clocksource */
 	best = clocksource_find_best(oneshot, skipcur);
 	if (!best)
@@ -806,10 +809,13 @@ int __clocksource_register_scale(struct clocksource *cs, u32 scale, u32 freq)
 	mutex_lock(&clocksource_mutex);
 
 	clocksource_watchdog_lock(&flags);
+
+	/*将该clock source按照rating的顺序插入到全局clocksource_list链表中*/
 	clocksource_enqueue(cs);
 	clocksource_enqueue_watchdog(cs);
 	clocksource_watchdog_unlock(&flags);
 
+	/*选择切换时钟源*/
 	clocksource_select();
 	clocksource_select_watchdog(false);
 	mutex_unlock(&clocksource_mutex);

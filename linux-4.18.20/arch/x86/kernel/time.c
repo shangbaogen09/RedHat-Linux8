@@ -74,6 +74,7 @@ static void __init setup_default_timer_irq(void)
 	 * Unconditionally register the legacy timer; even without legacy
 	 * PIC/PIT we need this for the HPET0 in legacy replacement mode.
 	 */
+	/*时钟中断处理函数初始化为timer_interrupt*/
 	if (setup_irq(0, &irq0))
 		pr_info("Failed to register legacy timer interrupt\n");
 }
@@ -81,8 +82,11 @@ static void __init setup_default_timer_irq(void)
 /* Default timer init function */
 void __init hpet_time_init(void)
 {
+	/*如果系统支持hpet，则hpet_enable会初始化该时钟,并向内核注册对应的clock source和clock event对象*/
 	if (!hpet_enable())
 		setup_pit_timer();
+
+	/*初始化时钟中断*/
 	setup_default_timer_irq();
 }
 
@@ -106,5 +110,6 @@ static __init void x86_late_time_init(void)
  */
 void __init time_init(void)
 {
+	/*初始化回调函数*/
 	late_time_init = x86_late_time_init;
 }

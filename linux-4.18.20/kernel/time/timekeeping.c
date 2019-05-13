@@ -130,7 +130,11 @@ static void tk_set_wall_to_mono(struct timekeeper *tk, struct timespec64 wtm)
 	set_normalized_timespec64(&tmp, -tk->wall_to_monotonic.tv_sec,
 					-tk->wall_to_monotonic.tv_nsec);
 	WARN_ON_ONCE(tk->offs_real != timespec64_to_ktime(tmp));
+
+	/*wall_to_monotonic初始值为负值*/
 	tk->wall_to_monotonic = wtm;
+
+	/*把wall_to_monotonic取反变正，赋值给offs_real字段*/
 	set_normalized_timespec64(&tmp, -wtm.tv_sec, -wtm.tv_nsec);
 	tk->offs_real = timespec64_to_ktime(tmp);
 	tk->offs_tai = ktime_add(tk->offs_real, ktime_set(tk->tai_offset, 0));
@@ -280,10 +284,15 @@ static void tk_setup_internals(struct timekeeper *tk, struct clocksource *clock)
 
 	++tk->cs_was_changed_seq;
 	old_clock = tk->tkr_mono.clock;
+
+	/*使用新的时钟源更新timekeeper的monotonic time的clock source*/
 	tk->tkr_mono.clock = clock;
 	tk->tkr_mono.mask = clock->mask;
+
+	/*同时把timekeeper记录的cycle值更新到最新的时间*/
 	tk->tkr_mono.cycle_last = tk_clock_read(&tk->tkr_mono);
 
+	/*使用新的时钟源更新timekeeper的raw time的clock source*/
 	tk->tkr_raw.clock = clock;
 	tk->tkr_raw.mask = clock->mask;
 	tk->tkr_raw.cycle_last = tk->tkr_mono.cycle_last;
@@ -1522,21 +1531,28 @@ static bool persistent_clock_exists;
  */
 void __init timekeeping_init(void)
 {
+	/*使用tk指针指向静态变量tk_core.timekeeper结构体成员*/
 	struct timekeeper *tk = &tk_core.timekeeper;
 	struct clocksource *clock;
 	unsigned long flags;
 	struct timespec64 now, boot, tmp;
 
+	/*获取RTC硬件时间，如果是x86，则从cmos中读取,并存到now中*/
 	read_persistent_clock64(&now);
+
+	/*检测该时间是否有效*/
 	if (!timespec64_valid_strict(&now)) {
 		pr_warn("WARNING: Persistent clock returned invalid value!\n"
 			"         Check your CMOS/BIOS settings.\n");
 		now.tv_sec = 0;
 		now.tv_nsec = 0;
-	} else if (now.tv_sec || now.tv_nsec)
+	} else if (now.tv_sec || now.tv_nsec)/*如果读出的时间不为0,则标记永久性时钟存在*/
 		persistent_clock_exists = true;
 
+	/*读出启动时间，默认该时间赋值为0*/
 	read_boot_clock64(&boot);
+
+	/*检测该时间是否有效*/
 	if (!timespec64_valid_strict(&boot)) {
 		pr_warn("WARNING: Boot clock returned invalid value!\n"
 			"         Check your CMOS/BIOS settings.\n");
@@ -1548,19 +1564,27 @@ void __init timekeeping_init(void)
 	write_seqcount_begin(&tk_core.seq);
 	ntp_init();
 
+	/*获取默认的clocksource*/
 	clock = clocksource_default_clock();
 	if (clock->enable)
 		clock->enable(clock);
+
+	/*把timekeeper和clocksource进行关联*/
 	tk_setup_internals(tk, clock);
 
+	/*利用RTC的当前时间，初始化xtime字段*/
 	tk_set_xtime(tk, &now);
 	tk->raw_sec = 0;
+
+	/*如果读取的启动的时间都为0，则使用xtime的时间作为启动时间时*/
 	if (boot.tv_sec == 0 && boot.tv_nsec == 0)
 		boot = tk_xtime(tk);
 
+	/*初始化代表实时时间和monotonic时间之间偏移量wall_to_mono字段*/
 	set_normalized_timespec64(&tmp, -boot.tv_sec, -boot.tv_nsec);
 	tk_set_wall_to_mono(tk, tmp);
 
+	/*更新当前timekeeping的时间信息*/
 	timekeeping_update(tk, TK_MIRROR | TK_CLOCK_WAS_SET);
 
 	write_seqcount_end(&tk_core.seq);

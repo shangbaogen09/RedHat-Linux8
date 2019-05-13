@@ -220,6 +220,7 @@ static inline int __clocksource_register(struct clocksource *cs)
 
 static inline int clocksource_register_hz(struct clocksource *cs, u32 hz)
 {
+	/*跟踪调用链*/
 	return __clocksource_register_scale(cs, 1, hz);
 }
 

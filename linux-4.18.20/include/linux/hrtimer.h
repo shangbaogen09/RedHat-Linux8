@@ -148,12 +148,19 @@ struct hrtimer_sleeper {
  * @offset:		offset of this clock to the monotonic base
  */
 struct hrtimer_clock_base {
+	/*指向时钟基础所属cpu的hrtimer_cpu_base结构*/
 	struct hrtimer_cpu_base	*cpu_base;
+
+	/*基础时钟索引*/
 	unsigned int		index;
 	clockid_t		clockid;
 	seqcount_t		seq;
 	struct hrtimer		*running;
+
+	/*红黑树根节点，包含了所有使用该时间基准系统的hrtimer*/
 	struct timerqueue_head	active;
+
+	/*获取该基准系统的时间函数*/
 	ktime_t			(*get_time)(void);
 	ktime_t			offset;
 } __hrtimer_clock_base_align;
@@ -201,22 +208,30 @@ enum  hrtimer_base_type {
 struct hrtimer_cpu_base {
 	raw_spinlock_t			lock;
 	unsigned int			cpu;
+
+	/*bit位图标识对应的时钟基础是否有活动的定时器*/
 	unsigned int			active_bases;
 	unsigned int			clock_was_set_seq;
+
+	/*标记该cpu的高分辨率模式是否已经启动*/
 	unsigned int			hres_active		: 1,
 					in_hrtirq		: 1,
 					hang_detected		: 1,
 					softirq_activated       : 1;
 #ifdef CONFIG_HIGH_RES_TIMERS
+	/*用于跟踪记录时钟中断的总数*/
 	unsigned int			nr_events;
 	unsigned short			nr_retries;
 	unsigned short			nr_hangs;
 	unsigned int			max_hang_time;
 #endif
+	/*各个时间基准的最先到期时间可能不同，所以它们之中最先到期的时间被记录在expires_next字段中*/
 	ktime_t				expires_next;
 	struct hrtimer			*next_timer;
 	ktime_t				softirq_expires_next;
 	struct hrtimer			*softirq_next_timer;
+
+	/*该hrtimer_cpu_base所管理的hrtimer_clock_base*/
 	struct hrtimer_clock_base	clock_base[HRTIMER_MAX_CLOCK_BASES];
 } ____cacheline_aligned;
 

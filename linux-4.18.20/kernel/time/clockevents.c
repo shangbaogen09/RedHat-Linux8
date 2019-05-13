@@ -458,6 +458,7 @@ void clockevents_register_device(struct clock_event_device *dev)
 {
 	unsigned long flags;
 
+	/*初始化clock_event_device的状态*/
 	/* Initialize state to DETACHED */
 	clockevent_set_state(dev, CLOCK_EVT_STATE_DETACHED);
 
@@ -468,7 +469,10 @@ void clockevents_register_device(struct clock_event_device *dev)
 
 	raw_spin_lock_irqsave(&clockevents_lock, flags);
 
+	/*把注册的clockevent device加入到全局clockevent_devices链表中*/
 	list_add(&dev->list, &clockevent_devices);
+
+	/*比对当前cpu所使用的clockevent device与新注册的特性，判断是否要进行切换*/
 	tick_check_new_device(dev);
 	clockevents_notify_released();
 
@@ -516,6 +520,8 @@ void clockevents_config_and_register(struct clock_event_device *dev,
 	dev->min_delta_ticks = min_delta;
 	dev->max_delta_ticks = max_delta;
 	clockevents_config(dev, freq);
+
+	/*注册clock_event_device*/
 	clockevents_register_device(dev);
 }
 EXPORT_SYMBOL_GPL(clockevents_config_and_register);

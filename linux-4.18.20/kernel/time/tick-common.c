@@ -247,6 +247,7 @@ void tick_install_replacement(struct clock_event_device *newdev)
 static bool tick_check_percpu(struct clock_event_device *curdev,
 			      struct clock_event_device *newdev, int cpu)
 {
+	/*Returns 1 if @cpu is set in @cpumask, else returns 0*/
 	if (!cpumask_test_cpu(cpu, newdev->cpumask))
 		return false;
 	if (cpumask_equal(newdev->cpumask, cpumask_of(cpu)))
@@ -303,10 +304,16 @@ void tick_check_new_device(struct clock_event_device *newdev)
 	struct tick_device *td;
 	int cpu;
 
+	/*取出当前cpu的处理器号*/
 	cpu = smp_processor_id();
+
+	/*取出当前cpu所属的tick device*/
 	td = &per_cpu(tick_cpu_device, cpu);
+
+	/*该tick device所拥有的clock event device*/
 	curdev = td->evtdev;
 
+	/*该函数在注册hpet时，返回false，跳转到out_bc，导致hpet注册为broadcast设备*/
 	/* cpu local device ? */
 	if (!tick_check_percpu(curdev, newdev, cpu))
 		goto out_bc;
@@ -337,6 +344,8 @@ out_bc:
 	/*
 	 * Can the new device be used as a broadcast device ?
 	 */
+	/*如果有broadcast功能的clock event device对象注册，并且没有被某个cpu用做自己的clock event device对象
+    那么最后的tick_check_broadcast_device试图把它作为broadcast设备，并设置全局变量tick_broadcast_device*/
 	tick_install_broadcast_device(newdev);
 }
 
