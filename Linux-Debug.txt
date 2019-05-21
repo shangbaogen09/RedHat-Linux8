@@ -456,3 +456,38 @@ $ln -sv gcc /tools/bin/cc
 root	ALL=(ALL) 	ALL
 bshang  ALL=(ALL)       ALL
 root    ALL = NOPASSWD: /bin/yum
+
+
+统计一个目录下所有普通文件的总行数
+方案一：find . -type f -name "*.c" -exec cat {} \; | grep -v '^$' | wc -l
+解释：find . -type f -name "*.c" 查找当前目录下所有以.c结尾的文件，如果不考虑文件类型，可以直接实用find . -type f即可。 
+-exec cat {} \; 是将找到的文件采用cat命令输出;  grep -v '^$' 是将不是空行的内容进行统计，如果是空行就不统计，它相当于一
+个过滤器。 wc -l 统计输出来的代码的行数。如果不需要对空行进行过滤的话，可以省去grep -v '^$'
+
+方案二：find . -type f -exec wc -l {} \; | awk '{sum+=$1}END{print sum}'
+解释：find命令同方案一。-exec wc -l 是指将找到的文件依次计算其中的行数，此时如果输出的话，会输出类似于
+22 main.c
+43 head1.h
+67 head1.c
+
+所以还要采用awk将第一列进行相加，由sum+=$1，很明显，比较容易理解awk的含义。但此种方法没有对空行进行过滤。
+
+方案三：find . -type f | xargs wc -l
+解释：使用xargs与方案二的差异在于在使用find命令的-exec选项处理匹配到的文件时， find命令将所有匹配到的文件一起传递给exec执行。
+但有些系统对能够传递给exec的命令长度有限制，这样在find命令运行几分钟之后，就会出现 溢出错误。错误信息通常是“参数列太长”或
+“参数列溢出”。这就是xargs命令的用处所在，特别是与find命令一起使用。
+
+find命令把匹配到的文件传递给xargs命令，而xargs命令每次只获取一部分文件而不是全部，不像-exec选项那样。这样它可以先处理最先获
+取的一部分文件，然后是下一批，并如此继续下去。
+
+对于方案三，系统会显示每个文件的行数，然后显示总行数：
+ 14 ./main.c
+  8 ./abc.c
+  8 ./folder/main.c
+  8 ./folder/shaoning/test.c
+ 38 总用量
+
+知道指定后缀名的文件总个数命令：（得到的是html文件的数目）
+　　find . -name "*.html" | wc -l
+知道一个目录下代码总行数以及单个文件行数：（得到的是每个及所有html文件中内容的行数）
+　　find . -name "*.html" | xargs wc -l
