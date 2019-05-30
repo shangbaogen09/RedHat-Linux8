@@ -242,7 +242,11 @@ extern void init_wait_entry(struct wait_queue_entry *wq_entry, int flags);
  * on purpose; we use long where we can return timeout values and int
  * otherwise.
  */
-
+/*该宏完成的工作为定义一个等待节点__wq_entry,使用传入的参数进行初始化
+判断是否可以加入等待队列，如果可以加入队列加入成功后执行调度函数，切换
+到下一个进程，当进程醒来时，继续走for循环，判断条件是否有真，如果为真
+则进入finish_wait函数流程.
+*/
 #define ___wait_event(wq_head, condition, state, exclusive, ret, cmd)		\
 ({										\
 	__label__ __out;							\
@@ -267,6 +271,7 @@ extern void init_wait_entry(struct wait_queue_entry *wq_entry, int flags);
 __out:	__ret;									\
 })
 
+/*继续调用该函数完成剩余的等待工作*/
 #define __wait_event(wq_head, condition)					\
 	(void)___wait_event(wq_head, condition, TASK_UNINTERRUPTIBLE, 0, 0,	\
 			    schedule())
@@ -283,6 +288,7 @@ __out:	__ret;									\
  * wake_up() has to be called after changing any variable that could
  * change the result of the wait condition.
  */
+/*在等待队列wq_head上等待着条件为真,再等待事件前，再次判断条件是否已经为真*/
 #define wait_event(wq_head, condition)						\
 do {										\
 	might_sleep();								\

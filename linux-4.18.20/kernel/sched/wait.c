@@ -256,12 +256,15 @@ void init_wait_entry(struct wait_queue_entry *wq_entry, int flags)
 }
 EXPORT_SYMBOL(init_wait_entry);
 
+/*调用该函数进行等待的准备工作*/
 long prepare_to_wait_event(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry, int state)
 {
 	unsigned long flags;
 	long ret = 0;
 
 	spin_lock_irqsave(&wq_head->lock, flags);
+
+	/*检查状态设置的是否正确，以及是否有pending的信号*/
 	if (unlikely(signal_pending_state(state, current))) {
 		/*
 		 * Exclusive waiter must not fail if it was selected by wakeup,
@@ -275,19 +278,28 @@ long prepare_to_wait_event(struct wait_queue_head *wq_head, struct wait_queue_en
 		 * can't see us, it should wake up another exclusive waiter if
 		 * we fail.
 		 */
+
+		/*如果有，则把该等待节点从链表上删除*/
 		list_del_init(&wq_entry->entry);
 		ret = -ERESTARTSYS;
 	} else {
+		/*如果等待节点没有加入到任何链表*/
 		if (list_empty(&wq_entry->entry)) {
+
+			/*如果设置的有WQ_FLAG_EXCLUSIVE标记，则把该等待节点加入到等待队列的尾部*/
 			if (wq_entry->flags & WQ_FLAG_EXCLUSIVE)
 				__add_wait_queue_entry_tail(wq_head, wq_entry);
 			else
+			/*如果没有设置WQ_FLAG_EXCLUSIVE标记，则把该等待节点加入到等待队列的头部*/
 				__add_wait_queue(wq_head, wq_entry);
 		}
+
+		/*设置当前的task_struct的状态为传入的状态*/
 		set_current_state(state);
 	}
 	spin_unlock_irqrestore(&wq_head->lock, flags);
 
+	/*加入等待队列成功后，先上层调用返回0*/
 	return ret;
 }
 EXPORT_SYMBOL(prepare_to_wait_event);
@@ -346,6 +358,7 @@ void finish_wait(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_en
 {
 	unsigned long flags;
 
+	/*设置该进程的状态为TASK_RUNNING*/
 	__set_current_state(TASK_RUNNING);
 	/*
 	 * We can check for list emptiness outside the lock
@@ -360,6 +373,7 @@ void finish_wait(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_en
 	 *    have _one_ other CPU that looks at or modifies
 	 *    the list).
 	 */
+	/*如果等待节点还在链表上挂载,则把等待节点从等待队列中摘除*/
 	if (!list_empty_careful(&wq_entry->entry)) {
 		spin_lock_irqsave(&wq_head->lock, flags);
 		list_del_init(&wq_entry->entry);

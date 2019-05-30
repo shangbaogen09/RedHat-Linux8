@@ -355,11 +355,15 @@ static inline int fatal_signal_pending(struct task_struct *p)
 
 static inline int signal_pending_state(long state, struct task_struct *p)
 {
+	/*如果等待时的状态设置的不是这两种，则可以在等待队列上休眠*/
 	if (!(state & (TASK_INTERRUPTIBLE | TASK_WAKEKILL)))
 		return 0;
+
+	/*检测是否有信号需要处理，如果没有，则能在等待队列上休眠*/
 	if (!signal_pending(p))
 		return 0;
 
+	/*如果状态为TASK_INTERRUPTIBLE，并且有致命的信号在pending，则不能休眠*/
 	return (state & TASK_INTERRUPTIBLE) || __fatal_signal_pending(p);
 }
 

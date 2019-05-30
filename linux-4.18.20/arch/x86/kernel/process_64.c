@@ -449,6 +449,7 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	 *
 	 * (e.g. xen_load_tls())
 	 */
+	/*把fs/gs保存到线程结构体*/
 	save_fsgs(prev_p);
 
 	/*
