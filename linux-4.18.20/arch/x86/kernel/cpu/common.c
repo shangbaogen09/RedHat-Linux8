@@ -1516,6 +1516,7 @@ EXPORT_PER_CPU_SYMBOL_GPL(irq_stack_union);
  * The following percpu variables are hot.  Align current_task to
  * cacheline size such that they fall in the same cacheline.
  */
+/*/*把current_task指向init_task 0号进程*/
 DEFINE_PER_CPU(struct task_struct *, current_task) ____cacheline_aligned =
 	&init_task;
 EXPORT_PER_CPU_SYMBOL(current_task);
@@ -1727,6 +1728,7 @@ void cpu_init(void)
 	switch_to_new_gdt(cpu);
 	loadsegment(fs, 0);
 
+	/*加载中断描述符到相应的寄存器中*/
 	load_current_idt();
 
 	memset(me->thread.tls_array, 0, GDT_ENTRY_TLS_ENTRIES * 8);
@@ -1742,7 +1744,10 @@ void cpu_init(void)
 	/*
 	 * set up and load the per-CPU TSS
 	 */
+	/*设置per cpu的tss描述符*/
 	if (!oist->ist[0]) {
+
+		/*获取内核栈区，循环赋值给tss异常栈*/
 		char *estacks = get_cpu_entry_area(cpu)->exception_stacks;
 
 		for (v = 0; v < N_EXCEPTION_STACKS; v++) {
@@ -1773,8 +1778,13 @@ void cpu_init(void)
 	 * Initialize the TSS.  sp0 points to the entry trampoline stack
 	 * regardless of what task is running.
 	 */
+	/*设置gdt中的tss段描述符*/
 	set_tss_desc(cpu, &get_cpu_entry_area(cpu)->tss.x86_tss);
+
+	/*设置tr寄存器指向对应的tss描述符*/
 	load_TR_desc();
+
+	/*设置tss描述符内核堆栈的栈底*/
 	load_sp0((unsigned long)(cpu_entry_stack(cpu) + 1));
 
 	load_mm_ldt(&init_mm);

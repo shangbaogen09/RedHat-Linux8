@@ -951,6 +951,7 @@ void __init trap_init(void)
 	/* Init cpu_entry_area before IST entries are set up */
 	setup_cpu_entry_areas();
 
+	/*设置系统默认定义好的中断处理函数*/
 	idt_setup_traps();
 
 	/*

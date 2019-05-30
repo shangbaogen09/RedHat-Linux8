@@ -47,16 +47,21 @@ static struct sighand_struct init_sighand = {
  * Set up the first task table, touch at your own risk!. Base=0,
  * limit=0x1fffff (=2MB)
  */
+/*变量init_task所在的位置(在内核的数据段中),就是进程0的任务结构*/
 struct task_struct init_task
+/*系统默认没有定义该宏，把task_struct放入堆栈中*/
 #ifdef CONFIG_ARCH_TASK_STRUCT_ON_STACK
 	__init_task_data
 #endif
 = {
+/*系统默认定义该宏，把thread_info放入task_struct中*/
 #ifdef CONFIG_THREAD_INFO_IN_TASK
 	.thread_info	= INIT_THREAD_INFO(init_task),
 	.stack_refcount	= ATOMIC_INIT(1),
 #endif
 	.state		= 0,
+
+	/*初始化堆栈，该堆栈在链接文件中定义*/
 	.stack		= init_stack,
 	.usage		= ATOMIC_INIT(2),
 	.flags		= PF_KTHREAD,
@@ -94,6 +99,8 @@ struct task_struct init_task
 	.group_leader	= &init_task,
 	RCU_POINTER_INITIALIZER(real_cred, &init_cred),
 	RCU_POINTER_INITIALIZER(cred, &init_cred),
+
+	/*初始化该进程的名字为"swapper进程"*/
 	.comm		= INIT_TASK_COMM,
 	.thread		= INIT_THREAD,
 	.fs		= &init_fs,

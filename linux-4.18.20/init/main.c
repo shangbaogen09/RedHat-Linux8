@@ -405,6 +405,7 @@ static noinline void __ref rest_init(void)
 	 * the init task will end up wanting to create kthreads, which, if
 	 * we schedule it before we create kthreadd, will OOPS.
 	 */
+	/*创建进程1，进程1是由进程0复制过来的，复制完成后执行kernel_init*/
 	pid = kernel_thread(kernel_init, NULL, CLONE_FS);
 	/*
 	 * Pin init on the boot CPU. Task migration is not properly working
@@ -437,6 +438,7 @@ static noinline void __ref rest_init(void)
 	 * The boot idle thread must execute schedule()
 	 * at least once to get things moving:
 	 */
+	/*进行一次进程调度，切出0号进程，执行新创建进程*/
 	schedule_preempt_disabled();
 	/* Call into cpu_idle with preempt disabled */
 	cpu_startup_entry(CPUHP_ONLINE);

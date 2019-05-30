@@ -585,6 +585,7 @@ static inline bool on_thread_stack(void)
 
 static inline void load_sp0(unsigned long sp0)
 {
+	/*把内核栈的栈底更新到tss描述符中*/
 	native_load_sp0(sp0);
 }
 

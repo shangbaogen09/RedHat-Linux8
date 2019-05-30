@@ -309,6 +309,7 @@ void __init idt_setup_early_traps(void)
  */
 void __init idt_setup_traps(void)
 {
+	/*设置系统默认定义好的中断处理函数def_idts*/
 	idt_setup_from_table(idt_table, def_idts, ARRAY_SIZE(def_idts), true);
 }
 

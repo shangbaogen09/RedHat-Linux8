@@ -20,6 +20,7 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
 
+/*每个cpu都有一个运行队列*/
 DEFINE_PER_CPU_SHARED_ALIGNED(struct rq, runqueues);
 
 #if defined(CONFIG_SCHED_DEBUG) && defined(HAVE_JUMP_LABEL)
@@ -2850,6 +2851,7 @@ context_switch(struct rq *rq, struct task_struct *prev,
 	prepare_lock_switch(rq, next, rf);
 
 	/* Here we just switch the register state and the stack. */
+	/*进程切换cpu寄存器和堆栈*/
 	switch_to(prev, next, prev);
 	barrier();
 
@@ -3340,27 +3342,35 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	 * higher scheduling class, because otherwise those loose the
 	 * opportunity to pull in more work from other CPUs.
 	 */
+	/*针对公平类的优化，如果运行队列中的任务个数刚好等于公平队列中的任务个数，则直接从公平类中选取*/
 	if (likely((prev->sched_class == &idle_sched_class ||
 		    prev->sched_class == &fair_sched_class) &&
 		   rq->nr_running == rq->cfs.h_nr_running)) {
 
+		/*使用公平类的pick_next_task函数pick_next_task_fair*/
 		p = fair_sched_class.pick_next_task(rq, prev, rf);
 		if (unlikely(p == RETRY_TASK))
 			goto again;
 
+		/*如果选出的公平类为空，则直接从idle类挑选*/
 		/* Assumes fair_sched_class->next == idle_sched_class */
 		if (unlikely(!p))
 			p = idle_sched_class.pick_next_task(rq, prev, rf);
 
+		/*向上层调用返回选出的task_struct*/
 		return p;
 	}
 
 again:
+	/*遍历调度类，从优先级最高的停止类开始查找，每个类提供了各自的pick_next_task
+	  函数，从就绪队列中选择需要投入运行的任务*/
 	for_each_class(class) {
 		p = class->pick_next_task(rq, prev, rf);
 		if (p) {
 			if (unlikely(p == RETRY_TASK))
 				goto again;
+
+			/*向上层调用返回选出的task_struct*/
 			return p;
 		}
 	}
@@ -3416,8 +3426,11 @@ static void __sched notrace __schedule(bool preempt)
 	struct rq *rq;
 	int cpu;
 
+	/*获取当前cpu的运行队列*/
 	cpu = smp_processor_id();
 	rq = cpu_rq(cpu);
+
+	/*取出当前进程*/
 	prev = rq->curr;
 
 	schedule_debug(prev);
@@ -3472,12 +3485,17 @@ static void __sched notrace __schedule(bool preempt)
 		switch_count = &prev->nvcsw;
 	}
 
+	/*挑选一个优先级最高的进程*/
 	next = pick_next_task(rq, prev, &rf);
 	clear_tsk_need_resched(prev);
 	clear_preempt_need_resched();
 
+	/*如果要切换的进程和当前进程不是同一个进程*/
 	if (likely(prev != next)) {
+		/*统计切换次数*/
 		rq->nr_switches++;
+
+		/*把当前队列中正在运行的进程执行刚挑选出来的进程*/
 		rq->curr = next;
 		/*
 		 * The membarrier system call requires each architecture
@@ -3497,6 +3515,7 @@ static void __sched notrace __schedule(bool preempt)
 
 		trace_sched_switch(preempt, prev, next);
 
+		/*进行进程上下文切换*/
 		/* Also unlocks the rq: */
 		rq = context_switch(rq, prev, next, &rf);
 	} else {
@@ -3535,12 +3554,15 @@ static inline void sched_submit_work(struct task_struct *tsk)
 		blk_schedule_flush_plug(tsk);
 }
 
+/*内核的调度函数*/
 asmlinkage __visible void __sched schedule(void)
 {
 	struct task_struct *tsk = current;
 
+	/*检查是否需要冲刷IO调度队列*/
 	sched_submit_work(tsk);
 	do {
+		/*首先是关闭抢占，防止再次调度*/
 		preempt_disable();
 		__schedule(false);
 		sched_preempt_enable_no_resched();
@@ -5446,9 +5468,13 @@ void init_idle(struct task_struct *idle, int cpu)
 	/*
 	 * The idle tasks have their own, simple scheduling class:
 	 */
+
+	/*把进程0设置为idle类*/
 	idle->sched_class = &idle_sched_class;
 	ftrace_graph_init_idle_task(idle, cpu);
 	vtime_init_idle(idle, cpu);
+
+	/*设置该进程的名字为"swapper"*/
 #ifdef CONFIG_SMP
 	sprintf(idle->comm, "%s/%d", INIT_TASK_COMM, cpu);
 #endif

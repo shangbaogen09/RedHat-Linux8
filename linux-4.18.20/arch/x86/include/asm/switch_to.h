@@ -67,6 +67,7 @@ struct fork_frame {
 	struct pt_regs regs;
 };
 
+/*进行实际的进程切换*/
 #define switch_to(prev, next, last)					\
 do {									\
 	prepare_switch_to(next);					\

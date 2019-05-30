@@ -295,9 +295,16 @@ int copy_thread_tls(unsigned long clone_flags, unsigned long sp,
 	struct inactive_task_frame *frame;
 	struct task_struct *me = current;
 
+	/*在内核栈的栈顶为该任务预留了大小为sizeof(struct pt_regs)的空间*/
 	childregs = task_pt_regs(p);
+
+	/*由childregs获取struct fork_frame结构体*/
 	fork_frame = container_of(childregs, struct fork_frame, regs);
+
+	/*获取该结构体成员frame*/
 	frame = &fork_frame->frame;
+
+	/*为返回地址和栈帧基地址赋值*/
 	frame->bp = 0;
 	frame->ret_addr = (unsigned long) ret_from_fork;
 	p->thread.sp = (unsigned long) fork_frame;
@@ -319,9 +326,14 @@ int copy_thread_tls(unsigned long clone_flags, unsigned long sp,
 		return 0;
 	}
 	frame->bx = 0;
+
+	/*把当前进程的内核栈值赋值给伪造的内核栈*/
 	*childregs = *current_pt_regs();
 
+	/*子进程pt_regs结构的eax设置为0，所以子进程fork()返回值为0*/
 	childregs->ax = 0;
+
+	/*如果传入的执行函数不为空，则为对应的寄存器设置对应的函数指针*/
 	if (sp)
 		childregs->sp = sp;
 
@@ -357,6 +369,7 @@ out:
 		p->thread.io_bitmap_max = 0;
 	}
 
+	/*向上层调用返回执行结果*/
 	return err;
 }
 
@@ -421,6 +434,8 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	struct thread_struct *next = &next_p->thread;
 	struct fpu *prev_fpu = &prev->fpu;
 	struct fpu *next_fpu = &next->fpu;
+
+	/*获取当前cpu的tss描述符*/
 	int cpu = smp_processor_id();
 	struct tss_struct *tss = &per_cpu(cpu_tss_rw, cpu);
 

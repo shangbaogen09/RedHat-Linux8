@@ -753,6 +753,7 @@ extern void rto_push_irq_work_func(struct irq_work *work);
  * (such as the load balancing or the thread migration code), lock
  * acquire operations must be ordered by ascending &runqueue.
  */
+/*cpu运行队列结构体*/
 struct rq {
 	/* runqueue lock: */
 	raw_spinlock_t		lock;

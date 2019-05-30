@@ -293,6 +293,7 @@
 	. = ALIGN(align);						\
 	*(.data..cacheline_aligned)
 
+/*默认系统定义的这个段(.data..init_task)都没有编译进系统*/
 #define INIT_TASK_DATA(align)						\
 	. = ALIGN(align);						\
 	__start_init_task = .;						\

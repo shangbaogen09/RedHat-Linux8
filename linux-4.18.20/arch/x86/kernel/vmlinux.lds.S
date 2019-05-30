@@ -161,7 +161,7 @@ SECTIONS
 		/* Start of data section */
 		_sdata = .;
 
-		/* init_task */
+		/* init_task,系统第一个任务的堆栈初始化，大小为THREAD_SIZE */
 		INIT_TASK_DATA(THREAD_SIZE)
 
 #ifdef CONFIG_X86_32

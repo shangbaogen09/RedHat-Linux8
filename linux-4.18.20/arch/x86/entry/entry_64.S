@@ -353,6 +353,13 @@ syscall_return_via_sysret:
 	USERGS_SYSRET64
 END(entry_SYSCALL_64)
 
+/*X86-64有16个64位寄存器，分别是:%rax，%rbx，%rcx，%rdx，%rsi，%rdi，%rbp，%rsp，%r8，%r9，%r10，%r11，%r12，%r13，%r14，%r15
+其中:
+%rax作为函数返回值使用
+%rsp栈指针寄存器,指向栈顶
+%rdi，%rsi，%rdx，%rcx，%r8，%r9用作函数参数，依次对应第1参数，第2参数......
+%rbx，%rbp，%r12，%r13，%14，%15 用作数据存储，遵循被调用者使用规则，简单说就是随便用，调用子函数之前要备份它，以防他被修改
+%r10，%r11 用作数据存储，遵循调用者使用规则，简单说就是使用之前要先保存原值*/
 /*
  * %rdi: prev task
  * %rsi: next task
@@ -363,6 +370,7 @@ ENTRY(__switch_to_asm)
 	 * Save callee-saved registers
 	 * This must match the order in inactive_task_frame
 	 */
+	/*保存如下寄存器到当前的内核栈中*/
 	pushq	%rbp
 	pushq	%rbx
 	pushq	%r12
@@ -370,8 +378,11 @@ ENTRY(__switch_to_asm)
 	pushq	%r14
 	pushq	%r15
 
+	/*把当前的内核栈栈顶rsp的值保存到当前任务结构体中*/
 	/* switch stack */
 	movq	%rsp, TASK_threadsp(%rdi)
+
+	/*把下一个要切换的任务的内核栈指针加载到堆栈寄存器中*/
 	movq	TASK_threadsp(%rsi), %rsp
 
 #ifdef CONFIG_STACKPROTECTOR
@@ -390,6 +401,7 @@ ENTRY(__switch_to_asm)
 	FILL_RETURN_BUFFER %r12, RSB_CLEAR_LOOPS, X86_FEATURE_RSB_CTXSW
 #endif
 
+	/*恢复目标任务的堆栈内容到相应的寄存器*/
 	/* restore callee-saved registers */
 	popq	%r15
 	popq	%r14

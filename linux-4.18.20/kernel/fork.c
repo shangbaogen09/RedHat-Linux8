@@ -799,16 +799,21 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 
 	if (node == NUMA_NO_NODE)
 		node = tsk_fork_get_node(orig);
+
+	/*从对应的task_struct_cachep sab缓存中分配一个task_struct结构体*/
 	tsk = alloc_task_struct_node(node);
 	if (!tsk)
 		return NULL;
 
+	/*分配线程堆栈空间*/
 	stack = alloc_thread_stack_node(tsk, node);
 	if (!stack)
 		goto free_tsk;
 
+	/*取出task_struct的stack_vm_area成员*/
 	stack_vm_area = task_stack_vm_area(tsk);
 
+	/*把父进程的task_struct内容拷贝到当前进程当中*/
 	err = arch_dup_task_struct(tsk, orig);
 
 	/*
@@ -816,7 +821,10 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 	 * sure they're properly initialized before using any stack-related
 	 * functions again.
 	 */
+	/*使用上面分配的栈空间重新初始化当前进程的内核栈*/
 	tsk->stack = stack;
+
+	/*重新把刚才保存的成员赋值回原结构体成员*/
 #ifdef CONFIG_VMAP_STACK
 	tsk->stack_vm_area = stack_vm_area;
 #endif
@@ -839,6 +847,8 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 
 	setup_thread_stack(tsk, orig);
 	clear_user_return_notifier(tsk);
+
+	/*清除当前任务的need_resched标记*/
 	clear_tsk_need_resched(tsk);
 	set_task_stack_end_magic(tsk);
 
@@ -866,6 +876,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 	tsk->fail_nth = 0;
 #endif
 
+	/*向上层调用返回该任务的task_struct结构体*/
 	return tsk;
 
 free_stack:
@@ -1628,6 +1639,7 @@ static __latent_entropy struct task_struct *copy_process(
 	 * Don't allow sharing the root directory with processes in a different
 	 * namespace
 	 */
+	/*进行clone前的检查工作，防止传入的clone flag有冲突*/
 	if ((clone_flags & (CLONE_NEWNS|CLONE_FS)) == (CLONE_NEWNS|CLONE_FS))
 		return ERR_PTR(-EINVAL);
 
@@ -1671,6 +1683,8 @@ static __latent_entropy struct task_struct *copy_process(
 	}
 
 	retval = -ENOMEM;
+
+	/*复制当前进程，针对init进程，当前进程为进程0*/
 	p = dup_task_struct(current, node);
 	if (!p)
 		goto fork_out;
@@ -1833,6 +1847,8 @@ static __latent_entropy struct task_struct *copy_process(
 	retval = copy_signal(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_sighand;
+
+	/*建立子进程的内存区域，也即设置task_struct的mm成员*/
 	retval = copy_mm(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_signal;
@@ -1842,6 +1858,8 @@ static __latent_entropy struct task_struct *copy_process(
 	retval = copy_io(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_namespaces;
+
+	/*调用该函数对内核栈进行修改*/
 	retval = copy_thread_tls(clone_flags, stack_start, stack_size, p, tls);
 	if (retval)
 		goto bad_fork_cleanup_io;
@@ -2014,6 +2032,7 @@ static __latent_entropy struct task_struct *copy_process(
 	trace_task_newtask(p, clone_flags);
 	uprobe_copy_process(p, clone_flags);
 
+	/*向上层调用返回初始化后的task_struct*/
 	return p;
 
 bad_fork_cancel_cgroup:
@@ -2107,6 +2126,8 @@ long _do_fork(unsigned long clone_flags,
 {
 	struct completion vfork;
 	struct pid *pid;
+
+	/*新fork的进程结构体指针*/
 	struct task_struct *p;
 	int trace = 0;
 	long nr;
@@ -2117,6 +2138,7 @@ long _do_fork(unsigned long clone_flags,
 	 * requested, no event is reported; otherwise, report if the event
 	 * for the type of forking is enabled.
 	 */
+	/*init进程的clone_flags中带有CLONE_UNTRACED标记*/
 	if (!(clone_flags & CLONE_UNTRACED)) {
 		if (clone_flags & CLONE_VFORK)
 			trace = PTRACE_EVENT_VFORK;
@@ -2129,6 +2151,7 @@ long _do_fork(unsigned long clone_flags,
 			trace = 0;
 	}
 
+	/*分配子进程的task_struct结构，并复制父进程的资源，stack_start为要传入的执行函数地址*/
 	p = copy_process(clone_flags, stack_start, stack_size,
 			 child_tidptr, NULL, trace, tls, NUMA_NO_NODE);
 	add_latent_entropy();
@@ -2142,6 +2165,7 @@ long _do_fork(unsigned long clone_flags,
 	 */
 	trace_sched_process_fork(current, p);
 
+	/*分配一个进程id*/
 	pid = get_task_pid(p, PIDTYPE_PID);
 	nr = pid_vnr(pid);
 
@@ -2154,6 +2178,7 @@ long _do_fork(unsigned long clone_flags,
 		get_task_struct(p);
 	}
 
+	/*把进程加入就绪队列*/
 	wake_up_new_task(p);
 
 	/* forking complete and child started to run, tell ptracer */
@@ -2166,6 +2191,8 @@ long _do_fork(unsigned long clone_flags,
 	}
 
 	put_pid(pid);
+
+	/*把pid返回上层调用*/
 	return nr;
 }
 
@@ -2188,6 +2215,7 @@ long do_fork(unsigned long clone_flags,
  */
 pid_t kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
 {
+	/*调用do_fork进行clone*/
 	return _do_fork(flags|CLONE_VM|CLONE_UNTRACED, (unsigned long)fn,
 		(unsigned long)arg, NULL, NULL, 0);
 }
