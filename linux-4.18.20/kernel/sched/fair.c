@@ -5400,6 +5400,8 @@ static void
 enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct cfs_rq *cfs_rq;
+
+	/*获取要加入运行队列任务的调度实体*/
 	struct sched_entity *se = &p->se;
 
 	/*

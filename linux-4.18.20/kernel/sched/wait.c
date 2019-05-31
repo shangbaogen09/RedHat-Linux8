@@ -75,23 +75,32 @@ static int __wake_up_common(struct wait_queue_head *wq_head, unsigned int mode,
 		list_del(&bookmark->entry);
 		bookmark->flags = 0;
 	} else
+		/*循环遍历等待队列头中的每一个任务，并放到当前的curr变量中*/
 		curr = list_first_entry(&wq_head->head, wait_queue_entry_t, entry);
 
+	/*如果该队列为空,则直接返回传入的要唤醒的任务个数*/
 	if (&curr->entry == &wq_head->head)
 		return nr_exclusive;
 
+	/*循环遍历队列中的每一个任务节点*/
 	list_for_each_entry_safe_from(curr, next, &wq_head->head, entry) {
 		unsigned flags = curr->flags;
 		int ret;
 
 		if (flags & WQ_FLAG_BOOKMARK)
 			continue;
-
+		
+		/*调用该任务节点的回调函数*/
 		ret = curr->func(curr, mode, wake_flags, key);
 		if (ret < 0)
 			break;
+
+		/*如果时间唤醒完成，并且flags中有互斥标记，让等待唤醒的任务数减一*/
 		if (ret && (flags & WQ_FLAG_EXCLUSIVE) && !--nr_exclusive)
 			break;
+
+		/*默认没有WQ_FLAG_EXCLUSIVE标记的话，会遍历等待队列中的所有节点
+		　唤醒所有的等待节点*/
 
 		if (bookmark && (++cnt > WAITQUEUE_WALK_BREAK_CNT) &&
 				(&next->entry != &wq_head->head)) {
@@ -101,6 +110,7 @@ static int __wake_up_common(struct wait_queue_head *wq_head, unsigned int mode,
 		}
 	}
 
+	/*向上层调用返回，要求唤醒的任务个数*/
 	return nr_exclusive;
 }
 
@@ -116,6 +126,7 @@ static void __wake_up_common_lock(struct wait_queue_head *wq_head, unsigned int 
 	INIT_LIST_HEAD(&bookmark.entry);
 
 	spin_lock_irqsave(&wq_head->lock, flags);
+	/*调用该函数进行实际的唤醒过程*/
 	nr_exclusive = __wake_up_common(wq_head, mode, nr_exclusive, wake_flags, key, &bookmark);
 	spin_unlock_irqrestore(&wq_head->lock, flags);
 
@@ -137,6 +148,7 @@ static void __wake_up_common_lock(struct wait_queue_head *wq_head, unsigned int 
  * It may be assumed that this function implies a write memory barrier before
  * changing the task state if and only if any tasks are woken up.
  */
+/*wq_head为要唤醒的等待队列，nr_exclusive为要唤醒的任务个数*/
 void __wake_up(struct wait_queue_head *wq_head, unsigned int mode,
 			int nr_exclusive, void *key)
 {
@@ -247,6 +259,7 @@ prepare_to_wait_exclusive(struct wait_queue_head *wq_head, struct wait_queue_ent
 }
 EXPORT_SYMBOL(prepare_to_wait_exclusive);
 
+/*初始化一个等待队列节点*/
 void init_wait_entry(struct wait_queue_entry *wq_entry, int flags)
 {
 	wq_entry->flags = flags;
@@ -384,6 +397,7 @@ EXPORT_SYMBOL(finish_wait);
 
 int autoremove_wake_function(struct wait_queue_entry *wq_entry, unsigned mode, int sync, void *key)
 {
+	/*调用该函数进行实际的唤醒操作*/
 	int ret = default_wake_function(wq_entry, mode, sync, key);
 
 	if (ret)

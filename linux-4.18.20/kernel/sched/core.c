@@ -748,6 +748,7 @@ static inline void enqueue_task(struct rq *rq, struct task_struct *p, int flags)
 	if (!(flags & ENQUEUE_RESTORE))
 		sched_info_queued(rq, p);
 
+	/*调用该任务所属的调度类，进行实际的入队操作enqueue_task_fair(完全公平调度)*/
 	p->sched_class->enqueue_task(rq, p, flags);
 }
 
@@ -767,6 +768,7 @@ void activate_task(struct rq *rq, struct task_struct *p, int flags)
 	if (task_contributes_to_load(p))
 		rq->nr_uninterruptible--;
 
+	/*进行实际的入队操作*/
 	enqueue_task(rq, p, flags);
 }
 
@@ -861,6 +863,8 @@ void check_preempt_curr(struct rq *rq, struct task_struct *p, int flags)
 {
 	const struct sched_class *class;
 
+	/*判断新进程与当前进程是否属于同一个调度类，如果是则使用当前进程调度类的检查抢占函数来
+	　判断是否可以抢占当前进程,check_preempt_wakeup(完全公平调度类)*/
 	if (p->sched_class == rq->curr->sched_class) {
 		rq->curr->sched_class->check_preempt_curr(rq, p, flags);
 	} else {
@@ -1656,7 +1660,10 @@ ttwu_stat(struct task_struct *p, int cpu, int wake_flags)
 
 static inline void ttwu_activate(struct rq *rq, struct task_struct *p, int en_flags)
 {
+	/*把进程p,放入运行队列rq中*/
 	activate_task(rq, p, en_flags);
+
+	/*标记该任务的状态已经在队列中*/
 	p->on_rq = TASK_ON_RQ_QUEUED;
 
 	/* If a worker is waking up, notify the workqueue: */
@@ -1671,6 +1678,8 @@ static void ttwu_do_wakeup(struct rq *rq, struct task_struct *p, int wake_flags,
 			   struct rq_flags *rf)
 {
 	check_preempt_curr(rq, p, wake_flags);
+
+	/*标记当前的进程状态为TASK_RUNNING*/
 	p->state = TASK_RUNNING;
 	trace_sched_wakeup(p);
 
@@ -1715,7 +1724,10 @@ ttwu_do_activate(struct rq *rq, struct task_struct *p, int wake_flags,
 		en_flags |= ENQUEUE_MIGRATED;
 #endif
 
+	/*将醒来的进程放入合适的运行队列*/
 	ttwu_activate(rq, p, en_flags);
+
+	/*改变进程状态为running,已经判断能否进行进程抢占*/
 	ttwu_do_wakeup(rq, p, wake_flags, rf);
 }
 
@@ -1847,6 +1859,7 @@ bool cpus_share_cache(int this_cpu, int that_cpu)
 
 static void ttwu_queue(struct task_struct *p, int cpu, int wake_flags)
 {
+	/*获取对应cpu编号的运行队列*/
 	struct rq *rq = cpu_rq(cpu);
 	struct rq_flags rf;
 
@@ -1860,6 +1873,8 @@ static void ttwu_queue(struct task_struct *p, int cpu, int wake_flags)
 
 	rq_lock(rq, &rf);
 	update_rq_clock(rq);
+
+	/*调用下列函数进行实际的入队和唤醒操作*/
 	ttwu_do_activate(rq, p, wake_flags, &rf);
 	rq_unlock(rq, &rf);
 }
@@ -1992,6 +2007,8 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 
 	/* We're going to change ->state: */
 	success = 1;
+
+	/*获取当前进程运行的cpu编号*/
 	cpu = task_cpu(p);
 
 	/*
@@ -2073,6 +2090,7 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 
 #endif /* CONFIG_SMP */
 
+	/*把进程放到合适的运行队列*/
 	ttwu_queue(p, cpu, wake_flags);
 stat:
 	ttwu_stat(p, cpu, wake_flags);
@@ -3758,6 +3776,7 @@ asmlinkage __visible void __sched preempt_schedule_irq(void)
 int default_wake_function(wait_queue_entry_t *curr, unsigned mode, int wake_flags,
 			  void *key)
 {
+	/*跟踪唤醒的调用链*/
 	return try_to_wake_up(curr->private, mode, wake_flags);
 }
 EXPORT_SYMBOL(default_wake_function);
