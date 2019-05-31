@@ -1,0 +1,363 @@
+/*drivers/block/floppy.c*/
+
+/*等待队列的使用*/
+－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－
+/*声明等待队列头*/
+static DECLARE_WAIT_QUEUE_HEAD(command_done);
+
+/*睡眠到等待队列上，等待这条件变真*/
+wait_event_interruptible(command_done, command_status >= 2);
+
+/*使等待条件为真，然后唤醒等待队列上睡眠的进程*/
+command_status += 2;
+wake_up(&command_done);
+
+/*等待队列的实现分析*/
+－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－
+struct list_head {                                                                                                                                              
+    struct list_head *next, *prev;
+};
+
+struct wait_queue_head {                                                                                                                                        
+    spinlock_t      lock;
+    struct list_head    head;
+};
+
+/*对该变量进行初始化*/
+#define __WAIT_QUEUE_HEAD_INITIALIZER(name) {                   \
+    .lock       = __SPIN_LOCK_UNLOCKED(name.lock),          \
+    .head       = { &(name).head, &(name).head } }
+
+/*定义一个等待队列头,并对该变量进行初始化*/
+#define DECLARE_WAIT_QUEUE_HEAD(name) \  
+    struct wait_queue_head name = __WAIT_QUEUE_HEAD_INITIALIZER(name)
+
+
+/*睡眠到某个等待队列上，等待着某个条件为真*/
+#define wait_event_interruptible(wq_head, condition)                \    
+({                                      \    
+    int __ret = 0;                              \    
+    might_sleep();                              \    
+	/*再次判断该条件是否为真，如果为真，则直接返回，如果不为真，则直接调用__wait_event_interruptible处理*/
+    if (!(condition))                           \    
+        __ret = __wait_event_interruptible(wq_head, condition);     \    
+    __ret;                                  \    
+})
+
+/*睡眠到某个等待队列上，等待着某个条件为真*/
+#define __wait_event_interruptible(wq_head, condition)              \    
+    ___wait_event(wq_head, condition, TASK_INTERRUPTIBLE, 0, 0, schedule())
+
+
+#define ___wait_event(wq_head, condition, state, exclusive, ret, cmd)       \
+({                                      \
+    __label__ __out;                            \
+
+	/*定义一个等待节点__wq_entry*/
+    struct wait_queue_entry __wq_entry;                 \
+    long __ret = ret;   /* explicit shadow */               \
+      
+	/*对等待节点进行初始化*/                                  \
+    init_wait_entry(&__wq_entry, exclusive ? WQ_FLAG_EXCLUSIVE : 0);    \
+
+	/*当进程醒来时，继续走for循环，判断条件是否有真，如果为真则进入finish_wait函数流程*/
+    for (;;) {                              \
+		/*把等待节点加入到等待队列的相应位置*/
+        long __int = prepare_to_wait_event(&wq_head, &__wq_entry, state);\
+         
+		/*再次判断条件是否为真，如果为真，则结束等待*/                               
+        if (condition)                          \
+            break;                          \
+                                        \
+        if (___wait_is_interruptible(state) && __int) {         \
+            __ret = __int;                      \
+            goto __out;                     \
+        }                               \
+        
+		/*执行调度函数schedule()切换到下一个进程*/
+        cmd;                                \
+    }                                   \
+
+	/*设置该进程的状态为TASK_RUNNING,并把等待节点从等待队列上摘除*/
+    finish_wait(&wq_head, &__wq_entry);                 \
+__out:  __ret;                                  \
+})
+
+/*初始化一个等待队列节点*/
+void init_wait_entry(struct wait_queue_entry *wq_entry, int flags)
+{
+    wq_entry->flags = flags;
+    wq_entry->private = current;
+    wq_entry->func = autoremove_wake_function;
+    INIT_LIST_HEAD(&wq_entry->entry);
+}
+EXPORT_SYMBOL(init_wait_entry);
+
+
+long prepare_to_wait_event(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry, int state)                                                       
+{
+    unsigned long flags;
+    long ret = 0;
+    
+    spin_lock_irqsave(&wq_head->lock, flags);
+    
+    /*检查状态设置的是否正确，以及是否有pending的信号*/ 
+    if (unlikely(signal_pending_state(state, current))) {
+        /*如果有，则把该等待节点从链表上删除*/
+        list_del_init(&wq_entry->entry);
+        ret = -ERESTARTSYS;
+    } else {
+        /*如果等待节点没有加入到任何链表*/
+        if (list_empty(&wq_entry->entry)) {
+            /*如果设置的有WQ_FLAG_EXCLUSIVE标记，则把该等待节点加入到等待队列的尾部*/
+            if (wq_entry->flags & WQ_FLAG_EXCLUSIVE) 
+                __add_wait_queue_entry_tail(wq_head, wq_entry);
+            else
+            /*如果没有设置WQ_FLAG_EXCLUSIVE标记，则把该等待节点加入到等待队列的头部*/
+                __add_wait_queue(wq_head, wq_entry);
+        }
+        
+        /*设置当前的task_struct的状态为传入的状态*/
+        set_current_state(state);
+    }
+    spin_unlock_irqrestore(&wq_head->lock, flags);
+    
+    /*加入等待队列成功后，先上层调用返回0*/
+    return ret;
+}   
+EXPORT_SYMBOL(prepare_to_wait_event);
+
+/*唤醒后，等待的条件如果为真，则走该流程*/
+void finish_wait(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry)
+{
+    unsigned long flags;
+
+    /*设置该进程的状态为TASK_RUNNING,其中唤醒流程已经把任务的状态设置为TASK_RUNNING*/
+    __set_current_state(TASK_RUNNING);
+
+    /*如果等待节点还在链表上挂载,则把等待节点从等待队列中摘除,唤醒流程已经把该等待节点删除*/
+    if (!list_empty_careful(&wq_entry->entry)) {
+        spin_lock_irqsave(&wq_head->lock, flags);
+        list_del_init(&wq_entry->entry);
+        spin_unlock_irqrestore(&wq_head->lock, flags);
+    }
+}
+EXPORT_SYMBOL(finish_wait);
+
+
+/*唤醒某个等待队列上的任务*/                                                                                                                                    
+#define wake_up(x)          __wake_up(x, TASK_NORMAL, 1, NULL)
+
+/*wq_head为要唤醒的等待队列，nr_exclusive为要唤醒的任务个数*/
+void __wake_up(struct wait_queue_head *wq_head, unsigned int mode,
+            int nr_exclusive, void *key)
+{
+    __wake_up_common_lock(wq_head, mode, nr_exclusive, 0, key);
+}
+EXPORT_SYMBOL(__wake_up);
+
+static void __wake_up_common_lock(struct wait_queue_head *wq_head, unsigned int mode,
+            int nr_exclusive, int wake_flags, void *key)
+{
+    unsigned long flags;
+
+	......
+
+    spin_lock_irqsave(&wq_head->lock, flags);
+    /*调用该函数进行实际的唤醒过程*/
+    nr_exclusive = __wake_up_common(wq_head, mode, nr_exclusive, wake_flags, key, &bookmark);
+    spin_unlock_irqrestore(&wq_head->lock, flags);
+
+	......
+} 
+
+
+static int __wake_up_common(struct wait_queue_head *wq_head, unsigned int mode,
+            int nr_exclusive, int wake_flags, void *key,
+            wait_queue_entry_t *bookmark)
+{
+    wait_queue_entry_t *curr, *next;
+    int cnt = 0;
+
+    if (bookmark && (bookmark->flags & WQ_FLAG_BOOKMARK)) {
+        curr = list_next_entry(bookmark, entry);
+
+        list_del(&bookmark->entry);
+        bookmark->flags = 0;
+    } else
+        /*循环遍历等待队列头中的每一个任务，并放到当前的curr变量中*/
+        curr = list_first_entry(&wq_head->head, wait_queue_entry_t, entry);
+
+    /*如果该队列为空,则直接返回传入的要唤醒的任务个数*/
+    if (&curr->entry == &wq_head->head)
+        return nr_exclusive;
+
+    /*循环遍历队列中的每一个任务节点*/
+    list_for_each_entry_safe_from(curr, next, &wq_head->head, entry) {
+        unsigned flags = curr->flags;
+        int ret;
+
+        if (flags & WQ_FLAG_BOOKMARK)
+            continue;
+        
+        /*调用该任务节点的回调函数autoremove_wake_function*/
+        ret = curr->func(curr, mode, wake_flags, key);
+        if (ret < 0)
+            break;
+
+        /*如果唤醒完成，并且flags中有互斥标记，让等待唤醒的任务数减一*/
+        if (ret && (flags & WQ_FLAG_EXCLUSIVE) && !--nr_exclusive)
+            break;
+
+        /*默认没有WQ_FLAG_EXCLUSIVE标记的话，会遍历等待队列中的所有节点
+        　唤醒所有的等待节点*/
+
+        if (bookmark && (++cnt > WAITQUEUE_WALK_BREAK_CNT) &&
+                (&next->entry != &wq_head->head)) {
+            bookmark->flags = WQ_FLAG_BOOKMARK;
+            list_add_tail(&bookmark->entry, &next->entry);
+            break;
+        }
+    }
+
+    /*向上层调用返回，要求唤醒的任务个数*/
+    return nr_exclusive;
+}
+
+nt autoremove_wake_function(struct wait_queue_entry *wq_entry, unsigned mode, int sync, void *key)
+{
+    /*调用该函数进行实际的唤醒操作*/
+    int ret = default_wake_function(wq_entry, mode, sync, key);
+
+	/*如果唤醒完成，则把该节点从等待队列中删除*/
+    if (ret)
+        list_del_init(&wq_entry->entry);
+
+    return ret;
+}
+EXPORT_SYMBOL(autoremove_wake_function);
+
+int default_wake_function(wait_queue_entry_t *curr, unsigned mode, int wake_flags, void *key)
+{
+    /*跟踪唤醒的调用链*/
+    return try_to_wake_up(curr->private, mode, wake_flags);
+}
+EXPORT_SYMBOL(default_wake_function);
+
+
+static int try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
+{
+	int cpu, success = 0;
+
+    /*获取当前进程运行的cpu编号*/
+    cpu = task_cpu(p);
+
+    /*把进程放到合适的运行队列*/
+    ttwu_queue(p, cpu, wake_flags);
+
+    return success;
+}
+
+static void ttwu_queue(struct task_struct *p, int cpu, int wake_flags)
+{
+    /*获取对应cpu编号的运行队列*/
+    struct rq *rq = cpu_rq(cpu);
+
+    /*调用下列函数进行实际的入队和唤醒操作*/
+    ttwu_do_activate(rq, p, wake_flags, &rf);
+}
+
+static void ttwu_do_activate(struct rq *rq, struct task_struct *p, int wake_flags,
+         struct rq_flags *rf)
+{
+    int en_flags = ENQUEUE_WAKEUP | ENQUEUE_NOCLOCK;
+
+    lockdep_assert_held(&rq->lock);
+
+#ifdef CONFIG_SMP
+    if (p->sched_contributes_to_load)
+        rq->nr_uninterruptible--;
+
+    if (wake_flags & WF_MIGRATED)
+        en_flags |= ENQUEUE_MIGRATED;
+#endif
+
+    /*将醒来的进程放入合适的运行队列*/
+    ttwu_activate(rq, p, en_flags);
+
+    /*改变进程状态为running,已经判断能否进行进程抢占*/
+    ttwu_do_wakeup(rq, p, wake_flags, rf);
+}
+
+static inline void ttwu_activate(struct rq *rq, struct task_struct *p, int en_flags)
+{
+    /*把进程p,放入运行队列rq中*/
+    activate_task(rq, p, en_flags);
+
+    /*标记该任务的状态已经在队列中*/
+    p->on_rq = TASK_ON_RQ_QUEUED;
+
+    /* If a worker is waking up, notify the workqueue: */
+    if (p->flags & PF_WQ_WORKER)
+        wq_worker_waking_up(p, cpu_of(rq));
+}
+
+void activate_task(struct rq *rq, struct task_struct *p, int flags)
+{
+    if (task_contributes_to_load(p))
+        rq->nr_uninterruptible--;
+
+    /*进行实际的入队操作*/
+    enqueue_task(rq, p, flags);
+}
+
+static inline void enqueue_task(struct rq *rq, struct task_struct *p, int flags)                                                                                
+{
+    if (!(flags & ENQUEUE_NOCLOCK))
+        update_rq_clock(rq);
+
+    if (!(flags & ENQUEUE_RESTORE))
+        sched_info_queued(rq, p);
+
+    /*调用该任务所属的调度类，进行实际的入队操作enqueue_task_fair(完全公平调度)*/
+    p->sched_class->enqueue_task(rq, p, flags);
+}
+
+static void ttwu_do_wakeup(struct rq *rq, struct task_struct *p, int wake_flags, struct rq_flags *rf)
+{
+	/*查看唤醒的进程是否可以抢占当前进程*/
+    check_preempt_curr(rq, p, wake_flags);
+
+    /*标记当前的进程状态为TASK_RUNNING*/
+    p->state = TASK_RUNNING;
+
+	......
+}
+
+void check_preempt_curr(struct rq *rq, struct task_struct *p, int flags)
+{
+    const struct sched_class *class;
+
+    /*判断新进程与当前进程是否属于同一个调度类，如果是则使用当前进程调度类的检查抢占函数来
+    　判断是否可以抢占当前进程,check_preempt_wakeup(完全公平调度类)*/
+    if (p->sched_class == rq->curr->sched_class) {
+        rq->curr->sched_class->check_preempt_curr(rq, p, flags);
+    } else {
+        for_each_class(class) {
+            if (class == rq->curr->sched_class)
+                break;
+            if (class == p->sched_class) {
+                resched_curr(rq);
+                break;
+            }
+        }
+    }
+
+    /*
+     * A queue event has occurred, and we're going to schedule.  In
+     * this case, we can save a useless back to back clock update.
+     */
+    if (task_on_rq_queued(rq->curr) && test_tsk_need_resched(rq->curr))
+        rq_clock_skip_update(rq);
+}
+

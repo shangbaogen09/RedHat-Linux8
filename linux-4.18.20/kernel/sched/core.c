@@ -1677,6 +1677,7 @@ static inline void ttwu_activate(struct rq *rq, struct task_struct *p, int en_fl
 static void ttwu_do_wakeup(struct rq *rq, struct task_struct *p, int wake_flags,
 			   struct rq_flags *rf)
 {
+	/*查看唤醒的进程是否可以抢占当前进程*/
 	check_preempt_curr(rq, p, wake_flags);
 
 	/*标记当前的进程状态为TASK_RUNNING*/
