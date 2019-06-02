@@ -447,6 +447,8 @@ struct sched_entity {
 	/* For load-balancing: */
 	struct load_weight		load;
 	unsigned long			runnable_weight;
+
+	/*挂载到红黑树的调度实体连接点*/
 	struct rb_node			run_node;
 	struct list_head		group_node;
 	unsigned int			on_rq;
@@ -463,6 +465,8 @@ struct sched_entity {
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	int				depth;
 	struct sched_entity		*parent;
+
+	/*该调度实体挂载到那个cfs运行队列上*/
 	/* rq on which this entity is (to be) queued: */
 	struct cfs_rq			*cfs_rq;
 	/* rq "owned" by this entity/group: */
@@ -481,6 +485,7 @@ struct sched_entity {
 };
 
 struct sched_rt_entity {
+	/*调度实体挂载到实时调度队列的连接点*/
 	struct list_head		run_list;
 	unsigned long			timeout;
 	unsigned long			watchdog_stamp;
@@ -491,6 +496,8 @@ struct sched_rt_entity {
 	struct sched_rt_entity		*back;
 #ifdef CONFIG_RT_GROUP_SCHED
 	struct sched_rt_entity		*parent;
+
+	/*该调度实体属于那一个rt_rq队列上*/
 	/* rq on which this entity is (to be) queued: */
 	struct rt_rq			*rt_rq;
 	/* rq "owned" by this entity/group: */
@@ -636,9 +643,16 @@ struct task_struct {
 #endif
 	int				on_rq;
 
+	/*动态/有效优先级,调度器最终考核该优先级作为调度依据*/
 	int				prio;
+
+	/*静态优先级，用于表示普通任务的，用户所要求的优先级(100-139)，实时任务该值无效*/
 	int				static_prio;
+
+	/*实时和普通任务统一化后的优先级*/
 	int				normal_prio;
+
+	/*针对实时任务设置的优先级，普通任务该值为0*/
 	unsigned int			rt_priority;
 
 	const struct sched_class	*sched_class;

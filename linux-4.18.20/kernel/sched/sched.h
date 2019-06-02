@@ -224,7 +224,9 @@ dl_entity_preempt(struct sched_dl_entity *a, struct sched_dl_entity *b)
 /*
  * This is the priority-queue data structure of the RT scheduling class:
  */
+/*包含一个位图和链表数组，每个数组是一个链表链接不同优先级的实时任务*/
 struct rt_prio_array {
+	/*判断链表数组中是否有需要执行的任务*/
 	DECLARE_BITMAP(bitmap, MAX_RT_PRIO+1); /* include 1 bit for delimiter */
 	struct list_head queue[MAX_RT_PRIO];
 };
@@ -489,12 +491,14 @@ struct cfs_rq {
 	u64			min_vruntime_copy;
 #endif
 
+	/*公平调度队列中红黑树的根,上面挂载的是调度实体*/
 	struct rb_root_cached	tasks_timeline;
 
 	/*
 	 * 'curr' points to currently running entity on this cfs_rq.
 	 * It is set to NULL otherwise (i.e when none are currently running).
 	 */
+	/*指向该队列当前正在运行的调度实体*/
 	struct sched_entity	*curr;
 	struct sched_entity	*next;
 	struct sched_entity	*last;
@@ -578,8 +582,10 @@ static inline int rt_bandwidth_enabled(void)
 # define HAVE_RT_PUSH_IPI
 #endif
 
+/*实时任务的运行队列*/
 /* Real-Time classes' related field in a runqueue: */
 struct rt_rq {
+	/*该队列的主要组织运行结构*/
 	struct rt_prio_array	active;
 	unsigned int		rt_nr_running;
 	unsigned int		rr_nr_running;
@@ -784,7 +790,10 @@ struct rq {
 	unsigned long		nr_load_updates;
 	u64			nr_switches;
 
+	/*运行队列中的完全公平调度队列*/
 	struct cfs_rq		cfs;
+
+	/*运行队列中的实时调度队列*/
 	struct rt_rq		rt;
 	struct dl_rq		dl;
 
@@ -802,6 +811,7 @@ struct rq {
 	 */
 	unsigned long		nr_uninterruptible;
 
+	/*当前队列中正在运行的任务*/
 	struct task_struct	*curr;
 	struct task_struct	*idle;
 	struct task_struct	*stop;
