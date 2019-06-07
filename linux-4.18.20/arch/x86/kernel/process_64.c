@@ -499,7 +499,10 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	/*
 	 * Switch the PDA and FPU contexts.
 	 */
+	/*为percpu变量切换到当前进程*/
 	this_cpu_write(current_task, next_p);
+	
+	/*更新当前进程的内核栈栈顶*/
 	this_cpu_write(cpu_current_top_of_stack, task_top_of_stack(next_p));
 
 	/* Reload sp0. */
@@ -554,6 +557,7 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	/* Load the Intel cache allocation PQR MSR. */
 	intel_rdt_sched_in();
 
+	/*向上层调用返回，最后一次切换出的进程*/
 	return prev_p;
 }
 

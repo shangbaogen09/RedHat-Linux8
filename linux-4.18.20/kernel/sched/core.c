@@ -760,6 +760,7 @@ static inline void dequeue_task(struct rq *rq, struct task_struct *p, int flags)
 	if (!(flags & DEQUEUE_SAVE))
 		sched_info_dequeued(rq, p);
 
+	/*调用实际进程调度类的出队操作函数*/
 	p->sched_class->dequeue_task(rq, p, flags);
 }
 
@@ -777,6 +778,7 @@ void deactivate_task(struct rq *rq, struct task_struct *p, int flags)
 	if (task_contributes_to_load(p))
 		rq->nr_uninterruptible++;
 
+	/*进行实际的出队列操作*/
 	dequeue_task(rq, p, flags);
 }
 
@@ -2837,6 +2839,7 @@ context_switch(struct rq *rq, struct task_struct *prev,
 
 	prepare_task_switch(rq, prev, next);
 
+	/*取出当前进程和下一个要切换进程的内存空间结构体*/
 	mm = next->mm;
 	oldmm = prev->active_mm;
 	/*
@@ -2853,11 +2856,13 @@ context_switch(struct rq *rq, struct task_struct *prev,
 	 * membarrier after storing to rq->curr, before returning to
 	 * user-space.
 	 */
+	/*如果要切入的进程的内存空间为空，表明是一个内核线程，则借用前一个任务的内存空间*/
 	if (!mm) {
 		next->active_mm = oldmm;
 		mmgrab(oldmm);
 		enter_lazy_tlb(oldmm, next);
 	} else
+		/*调用switch_mm_irqs_off切换页表*/
 		switch_mm_irqs_off(oldmm, mm, next);
 
 	if (!prev->mm) {
@@ -2874,6 +2879,7 @@ context_switch(struct rq *rq, struct task_struct *prev,
 	switch_to(prev, next, prev);
 	barrier();
 
+	/*对pre进程进行清理工作，注意pre以及更改在switch_to中*/
 	return finish_task_switch(prev);
 }
 
@@ -3449,7 +3455,7 @@ static void __sched notrace __schedule(bool preempt)
 	cpu = smp_processor_id();
 	rq = cpu_rq(cpu);
 
-	/*取出当前进程*/
+	/*取出当前队列中正在运行的进程*/
 	prev = rq->curr;
 
 	schedule_debug(prev);
@@ -3476,11 +3482,17 @@ static void __sched notrace __schedule(bool preempt)
 	update_rq_clock(rq);
 
 	switch_count = &prev->nivcsw;
+	
+	/*如果之前的状态不是TASK_RUNNING状态*/
 	if (!preempt && prev->state) {
+		/*该进程存在未处理的信号，则再次设置为TASK_RUNNING状态*/
 		if (unlikely(signal_pending_state(prev->state, prev))) {
 			prev->state = TASK_RUNNING;
 		} else {
+			/*先前的进程不再处于可运行状态，需要将其从运行队列中移除出去*/
 			deactivate_task(rq, prev, DEQUEUE_SLEEP | DEQUEUE_NOCLOCK);
+
+			/*标记已经不再队列中*/
 			prev->on_rq = 0;
 
 			if (prev->in_iowait) {
@@ -3506,6 +3518,8 @@ static void __sched notrace __schedule(bool preempt)
 
 	/*挑选一个优先级最高的进程*/
 	next = pick_next_task(rq, prev, &rf);
+
+	/*清除被抢占进程的TIF_NEED_RESCHED标记*/
 	clear_tsk_need_resched(prev);
 	clear_preempt_need_resched();
 
@@ -3514,7 +3528,7 @@ static void __sched notrace __schedule(bool preempt)
 		/*统计切换次数*/
 		rq->nr_switches++;
 
-		/*把当前队列中正在运行的进程执行刚挑选出来的进程*/
+		/*把当前队列中正在运行的进程执向刚挑选出来的进程*/
 		rq->curr = next;
 		/*
 		 * The membarrier system call requires each architecture
@@ -3585,6 +3599,8 @@ asmlinkage __visible void __sched schedule(void)
 		preempt_disable();
 		__schedule(false);
 		sched_preempt_enable_no_resched();
+
+		/*再次检查当前进程是否需要调度*/
 	} while (need_resched());
 }
 EXPORT_SYMBOL(schedule);

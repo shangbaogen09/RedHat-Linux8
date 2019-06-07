@@ -816,6 +816,8 @@ struct rq {
 	struct task_struct	*idle;
 	struct task_struct	*stop;
 	unsigned long		next_balance;
+
+	/*刚切换出去任务的内存空间*/
 	struct mm_struct	*prev_mm;
 
 	unsigned int		clock_update_flags;

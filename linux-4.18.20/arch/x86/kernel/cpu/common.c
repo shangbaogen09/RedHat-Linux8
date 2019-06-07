@@ -1516,7 +1516,7 @@ EXPORT_PER_CPU_SYMBOL_GPL(irq_stack_union);
  * The following percpu variables are hot.  Align current_task to
  * cacheline size such that they fall in the same cacheline.
  */
-/*/*把current_task指向init_task 0号进程*/
+/*把current_task指向init_task 0号进程*/
 DEFINE_PER_CPU(struct task_struct *, current_task) ____cacheline_aligned =
 	&init_task;
 EXPORT_PER_CPU_SYMBOL(current_task);

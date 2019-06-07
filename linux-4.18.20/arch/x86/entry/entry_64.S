@@ -410,6 +410,7 @@ ENTRY(__switch_to_asm)
 	popq	%rbx
 	popq	%rbp
 
+	/*更新硬件寄存器，以及全局的常用cpu变量*/
 	jmp	__switch_to
 END(__switch_to_asm)
 
