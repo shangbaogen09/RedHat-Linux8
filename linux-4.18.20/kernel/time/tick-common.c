@@ -78,6 +78,7 @@ int tick_is_oneshot_available(void)
  */
 static void tick_periodic(int cpu)
 {
+	/*如果当前cpu是负责全局工作的cpu，则做一些全局性工作*/
 	if (tick_do_timer_cpu == cpu) {
 		write_seqlock(&jiffies_lock);
 
@@ -89,6 +90,7 @@ static void tick_periodic(int cpu)
 		update_wall_time();
 	}
 
+	/*更新进程时间，并进行调度处理*/
 	update_process_times(user_mode(get_irq_regs()));
 	profile_tick(CPU_PROFILING);
 }
@@ -96,11 +98,14 @@ static void tick_periodic(int cpu)
 /*
  * Event handler for periodic ticks
  */
+/*处理周期性时钟*/
 void tick_handle_periodic(struct clock_event_device *dev)
 {
+	/*获取当前所在的cpu编号*/
 	int cpu = smp_processor_id();
 	ktime_t next = dev->next_event;
 
+	/*周期性中断的具体处理*/
 	tick_periodic(cpu);
 
 #if defined(CONFIG_HIGH_RES_TIMERS) || defined(CONFIG_NO_HZ_COMMON)
@@ -113,8 +118,11 @@ void tick_handle_periodic(struct clock_event_device *dev)
 		return;
 #endif
 
+	/*如果不是一次性模式，则直接返回*/
 	if (!clockevent_state_oneshot(dev))
 		return;
+
+	/*针对不是周期性触发的模式，再次编程触发定时中断*/
 	for (;;) {
 		/*
 		 * Setup the next period for devices, which do not have

@@ -443,32 +443,58 @@ struct sched_statistics {
 #endif
 };
 
+/*一个调度实体(红黑树的一个结点)，其包含一组或一个指定的进程，包含一个自己的
+ *运行队列，一个父亲指针，一个指向需要调度的运行队列指针*/
 struct sched_entity {
 	/* For load-balancing: */
+	/*权重，在数组prio_to_weight[]包含优先级转权重的数值*/
 	struct load_weight		load;
 	unsigned long			runnable_weight;
 
 	/*挂载到红黑树的调度实体连接点*/
 	struct rb_node			run_node;
+
+	/*实体所在的进程组*/
 	struct list_head		group_node;
+
+	/*实体是否处于红黑树运行队列中*/
 	unsigned int			on_rq;
 
+	/* 开始运行时间 */
 	u64				exec_start;
+
+	/* 总运行时间 */
 	u64				sum_exec_runtime;
+
+    /* 虚拟运行时间，在时间中断或者任务状态发生改变时会更新
+     * 其会不停增长，增长速度与load权重成反比，load越高，增
+	 * 长速度越慢，就越可能处于红黑树最左边被调度每次时钟中
+	 * 断都会修改其值具体见calc_delta_fair()函数
+     */
 	u64				vruntime;
+
+	/* 进程在切换进CPU时的sum_exec_runtime值 */
 	u64				prev_sum_exec_runtime;
 
+	/* 此调度实体中进程移到其他CPU组的数量 */
 	u64				nr_migrations;
 
+	/* 用于统计一些数据 */
 	struct sched_statistics		statistics;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
+	/* 代表此进程组的深度，每个进程组都比其parent调度组深度大1 */
 	int				depth;
+
+    /*父亲调度实体指针，如果是进程则指向其运行队列的调度实体，如果
+	 *是进程组则指向其上一个进程组的调度实体在set_task_rq函数中设置*/
 	struct sched_entity		*parent;
 
 	/*该调度实体挂载到那个cfs运行队列上*/
 	/* rq on which this entity is (to be) queued: */
 	struct cfs_rq			*cfs_rq;
+
+	/* 实体的红黑树运行队列，如果为NULL表明其是一个进程，若非NULL表明其是调度组 */
 	/* rq "owned" by this entity/group: */
 	struct cfs_rq			*my_q;
 #endif
@@ -605,6 +631,8 @@ struct task_struct {
 	 */
 	struct thread_info		thread_info;
 #endif
+
+	/*当前进程所处的状态*/
 	/* -1 unrunnable, 0 runnable, >0 stopped: */
 	volatile long			state;
 
@@ -641,6 +669,7 @@ struct task_struct {
 	int				recent_used_cpu;
 	int				wake_cpu;
 #endif
+	/*表示是否在运行队列*/
 	int				on_rq;
 
 	/*动态/有效优先级,调度器最终考核该优先级作为调度依据*/
@@ -655,12 +684,21 @@ struct task_struct {
 	/*针对实时任务设置的优先级，普通任务该值为0*/
 	unsigned int			rt_priority;
 
+	/*该任务所属的调度类*/
 	const struct sched_class	*sched_class;
+
+	/*普通非实时进程的调度实体*/
 	struct sched_entity		se;
+
+	/*实时进程所采用的调度实体*/
 	struct sched_rt_entity		rt;
+
+	/*指向其所在进程组*/
 #ifdef CONFIG_CGROUP_SCHED
 	struct task_group		*sched_task_group;
 #endif
+
+	/*最早截至时间优先算法的调度实体*/
 	struct sched_dl_entity		dl;
 
 #ifdef CONFIG_PREEMPT_NOTIFIERS
@@ -672,8 +710,17 @@ struct task_struct {
 	unsigned int			btrace_seq;
 #endif
 
+	/*policy保存了进程的调度策略
+	 #define SCHED_NORMAL            0
+     #define SCHED_FIFO              1
+     #define SCHED_RR                2
+     #define SCHED_BATCH             3
+     #define SCHED_IDLE              5
+     #define SCHED_DEADLINE          6*/
 	unsigned int			policy;
 	int				nr_cpus_allowed;
+
+	/*用于控制进程可以在哪些处理器上运行*/
 	cpumask_t			cpus_allowed;
 
 #ifdef CONFIG_PREEMPT_RCU

@@ -1635,18 +1635,24 @@ static inline int collect_expired_timers(struct timer_base *base,
  * Called from the timer interrupt handler to charge one tick to the current
  * process.  user_tick is 1 if the tick is user time, 0 for system.
  */
+/*根据传入的参数user_tick设置统计时间*/
 void update_process_times(int user_tick)
 {
 	struct task_struct *p = current;
 
+	/*统计用户态和内核态的运行时间*/
 	/* Note: this timer irq context must be accounted for as well. */
 	account_process_tick(p, user_tick);
+
+	/*处理当前cpu的定时器*/
 	run_local_timers();
 	rcu_check_callbacks(user_tick);
 #ifdef CONFIG_IRQ_WORK
 	if (in_irq())
 		irq_work_tick();
 #endif
+
+	/*调用周期性调度函数*/
 	scheduler_tick();
 	if (IS_ENABLED(CONFIG_POSIX_TIMERS))
 		run_posix_cpu_timers(p);

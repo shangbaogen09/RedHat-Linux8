@@ -479,29 +479,47 @@ struct cfs_bandwidth { };
 #endif	/* CONFIG_CGROUP_SCHED */
 
 /* CFS-related fields in a runqueue */
+/*CFS调度的运行队列，每个CPU的rq会包含一个cfs_rq，而每个组调度的sched_entity也会有自己的一个cfs_rq队列*/
 struct cfs_rq {
+
+	/*CFS运行队列中所有进程的总负载*/
 	struct load_weight	load;
 	unsigned long		runnable_weight;
+
+	/*cfs_rq中调度实体数量*/
 	unsigned int		nr_running;
 	unsigned int		h_nr_running;
 
 	u64			exec_clock;
+
+    /*
+     * 当前CFS队列上最小运行时间，单调递增
+     * 两种情况下更新该值: 
+     * 1、更新当前运行任务的累计运行时间时  
+	 * 2、当任务从队列删除去，如任务睡眠或退出，这时候会查看剩下
+     * 的任务的vruntime是否大于min_vruntime，如果是则更新该值*/
 	u64			min_vruntime;
 #ifndef CONFIG_64BIT
 	u64			min_vruntime_copy;
 #endif
 
-	/*公平调度队列中红黑树的根,上面挂载的是调度实体*/
+	/*包含公平调度队列中红黑树的根,上面挂载的是调度实体，
+	 *以及下一个调度结点(红黑树最左边结点，最左边结点就是下个调度实体)*/
 	struct rb_root_cached	tasks_timeline;
 
 	/*
 	 * 'curr' points to currently running entity on this cfs_rq.
 	 * It is set to NULL otherwise (i.e when none are currently running).
 	 */
-	/*指向该队列当前正在运行的调度实体*/
+	/*指向该队列当前正在运行的调度实体,（对于组虽然它不会在cpu上运行，但是当它的下层有一个task在
+	 *cpu上运行，那么它所在的cfs_rq就把它当做是该cfs_rq上当前正在运行的sched_entity）*/
 	struct sched_entity	*curr;
+
+	/*表示有些进程急需运行，即使不遵从CFS调度也必须运行它，调度时会检查是否next需要调度，有就调度next*/
 	struct sched_entity	*next;
 	struct sched_entity	*last;
+
+	/*skip: 略过进程(不会选择skip指定的进程调度)*/
 	struct sched_entity	*skip;
 
 #ifdef	CONFIG_SCHED_DEBUG
@@ -542,6 +560,7 @@ struct cfs_rq {
 #endif /* CONFIG_SMP */
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
+	/*所属于的CPU rq*/
 	struct rq		*rq;	/* CPU runqueue to which this cfs_rq is attached */
 
 	/*
@@ -554,6 +573,8 @@ struct cfs_rq {
 	 */
 	int			on_list;
 	struct list_head	leaf_cfs_rq_list;
+
+	/*拥有该CFS运行队列的进程组*/
 	struct task_group	*tg;	/* group that "owns" this runqueue */
 
 #ifdef CONFIG_CFS_BANDWIDTH
@@ -768,11 +789,26 @@ struct rq {
 	 * nr_running and cpu_load should be in the same cacheline because
 	 * remote CPUs use both these fields when doing load calculation.
 	 */
+	/*用以记录目前处理器rq中执行task的数量*/
 	unsigned int		nr_running;
 #ifdef CONFIG_NUMA_BALANCING
 	unsigned int		nr_numa_running;
 	unsigned int		nr_preferred_running;
 #endif
+
+    /*用以表示处理器的负载，在每个处理器的rq中都会有对应到该处理器的cpu_load参数配置，
+    在每次处理器触发scheduler tick时，都会调用函数update_cpu_load_active,进行cpu_load
+	的更新在系统初始化的时候会调用函数sched_init把rq的cpu_load数组初始化为0.
+    了解他的更新方式最好的方式是通过函数update_cpu_load,公式如下
+    cpu_load[0]会直接等于rq中load.weight的值。
+    cpu_load[1]=(cpu_load[1]*(2-1)+cpu_load[0])/2
+    cpu_load[2]=(cpu_load[2]*(4-1)+cpu_load[0])/4
+    cpu_load[3]=(cpu_load[3]*(8-1)+cpu_load[0])/8
+    cpu_load[4]=(cpu_load[4]*(16-1)+cpu_load[0]/16
+    调用函数this_cpu_load时，所返回的cpu load值是cpu_load[0]
+    而在进行cpu blance或migration时，就会呼叫函数
+    source_load target_load取得对该处理器cpu_load index值，
+    来进行计算*/
 	#define CPU_LOAD_IDX_MAX 5
 	unsigned long		cpu_load[CPU_LOAD_IDX_MAX];
 #ifdef CONFIG_NO_HZ_COMMON
@@ -786,18 +822,30 @@ struct rq {
 #endif /* CONFIG_NO_HZ_COMMON */
 
 	/* capture load from *all* tasks on this CPU: */
+    /*load->weight值是目前所执行的schedule entity的load->weight的总和
+    也就是说rq的load->weight越高,表示处理器所负荷的执行单元也越重*/
 	struct load_weight	load;
+
+    /*在每次scheduler tick中呼叫update_cpu_load时，这个值就增加一，
+    可以用来反馈目前cpu load更新的次数*/
 	unsigned long		nr_load_updates;
+
+    /*用来累加处理器进行context switch的次数，会在调用schedule时进行累加，
+    并可以通过函数nr_context_switches统计目前所有处理器总共的context switch次数
+    或是可以透过查看档案/proc/stat中的ctxt位得知目前整个系统触发context switch的次数*/
 	u64			nr_switches;
 
-	/*运行队列中的完全公平调度队列*/
+	/*为cfs fair scheduling class的rq就绪队列*/
 	struct cfs_rq		cfs;
 
-	/*运行队列中的实时调度队列*/
+	/*为real-time scheduling class的rq就绪队列*/
 	struct rt_rq		rt;
+
+	/*为deadline scheduling class的rq就绪队列*/
 	struct dl_rq		dl;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
+	/*用以支援可以group cfs tasks的机制*/
 	/* list of leaf cfs_rq on this CPU: */
 	struct list_head	leaf_cfs_rq_list;
 	struct list_head	*tmp_alone_branch;
@@ -809,21 +857,45 @@ struct rq {
 	 * one CPU and if it got migrated afterwards it may decrease
 	 * it on another CPU. Always updated under the runqueue lock:
 	 */
+	/*透过这个变量会统计目前rq中有多少task属于TASK_UNINTERRUPTIBLE的状态
+	 *当调用函数active_task时，会把nr_uninterruptible值减一
+	 *并透过该函数enqueue_task把对应的task依据所在的scheduling
+	 *class放在对应的rq中，并把目前rq中nr_running值加一*/
 	unsigned long		nr_uninterruptible;
 
-	/*当前队列中正在运行的任务*/
+	/*curr:指向目前处理器正在执行的task*/
 	struct task_struct	*curr;
+
+	/*idle:指向属于idle-task scheduling class 的idle task;*/
 	struct task_struct	*idle;
+
+	/*stop:指向目前最高等级属于stop-task scheduling class的task;*/
 	struct task_struct	*stop;
+
+	/*基于处理器的jiffies值，用以记录下次进行处理器balancing的时间点*/
 	unsigned long		next_balance;
 
-	/*刚切换出去任务的内存空间*/
+    /*用以存储context-switch发生时，前一个task的memory management结构并可用
+	 *在函数finish_task_switch透过函数mmdrop释放前一个task的结构体资源*/
 	struct mm_struct	*prev_mm;
 
 	unsigned int		clock_update_flags;
+
+    /*用以记录目前rq的clock值，基本上该值会等于通过sched_clock_cpu(cpu_of(rq))的返回值，
+    并会在每次调用scheduler_tick时通过函数update_rq_clock更新目前rq clock值。
+    函数sched_clock_cpu会通过sched_clock_local或ched_clock_remote取得
+    对应的sched_clock_data,而处理的sched_clock_data值，
+    会通过函数sched_clock_tick在每次调用scheduler_tick时进行更新；
+    */
 	u64			clock;
 	u64			clock_task;
 
+    /*用以记录目前rq中有多少task处于等待i/o的sleep状态
+    在实际的使用上，例如当driver接受来自task的调用，
+    但处于等待i/o回复的阶段时，为了充分利用处理器的执行资源，
+    这时就可以在driver中调用函数io_schedule，
+    此时就会把目前rq中的nr_iowait加一，并设定目前task的io_wait为1
+    然后触发scheduling 让其他task有机会可以得到处理器执行时间*/
 	atomic_t		nr_iowait;
 
 #ifdef CONFIG_SMP
@@ -843,7 +915,10 @@ struct rq {
 	struct cpu_stop_work	active_balance_work;
 
 	/* CPU of this runqueue: */
+	/*用以存储运行这个RunQueue的处理器ID*/
 	int			cpu;
+
+	/*为1表示目前此RunQueue有在对应的处理器上并执行*/
 	int			online;
 
 	struct list_head cfs_tasks;
@@ -1489,13 +1564,20 @@ extern const u32		sched_prio_to_wmult[40];
 #define RETRY_TASK		((void *)-1UL)
 
 struct sched_class {
+	/*系统中多个调度类, 按照其调度的优先级排成一个链表,
+	 *调度类优先级顺序: stop_sched_class -> dl_sched_class -> 
+	 *rt_sched_class -> fair_sched_class -> idle_sched_class*/
 	const struct sched_class *next;
 
+	/*将进程加入到运行队列中，即将调度实体（进程）放入红黑树中，并对nr_running变量加1*/
 	void (*enqueue_task) (struct rq *rq, struct task_struct *p, int flags);
+
+	/*从运行队列中删除进程，并对nr_running变量中减1*/
 	void (*dequeue_task) (struct rq *rq, struct task_struct *p, int flags);
 	void (*yield_task)   (struct rq *rq);
 	bool (*yield_to_task)(struct rq *rq, struct task_struct *p, bool preempt);
 
+	/*检查当前进程是否可被新进程抢占*/
 	void (*check_preempt_curr)(struct rq *rq, struct task_struct *p, int flags);
 
 	/*
@@ -1506,21 +1588,31 @@ struct sched_class {
 	 * May return RETRY_TASK when it finds a higher prio class has runnable
 	 * tasks.
 	 */
+	/*选择下一个应该要运行的进程运行*/
 	struct task_struct * (*pick_next_task)(struct rq *rq,
 					       struct task_struct *prev,
 					       struct rq_flags *rf);
+	/*将进程放回运行队列*/
 	void (*put_prev_task)(struct rq *rq, struct task_struct *p);
 
 #ifdef CONFIG_SMP
+	/*为进程选择一个合适的CPU*/
 	int  (*select_task_rq)(struct task_struct *p, int task_cpu, int sd_flag, int flags);
+
+	/*迁移任务到另一个CPU*/
 	void (*migrate_task_rq)(struct task_struct *p);
 
+	/*用于进程唤醒*/
 	void (*task_woken)(struct rq *this_rq, struct task_struct *task);
 
+	/*修改进程的CPU亲和力(affinity)*/
 	void (*set_cpus_allowed)(struct task_struct *p,
 				 const struct cpumask *newmask);
 
+	/*启动运行队列*/
 	void (*rq_online)(struct rq *rq);
+
+	/*禁止运行队列*/
 	void (*rq_offline)(struct rq *rq);
 #endif
 

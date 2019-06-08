@@ -4335,9 +4335,16 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 	struct sched_entity *se;
 	s64 delta;
 
+	/*ideal_runtime记录了进程应该运行的时间片*/
 	ideal_runtime = sched_slice(cfs_rq, curr);
+	
+	/*delta_exec记录了进程真实的运行时间*/
 	delta_exec = curr->sum_exec_runtime - curr->prev_sum_exec_runtime;
+
+	/*如果真实运行时间超过了应该运行的时间，则需要调度出去，被抢占*/
 	if (delta_exec > ideal_runtime) {
+
+		/*设置当前进程的TIF_NEED_RESCHED标记*/
 		resched_curr(rq_of(cfs_rq));
 		/*
 		 * The current task ran long enough, ensure it doesn't get
@@ -4352,6 +4359,7 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 	 * narrow margin doesn't have to wait for a full slice.
 	 * This also mitigates buddy induced latencies under load.
 	 */
+	/*如果当前进程运行时间低于调度的最小粒度，则不允许发生抢占*/
 	if (delta_exec < sysctl_sched_min_granularity)
 		return;
 
@@ -4490,6 +4498,7 @@ entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
 	/*
 	 * Update run-time statistics of the 'current'.
 	 */
+	/*更新正在运行的进程的统计信息，真实运行时间，虚拟运行时间，运行队列的最小虚拟运行时间*/
 	update_curr(cfs_rq);
 
 	/*
@@ -4515,6 +4524,7 @@ entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
 		return;
 #endif
 
+	/*如果可运行状态的进程个数大于1，检查是否可以抢占当前进程*/
 	if (cfs_rq->nr_running > 1)
 		check_preempt_tick(cfs_rq, curr);
 }
@@ -9913,6 +9923,7 @@ void trigger_load_balance(struct rq *rq)
 	if (unlikely(on_null_domain(rq)))
 		return;
 
+	/*周期性负载均衡*/
 	if (time_after_eq(jiffies, rq->next_balance))
 		raise_softirq(SCHED_SOFTIRQ);
 
@@ -9947,10 +9958,14 @@ static void rq_offline_fair(struct rq *rq)
 static void task_tick_fair(struct rq *rq, struct task_struct *curr, int queued)
 {
 	struct cfs_rq *cfs_rq;
+	
+	/*取出该进程的调度实体*/
 	struct sched_entity *se = &curr->se;
 
 	for_each_sched_entity(se) {
 		cfs_rq = cfs_rq_of(se);
+
+		/*处理当前的se*/
 		entity_tick(cfs_rq, se, queued);
 	}
 

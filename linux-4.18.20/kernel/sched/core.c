@@ -464,12 +464,16 @@ void resched_curr(struct rq *rq)
 
 	lockdep_assert_held(&rq->lock);
 
+	/*测试是否设置了need resched标记*/
 	if (test_tsk_need_resched(curr))
 		return;
 
+	/*当前运行队列所属的cpu*/
 	cpu = cpu_of(rq);
 
+	/*如果队列所属的cpu就是当前cpu*/
 	if (cpu == smp_processor_id()) {
+		/*设置当前进程的need schedu标记*/
 		set_tsk_need_resched(curr);
 		set_preempt_need_resched();
 		return;
@@ -3090,10 +3094,16 @@ unsigned long long task_sched_runtime(struct task_struct *p)
  * This function gets called by the timer code, with HZ frequency.
  * We call it with interrupts disabled.
  */
+/*以hz模式进行中断调用，在调用过程中中断处于关闭状态*/
 void scheduler_tick(void)
 {
+	/*在于SMP的情况下，获得当前CPU的ID。如果不是SMP，那么就返回0*/
 	int cpu = smp_processor_id();
+
+	/*获取cpu的全局就绪队列rq, 每个CPU都有一个就绪队列rq*/
 	struct rq *rq = cpu_rq(cpu);
+
+	/*获取就绪队列上正在运行的进程curr*/
 	struct task_struct *curr = rq->curr;
 	struct rq_flags rf;
 
@@ -3101,9 +3111,19 @@ void scheduler_tick(void)
 
 	rq_lock(rq, &rf);
 
+	/*更新rq的当前时间戳.即使rq->clock变为当前时间戳*/
 	update_rq_clock(rq);
+
+	/*执行当前运行进程所在调度类的task_tick函数进行周期性调度
+	 * fair_sched_class(task_tick_fair),rt_sched_class*/
 	curr->sched_class->task_tick(rq, curr, 0);
+
+    /*更新rq的负载信息,即就绪队列的cpu_load[]数据
+     *本质是讲数组中先前存储的负荷值向后移动一个位置，
+     *将当前负荷记入数组的第一个位置 */
 	cpu_load_update_active(rq);
+
+	/*更新cpu的active count活动计数, 主要是更新全局cpu就绪队列的calc_load_update*/
 	calc_global_load_tick(rq);
 
 	rq_unlock(rq, &rf);
@@ -3111,7 +3131,10 @@ void scheduler_tick(void)
 	perf_event_task_tick();
 
 #ifdef CONFIG_SMP
+	 /* 当前CPu是否空闲标记 */
 	rq->idle_balance = idle_cpu(cpu);
+
+	/* 进行周期性负载平衡则触发SCHED_SOFTIRQ */
 	trigger_load_balance(rq);
 #endif
 }
@@ -4072,21 +4095,27 @@ int task_prio(const struct task_struct *p)
  *
  * Return: 1 if the CPU is currently idle. 0 otherwise.
  */
+/*判断当前cpu是否空闲*/
 int idle_cpu(int cpu)
 {
+	/*取出当前cpu的运行队列*/
 	struct rq *rq = cpu_rq(cpu);
 
+	/*如果当前运行队列中的正在运行的任务不是idle任务，则表示不空闲*/
 	if (rq->curr != rq->idle)
 		return 0;
 
+	/*如果当前运行队列中正在运行的进程数不为0，则表示不空闲*/
 	if (rq->nr_running)
 		return 0;
 
 #ifdef CONFIG_SMP
+	/*如果队列的唤醒任务列表不为null，则表示不空闲*/
 	if (!llist_empty(&rq->wake_list))
 		return 0;
 #endif
 
+	/*否则当前cpu是空闲的*/
 	return 1;
 }
 
