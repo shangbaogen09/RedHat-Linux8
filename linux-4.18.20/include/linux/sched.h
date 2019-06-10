@@ -632,7 +632,13 @@ struct task_struct {
 	struct thread_info		thread_info;
 #endif
 
-	/*当前进程所处的状态*/
+	/*当前进程所处的状态,5个互斥状态
+	 *  #define TASK_RUNNING            0
+        #define TASK_INTERRUPTIBLE      1
+        #define TASK_UNINTERRUPTIBLE    2
+        #define __TASK_STOPPED          4
+        #define __TASK_TRACED           8
+     */
 	/* -1 unrunnable, 0 runnable, >0 stopped: */
 	volatile long			state;
 
@@ -642,10 +648,17 @@ struct task_struct {
 	 */
 	randomized_struct_fields_start
 
+	/*进程内核栈*/
 	void				*stack;
+
+	/*进程描述符使用计数*/
 	atomic_t			usage;
+
+	/*反应进程状态的信息，但不是运行状态，用于内核识别进程当前的状态，以备下一步操作*/
 	/* Per task flags (PF_*), defined further below: */
 	unsigned int			flags;
+
+	/*ptrace系统调用*/
 	unsigned int			ptrace;
 
 #ifdef CONFIG_SMP
@@ -738,34 +751,52 @@ struct task_struct {
 	struct list_head		rcu_tasks_holdout_list;
 #endif /* #ifdef CONFIG_TASKS_RCU */
 
+	/*用于调度器统计进程的运行信息 */
 	struct sched_info		sched_info;
 
+	/*用于构建进程链表*/
 	struct list_head		tasks;
 #ifdef CONFIG_SMP
 	struct plist_node		pushable_tasks;
 	struct rb_node			pushable_dl_tasks;
 #endif
 
+	/*进程所拥有的用户空间内存描述符，内核线程无的mm为NULL*/
 	struct mm_struct		*mm;
+
+	/*active_mm指向进程运行时所使用的内存描述符， 对于普通进程而言，这两个指针变量的值相同。
+	 *但是内核线程kernel thread是没有进程地址空间的，所以内核线程的tsk->mm域是空（NULL）。
+	 *但是内核必须知道用户空间包含了什么，因此它的active_mm成员被初始化为前一个运行进程的active_mm值*/
 	struct mm_struct		*active_mm;
 
 	/* Per-thread vma caching: */
 	struct vmacache			vmacache;
 
+	/*用来记录缓冲信息*/
 #ifdef SPLIT_RSS_COUNTING
 	struct task_rss_stat		rss_stat;
 #endif
+
+	/*2个终止状态,EXIT_ZOMBIE,EXIT_DEAD*/
 	int				exit_state;
+
+	/*用于设置进程的终止代号，这个值要么是_exit()或exit_group()系统调用参数（正常终止），要么是由内核提供的一个错误代号（异常终止）*/
 	int				exit_code;
+
+	/*被置为-1时表示是某个线程组中的一员。只有当线程组的最后一个成员终止时，才会产生一个信号，以通知线程组的领头进程的父进程*/
 	int				exit_signal;
+
+	/*用于判断父进程终止时是否发送信号*/
 	/* The signal sent when the parent dies: */
 	int				pdeath_signal;
 	/* JOBCTL_*, siglock protected: */
 	unsigned long			jobctl;
 
+	/*用于处理不同的ABI*/
 	/* Used for emulating ABI behavior of previous Linux versions: */
 	unsigned int			personality;
 
+	/*用于判断是否恢复默认的优先级或调度策略*/
 	/* Scheduler bits, serialized by scheduler locks: */
 	unsigned			sched_reset_on_fork:1;
 	unsigned			sched_contributes_to_load:1;
@@ -776,8 +807,11 @@ struct task_struct {
 
 	/* Unserialized, strictly 'current' */
 
+	/*用于通知LSM是否被do_execve()函数所调用*/
 	/* Bit to tell LSMs we're in execve(): */
 	unsigned			in_execve:1;
+
+	/*用于判断是否进行iowait计数*/
 	unsigned			in_iowait:1;
 #ifndef TIF_RESTORE_SIGMASK
 	unsigned			restore_sigmask:1;
@@ -800,9 +834,13 @@ struct task_struct {
 
 	struct restart_block		restart_block;
 
+	/*进程标识符*/
 	pid_t				pid;
+
+	/*一个线程组所有线程与领头线程具有相同的pid，存入tgid字段，getpid()返回当前进程的tgid值而不是pid的值*/
 	pid_t				tgid;
 
+	/*防止内核堆栈溢出*/
 #ifdef CONFIG_STACKPROTECTOR
 	/* Canary value for the -fstack-protector GCC feature: */
 	unsigned long			stack_canary;
@@ -813,17 +851,26 @@ struct task_struct {
 	 * p->real_parent->pid)
 	 */
 
+	/*表示进程亲属关系的成员*/
+
+	/*指向其父进程，如果创建它的父进程不再存在，则指向PID为1的init进程*/
 	/* Real parent process: */
 	struct task_struct __rcu	*real_parent;
 
+	/*指向其父进程，当它终止时，必须向它的父进程发送信号。它的值通常与real_parent相同*/
 	/* Recipient of SIGCHLD, wait4() reports: */
 	struct task_struct __rcu	*parent;
 
 	/*
 	 * Children/sibling form the list of natural children:
 	 */
+	/*表示链表的头部，链表中的所有元素都是它的子进程*/
 	struct list_head		children;
+
+	/*用于把当前进程插入到兄弟链表中*/
 	struct list_head		sibling;
+
+	/*指向其所在进程组的领头进程*/
 	struct task_struct		*group_leader;
 
 	/*
@@ -848,12 +895,17 @@ struct task_struct {
 	/* CLONE_CHILD_CLEARTID: */
 	int __user			*clear_child_tid;
 
+	/*用于记录进程在用户态/内核态下所经过的节拍数（定时器）*/
 	u64				utime;
 	u64				stime;
+
+	/*用于记录进程在用户态/内核态的运行时间，但它们以处理器的频率为刻度*/
 #ifdef CONFIG_ARCH_HAS_SCALED_CPUTIME
 	u64				utimescaled;
 	u64				stimescaled;
 #endif
+
+	/*以节拍计数的虚拟机运行时间（guest time）*/
 	u64				gtime;
 	struct prev_cputime		prev_cputime;
 #ifdef CONFIG_VIRT_CPU_ACCOUNTING_GEN
@@ -863,22 +915,28 @@ struct task_struct {
 #ifdef CONFIG_NO_HZ_FULL
 	atomic_t			tick_dep_mask;
 #endif
+
+	/*是自愿（voluntary）/非自愿（involuntary）上下文切换计数*/
 	/* Context switch counts: */
 	unsigned long			nvcsw;
 	unsigned long			nivcsw;
 
 	/* Monotonic time in nsecs: */
+	/*进程的创建时间*/
 	u64				start_time;
 
 	/* Boot based time in nsecs: */
 	u64				real_start_time;
 
+	/*缺页统计*/
 	/* MM fault and swap info: this can arguably be seen as either mm-specific or thread-specific: */
 	unsigned long			min_flt;
 	unsigned long			maj_flt;
 
 #ifdef CONFIG_POSIX_TIMERS
 	struct task_cputime		cputime_expires;
+
+	/*用来统计进程或进程组被跟踪的处理器时间，其中的三个成员对应着cpu_timers[3]的三个链表*/
 	struct list_head		cpu_timers[3];
 #endif
 
@@ -900,6 +958,7 @@ struct task_struct {
 	 * - access it with [gs]et_task_comm()
 	 * - lock it with task_lock()
 	 */
+	/*相应的程序名*/
 	char				comm[TASK_COMM_LEN];
 
 	struct nameidata		*nameidata;
@@ -911,23 +970,37 @@ struct task_struct {
 #ifdef CONFIG_DETECT_HUNG_TASK
 	unsigned long			last_switch_count;
 #endif
+
+	/*fs用来表示进程与文件系统的联系，包括当前目录和根目录*/
 	/* Filesystem information: */
 	struct fs_struct		*fs;
 
+	/*files表示进程当前打开的文件*/
 	/* Open file information: */
 	struct files_struct		*files;
 
+	/*命名空间*/
 	/* Namespaces: */
 	struct nsproxy			*nsproxy;
 
+	/*信号处理*/
 	/* Signal handlers: */
+	/*指向进程的信号描述符*/
 	struct signal_struct		*signal;
+
+	/*指向进程的信号处理程序描述符*/
 	struct sighand_struct		*sighand;
+
+	/*表示被阻塞信号的掩码，real_blocked表示临时掩码*/
 	sigset_t			blocked;
 	sigset_t			real_blocked;
 	/* Restored if set_restore_sigmask() was used: */
 	sigset_t			saved_sigmask;
+
+	/*存放私有挂起信号的数据结构*/
 	struct sigpending		pending;
+
+	/*是信号处理程序备用堆栈的地址，sas_ss_size表示堆栈的大小*/
 	unsigned long			sas_ss_sp;
 	size_t				sas_ss_size;
 	unsigned int			sas_ss_flags;
@@ -953,6 +1026,7 @@ struct task_struct {
 
 	struct wake_q_node		wake_q;
 
+	/*基于PI协议的等待互斥锁，其中PI指的是priority inheritance（优先级继承）*/
 #ifdef CONFIG_RT_MUTEXES
 	/* PI waiters blocked on a rt_mutex held by this task: */
 	struct rb_root_cached		pi_waiters;
@@ -998,6 +1072,7 @@ struct task_struct {
 	/* Journalling filesystem info: */
 	void				*journal_info;
 
+	/*块设备链表*/
 	/* Stacked block device info: */
 	struct bio_list			*bio_list;
 
@@ -1247,6 +1322,7 @@ struct task_struct {
 	 */
 	randomized_struct_fields_end
 
+	/*处理器特有数据*/
 	/* CPU-specific state of this task: */
 	struct thread_struct		thread;
 

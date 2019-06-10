@@ -6798,6 +6798,7 @@ static void task_dead_fair(struct task_struct *p)
 }
 #endif /* CONFIG_SMP */
 
+/*计算睡眠的最小粒度，放在频繁唤醒*/
 static unsigned long wakeup_gran(struct sched_entity *se)
 {
 	unsigned long gran = sysctl_sched_wakeup_granularity;
@@ -6835,12 +6836,16 @@ static unsigned long wakeup_gran(struct sched_entity *se)
 static int
 wakeup_preempt_entity(struct sched_entity *curr, struct sched_entity *se)
 {
+	/*计算两者的虚拟运行时间的差值*/
 	s64 gran, vdiff = curr->vruntime - se->vruntime;
 
 	if (vdiff <= 0)
 		return -1;
 
+	/*计算睡眠的最小粒度，防止频繁抢占*/
 	gran = wakeup_gran(se);
+
+	/*计算的差值大于最小粒度才允许抢占*/
 	if (vdiff > gran)
 		return 1;
 
@@ -6880,14 +6885,19 @@ static void set_skip_buddy(struct sched_entity *se)
 /*
  * Preempt the current task with a newly woken task if needed:
  */
+/*判断唤醒进程是否可以抢占当前进程*/
 static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_flags)
 {
+	/*取出当前正在运行的进程*/
 	struct task_struct *curr = rq->curr;
+
+	/*获取两个进程的调度实体*/
 	struct sched_entity *se = &curr->se, *pse = &p->se;
 	struct cfs_rq *cfs_rq = task_cfs_rq(curr);
 	int scale = cfs_rq->nr_running >= sched_nr_latency;
 	int next_buddy_marked = 0;
 
+	/*如果是同一进程，则直接退出*/
 	if (unlikely(se == pse))
 		return;
 
@@ -6915,9 +6925,11 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 	 * prevents us from potentially nominating it as a false LAST_BUDDY
 	 * below.
 	 */
+	/*如果当前进程被设置了need_sched标记，则直接退出*/
 	if (test_tsk_need_resched(curr))
 		return;
 
+	/*如果当前进程是SCHED_IDLE，新进程不是SCHED_IDLE，则直接跳转到抢占流程*/
 	/* Idle tasks are by definition preempted by non-idle tasks. */
 	if (unlikely(curr->policy == SCHED_IDLE) &&
 	    likely(p->policy != SCHED_IDLE))
@@ -6931,8 +6943,12 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 		return;
 
 	find_matching_se(&se, &pse);
+
+	/*更新当前进程的统计信息*/
 	update_curr(cfs_rq_of(se));
 	BUG_ON(!pse);
+	
+	/*如果允许抢占的值返回1,则进行抢占处理*/
 	if (wakeup_preempt_entity(se, pse) == 1) {
 		/*
 		 * Bias pick_next to pick the sched entity that is
@@ -6940,12 +6956,15 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 		 */
 		if (!next_buddy_marked)
 			set_next_buddy(pse);
+
+		/*进行抢占处理*/
 		goto preempt;
 	}
 
 	return;
 
 preempt:
+	/*设置当前进程的need resched标记*/
 	resched_curr(rq);
 	/*
 	 * Only set the backward buddy when the current task is still
