@@ -61,7 +61,7 @@ extern struct cred init_cred;
 #ifdef CONFIG_ARCH_TASK_STRUCT_ON_STACK
 #define __init_task_data __attribute__((__section__(".data..init_task")))
 #else
-#define __init_task_data /**/
+#define __init_task_data
 #endif
 
 /* Attach to the thread_info data structure for proper alignment */

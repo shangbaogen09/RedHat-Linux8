@@ -875,8 +875,12 @@ void check_preempt_curr(struct rq *rq, struct task_struct *p, int flags)
 		rq->curr->sched_class->check_preempt_curr(rq, p, flags);
 	} else {
 		for_each_class(class) {
+			/*如果候选进程的调度类低于当前进程的调度类，则直接退出，不允许
+			 *低优先级的调度类抢占高优先级的调度类*/
 			if (class == rq->curr->sched_class)
 				break;
+
+			/*如果候选进程的调度类高于当前进程的调度类，则调用resched_curr设置调度标记*/
 			if (class == p->sched_class) {
 				resched_curr(rq);
 				break;
@@ -1558,6 +1562,7 @@ int select_task_rq(struct task_struct *p, int cpu, int sd_flags, int wake_flags)
 {
 	lockdep_assert_held(&p->pi_lock);
 
+	/*对于公平调度类为:select_task_rq_fair*/
 	if (p->nr_cpus_allowed > 1)
 		cpu = p->sched_class->select_task_rq(p, cpu, sd_flags, wake_flags);
 	else
@@ -2345,6 +2350,7 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 	unsigned long flags;
 	int cpu = get_cpu();
 
+	/*初始化调度相关的变量*/
 	__sched_fork(clone_flags, p);
 	/*
 	 * We mark the process as NEW here. This guarantees that
@@ -2356,11 +2362,14 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 	/*
 	 * Make sure we do not leak PI boosting priority to the child.
 	 */
+	/*继承父进程的优先级*/
 	p->prio = current->normal_prio;
 
 	/*
 	 * Revert to default priority/policy on fork if requested.
 	 */
+
+	/*如果设置了sched_reset_on_fork变量，则重置成默认值*/
 	if (unlikely(p->sched_reset_on_fork)) {
 		if (task_has_dl_policy(p) || task_has_rt_policy(p)) {
 			p->policy = SCHED_NORMAL;
@@ -2379,6 +2388,7 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 		p->sched_reset_on_fork = 0;
 	}
 
+	/*根据进程的优先级设置进程的调度类*/
 	if (dl_prio(p->prio)) {
 		put_cpu();
 		return -EAGAIN;
@@ -2403,6 +2413,8 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 	 * so use __set_task_cpu().
 	 */
 	__set_task_cpu(p, cpu);
+	
+	/*调用进程所属的调度类的task_fork函数(task_fork_fair)*/
 	if (p->sched_class->task_fork)
 		p->sched_class->task_fork(p);
 	raw_spin_unlock_irqrestore(&p->pi_lock, flags);
@@ -2453,6 +2465,8 @@ void wake_up_new_task(struct task_struct *p)
 	struct rq *rq;
 
 	raw_spin_lock_irqsave(&p->pi_lock, rf.flags);
+
+	/*标示该进程的状态为running*/
 	p->state = TASK_RUNNING;
 #ifdef CONFIG_SMP
 	/*
@@ -2464,15 +2478,22 @@ void wake_up_new_task(struct task_struct *p)
 	 * as we're not fully set-up yet.
 	 */
 	p->recent_used_cpu = task_cpu(p);
+	
+	/*选择在哪一个cpu上运行*/
 	__set_task_cpu(p, select_task_rq(p, task_cpu(p), SD_BALANCE_FORK, 0));
 #endif
 	rq = __task_rq_lock(p, &rf);
+
+	/*更新运行队列的时间*/
 	update_rq_clock(rq);
 	post_init_entity_util_avg(&p->se);
 
+	/*把task加入到运行队列*/
 	activate_task(rq, p, ENQUEUE_NOCLOCK);
 	p->on_rq = TASK_ON_RQ_QUEUED;
 	trace_sched_wakeup_new(p);
+
+	/*检查可否抢占当前的进程*/
 	check_preempt_curr(rq, p, WF_FORK);
 #ifdef CONFIG_SMP
 	if (p->sched_class->task_woken) {

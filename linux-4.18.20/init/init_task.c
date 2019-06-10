@@ -61,7 +61,7 @@ struct task_struct init_task
 #endif
 	.state		= 0,
 
-	/*初始化堆栈，该堆栈在链接文件中定义*/
+	/*初始化堆栈，该堆栈在链接文件中定义,x64初始化为16k大小*/
 	.stack		= init_stack,
 	.usage		= ATOMIC_INIT(2),
 	.flags		= PF_KTHREAD,

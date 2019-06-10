@@ -169,6 +169,17 @@ Linux backport patches steps:
 3.修改完成后,使用git add ~/modify.file
 4.使用git am --resolved再次应用,就能把原始patch的log打上.
 
+如果不小心使用git reset --hard重置了一些commit，可使用如下方法找回回退:
+[pek-lpd-ccm2:source]$git reflog
+f137b91 HEAD@{0}: reset: moving to HEAD^
+59bef53 HEAD@{1}: commit (amend): x86/speculation: Prepare for per task indirect branch speculation control
+2f647c7 HEAD@{2}: am: x86/speculation: Prepare for per task indirect branch speculation control
+f137b91 HEAD@{3}: commit (amend): x86/speculation: Add command line control for indirect branch speculation
+9545563 HEAD@{4}: am: x86/speculation: Add command line control for indirect branch speculation
+
+然后使用回退到具体的commit:
+#git reset 59bef53
+
 编译gdb-8.2
 #wget http://ftp.gnu.org/gnu/gdb/gdb-8.2.tar.gz
 #tar xvf gdb-8.2.tar.gz

@@ -16,7 +16,7 @@
 /*默认order=2*/
 #define THREAD_SIZE_ORDER	(2 + KASAN_STACK_ORDER)
 
-/*内核栈的大小为4页*/
+/*内核栈的大小为4页=16k*/
 #define THREAD_SIZE  (PAGE_SIZE << THREAD_SIZE_ORDER)
 #define CURRENT_MASK (~(THREAD_SIZE - 1))
 
