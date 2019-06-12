@@ -47,7 +47,7 @@ static struct sighand_struct init_sighand = {
  * Set up the first task table, touch at your own risk!. Base=0,
  * limit=0x1fffff (=2MB)
  */
-/*变量init_task所在的位置(在内核的数据段中),就是进程0的任务结构*/
+/*变量init_task在内核的数据段中,是进程0的任务结构*/
 struct task_struct init_task
 /*系统默认没有定义该宏，把task_struct放入堆栈中*/
 #ifdef CONFIG_ARCH_TASK_STRUCT_ON_STACK

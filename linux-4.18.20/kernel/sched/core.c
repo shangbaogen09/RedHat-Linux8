@@ -5504,12 +5504,14 @@ void show_state_filter(unsigned long state_filter)
  */
 void init_idle(struct task_struct *idle, int cpu)
 {
+	/*取出给定cpu的运行队列*/
 	struct rq *rq = cpu_rq(cpu);
 	unsigned long flags;
 
 	raw_spin_lock_irqsave(&idle->pi_lock, flags);
 	raw_spin_lock(&rq->lock);
 
+	/*设置idle进程的部分成员变量*/
 	__sched_fork(0, idle);
 	idle->state = TASK_RUNNING;
 	idle->se.exec_start = sched_clock();
@@ -5540,6 +5542,7 @@ void init_idle(struct task_struct *idle, int cpu)
 	__set_task_cpu(idle, cpu);
 	rcu_read_unlock();
 
+	/*把idle进程挂到当前运行队列的idle指针和current指针*/
 	rq->curr = rq->idle = idle;
 	idle->on_rq = TASK_ON_RQ_QUEUED;
 #ifdef CONFIG_SMP
@@ -6119,10 +6122,14 @@ void __init sched_init(void)
 	autogroup_init(&init_task);
 #endif /* CONFIG_CGROUP_SCHED */
 
+	/*循环系统中的所有cpu为每一个cpu初始化对应的运行队列*/
 	for_each_possible_cpu(i) {
 		struct rq *rq;
 
+		/*取出对应编号的cpu运行队列*/
 		rq = cpu_rq(i);
+
+		/*初始化运行队列中的结构体成员*/
 		raw_spin_lock_init(&rq->lock);
 		rq->nr_running = 0;
 		rq->calc_load_active = 0;
@@ -6206,6 +6213,7 @@ void __init sched_init(void)
 	 * but because we are the idle thread, we just pick up running again
 	 * when this runqueue becomes "idle".
 	 */
+	/*为当前cpu继续初始化该idle线程*/
 	init_idle(current, smp_processor_id());
 
 	calc_load_update = jiffies + LOAD_FREQ;

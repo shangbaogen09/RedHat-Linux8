@@ -520,6 +520,7 @@ static int bringup_wait_for_ap(unsigned int cpu)
 
 static int bringup_cpu(unsigned int cpu)
 {
+	/*获取指定cpu编号的idle线程*/
 	struct task_struct *idle = idle_thread_get(cpu);
 	int ret;
 
@@ -530,6 +531,7 @@ static int bringup_cpu(unsigned int cpu)
 	 */
 	irq_lock_sparse();
 
+	/*调用架构相关的__cpu_up函数来启动AP处理器*/
 	/* Arch-specific enabling code. */
 	ret = __cpu_up(cpu, idle);
 	irq_unlock_sparse();
@@ -1069,6 +1071,7 @@ void cpuhp_online_idle(enum cpuhp_state state)
 /* Requires cpu_add_remove_lock to be held */
 static int _cpu_up(unsigned int cpu, int tasks_frozen, enum cpuhp_state target)
 {
+	/*取出给定cpu的的percpu变量cpuhp_state*/
 	struct cpuhp_cpu_state *st = per_cpu_ptr(&cpuhp_state, cpu);
 	struct task_struct *idle;
 	int ret = 0;
@@ -1087,7 +1090,10 @@ static int _cpu_up(unsigned int cpu, int tasks_frozen, enum cpuhp_state target)
 	if (st->state >= target)
 		goto out;
 
+	/*默认的st->state = CPUHP_OFFLINE，所以执行该函数*/
 	if (st->state == CPUHP_OFFLINE) {
+
+		/*为该cpu创建一个idle线程*/
 		/* Let it fail before we try to bring the cpu up */
 		idle = idle_thread_get(cpu);
 		if (IS_ERR(idle)) {
@@ -1118,7 +1124,10 @@ static int _cpu_up(unsigned int cpu, int tasks_frozen, enum cpuhp_state target)
 	 * CPUHP_BRINGUP_CPU. After that the AP hotplug thread is
 	 * responsible for bringing it up to the target state.
 	 */
+	/*这里的target是CPUHP_ONLINE。经过min((int)target, CPUHP_BRINGUP_CPU)之后target就变成CPUHP_BRINGUP_CPU*/
 	target = min((int)target, CPUHP_BRINGUP_CPU);
+
+	/*调用CPUHP_BRINGUP_CPU状态的回调函数bringup_cpu*/
 	ret = cpuhp_up_callbacks(cpu, st, target);
 out:
 	cpus_write_unlock();
@@ -1153,6 +1162,7 @@ static int do_cpu_up(unsigned int cpu, enum cpuhp_state target)
 		goto out;
 	}
 
+	/*跟踪调用链*/
 	err = _cpu_up(cpu, 0, target);
 out:
 	cpu_maps_update_done();
@@ -1161,6 +1171,7 @@ out:
 
 int cpu_up(unsigned int cpu)
 {
+	/*跟踪调用链*/
 	return do_cpu_up(cpu, CPUHP_ONLINE);
 }
 EXPORT_SYMBOL_GPL(cpu_up);

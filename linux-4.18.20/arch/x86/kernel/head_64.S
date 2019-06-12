@@ -286,7 +286,8 @@ ENTRY(secondary_startup_64)
 	pushq	$__KERNEL_CS	# set correct cs
 	pushq	%rax		# target address in negative space
 
-	/*执行该指令，弹出压入的cs:ip值，执行initial_code标签处的指令x86_64_start_kernel*/
+	/*执行该指令，弹出压入的cs:ip值，执行initial_code标签处的指令x86_64_start_kernel
+	 针对ap处理器该函数为：start_secondary*/
 	lretq
 .Lafter_lret:
 END(secondary_startup_64)

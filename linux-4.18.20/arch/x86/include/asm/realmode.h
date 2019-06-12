@@ -14,6 +14,7 @@
 #include <linux/types.h>
 #include <asm/io.h>
 
+/*此处定义的结构体必须和汇编文件realmode.S中定义的一致*/
 /* This must match data at realmode.S */
 struct real_mode_header {
 	u32	text_start;

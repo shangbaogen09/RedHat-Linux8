@@ -13,11 +13,13 @@
 	
 	.section ".header", "a"
 
+/*全局变量real_mode_header的定义*/
 	.balign	16
 GLOBAL(real_mode_header)
 	.long	pa_text_start
 	.long	pa_ro_end
 	/* SMP trampoline */
+	/*在文件arch/x86/realmode/rm/pasyms.h中赋值为pa_trampoline_start = trampoline_start*/
 	.long	pa_trampoline_start
 	.long	pa_trampoline_status
 	.long	pa_trampoline_header

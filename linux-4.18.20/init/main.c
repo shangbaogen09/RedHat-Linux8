@@ -405,7 +405,7 @@ static noinline void __ref rest_init(void)
 	 * the init task will end up wanting to create kthreads, which, if
 	 * we schedule it before we create kthreadd, will OOPS.
 	 */
-	/*创建进程1，进程1是由进程0复制过来的，复制完成后执行kernel_init*/
+	/*创建进程1，该线程随后转向用户空间, 演变为init进程*/
 	pid = kernel_thread(kernel_init, NULL, CLONE_FS);
 	/*
 	 * Pin init on the boot CPU. Task migration is not properly working
@@ -418,6 +418,7 @@ static noinline void __ref rest_init(void)
 	rcu_read_unlock();
 
 	numa_default_policy();
+	/*创建2号进程，所有的内核线程都是直接或者间接的以kthreadd为父进程*/
 	pid = kernel_thread(kthreadd, NULL, CLONE_FS | CLONE_FILES);
 	rcu_read_lock();
 	kthreadd_task = find_task_by_pid_ns(pid, &init_pid_ns);
@@ -438,8 +439,10 @@ static noinline void __ref rest_init(void)
 	 * The boot idle thread must execute schedule()
 	 * at least once to get things moving:
 	 */
-	/*进行一次进程调度，切出0号进程，执行新创建进程*/
+	/*进行一次进程调度，切出0号进程，执行新创建的1号进程*/
 	schedule_preempt_disabled();
+
+	/*0号进程退化为idle进程*/
 	/* Call into cpu_idle with preempt disabled */
 	cpu_startup_entry(CPUHP_ONLINE);
 }
@@ -606,6 +609,7 @@ asmlinkage __visible void __init start_kernel(void)
 	 * timer interrupt). Full topology setup happens at smp_init()
 	 * time - but meanwhile we still have a functioning scheduler.
 	 */
+	/*调度子系统的初始化*/
 	sched_init();
 	/*
 	 * Disable preemption - early bootup scheduling is extremely
@@ -753,6 +757,7 @@ asmlinkage __visible void __init start_kernel(void)
 		efi_free_boot_services();
 	}
 
+	/*创建1号和2号进程，并使0号进程进入idle循环*/
 	/* Do the rest non-__init'ed, we're now alive */
 	rest_init();
 }

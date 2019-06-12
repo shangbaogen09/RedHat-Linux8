@@ -575,11 +575,13 @@ void __init smp_init(void)
 
 	pr_info("Bringing up secondary CPUs ...\n");
 
+	/*循环启动系统中的所有cpu*/
 	/* FIXME: This should be done in userspace --RR */
 	for_each_present_cpu(cpu) {
 		if (num_online_cpus() >= setup_max_cpus)
 			break;
 		if (!cpu_online(cpu))
+			/*调用该函数做具体的启动工作*/
 			cpu_up(cpu);
 	}
 

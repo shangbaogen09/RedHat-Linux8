@@ -268,6 +268,8 @@ static void notrace start_secondary(void *unused)
 	x86_cpuinit.setup_percpu_clockev();
 
 	wmb();
+
+	/*当前线程进入idle循环*/
 	cpu_startup_entry(CPUHP_AP_ONLINE_IDLE);
 }
 
@@ -943,6 +945,7 @@ void common_cpu_up(unsigned int cpu, struct task_struct *idle)
 	/* Just in case we booted with a single CPU. */
 	alternatives_enable_smp();
 
+	/*更新当前cpu的current_task变量为当前cpu的idle进程*/
 	per_cpu(current_task, cpu) = idle;
 
 #ifdef CONFIG_X86_32
@@ -965,14 +968,21 @@ static int do_boot_cpu(int apicid, int cpu, struct task_struct *idle,
 {
 	volatile u32 *trampoline_status =
 		(volatile u32 *) __va(real_mode_header->trampoline_status);
+
+	/*取出ap处理器启动时要执行的地址ip,该ip为定义在汇编文件中的trampoline_start函数*/
 	/* start_ip had better be page-aligned! */
 	unsigned long start_ip = real_mode_header->trampoline_start;
 
 	unsigned long boot_error = 0;
 	unsigned long timeout;
 
+	/*取出当前进程的内核堆栈栈顶*/
 	idle->thread.sp = (unsigned long)task_pt_regs(idle);
+
+	/*获取全局的gdt描述符表*/
 	early_gdt_descr.address = (unsigned long)get_cpu_gdt_rw(cpu);
+
+	/*设置ipi中断处理函数中要调用的钩子函数start_secondary*/
 	initial_code = (unsigned long)start_secondary;
 	initial_stack  = idle->thread.sp;
 
@@ -1016,6 +1026,7 @@ static int do_boot_cpu(int apicid, int cpu, struct task_struct *idle,
 	 * Otherwise,
 	 * - Use an INIT boot APIC message for APs or NMI for BSP.
 	 */
+	/*通过发送INIT-INIT-Startup IPI序列来将AP处理器从halted状态唤醒并开始让她执行start_ip处所指向的代码*/
 	if (apic->wakeup_secondary_cpu)
 		boot_error = apic->wakeup_secondary_cpu(apicid, start_ip);
 	else
@@ -1109,8 +1120,10 @@ int native_cpu_up(unsigned int cpu, struct task_struct *tidle)
 	/* the FPU context is blank, nobody can own it */
 	per_cpu(fpu_fpregs_owner_ctx, cpu) = NULL;
 
+	/*更新当前cpu的current_task变量为当前cpu的idle进程*/
 	common_cpu_up(cpu, tidle);
 
+	/*调用该函数完成处理器真正的启动工作*/
 	err = do_boot_cpu(apicid, cpu, tidle, &cpu0_nmi_registered);
 	if (err) {
 		pr_err("do_boot_cpu failed(%d) to wakeup CPU#%u\n", err, cpu);

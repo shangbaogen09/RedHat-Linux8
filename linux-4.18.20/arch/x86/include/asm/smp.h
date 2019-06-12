@@ -93,6 +93,7 @@ static inline void smp_cpus_done(unsigned int max_cpus)
 
 static inline int __cpu_up(unsigned int cpu, struct task_struct *tidle)
 {
+	/*调用回调函数native_cpu_up*/
 	return smp_ops.cpu_up(cpu, tidle);
 }
 

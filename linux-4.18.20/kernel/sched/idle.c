@@ -236,6 +236,7 @@ static void do_idle(void)
 	__current_set_polling();
 	tick_nohz_idle_enter();
 
+	/*不停的循环判断当前进程是否设置需要调度标记*/
 	while (!need_resched()) {
 		check_pgt_cache();
 		rmb();
@@ -283,6 +284,8 @@ static void do_idle(void)
 	smp_mb__after_atomic();
 
 	sched_ttwu_pending();
+
+	/*从idle进程调度切换到其他进程*/
 	schedule_idle();
 
 	if (unlikely(klp_patch_pending(current)))
@@ -364,6 +367,8 @@ void cpu_startup_entry(enum cpuhp_state state)
 #endif
 	arch_cpu_idle_prepare();
 	cpuhp_online_idle(state);
+
+	/*调用do_idle，0号线程进入idle函数的循环，在该循环中会周期性地检查是否需要调度执行其他进程*/
 	while (1)
 		do_idle();
 }

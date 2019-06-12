@@ -90,6 +90,7 @@ static void __init setup_real_mode(void)
 		*ptr += phys_base;
 	}
 
+	/*初始化real_mode_header->trampoline_header结构体成员*/
 	/* Must be perfomed *after* relocation. */
 	trampoline_header = (struct trampoline_header *)
 		__va(real_mode_header->trampoline_header);
@@ -106,6 +107,7 @@ static void __init setup_real_mode(void)
 	rdmsrl(MSR_EFER, efer);
 	trampoline_header->efer = efer & ~EFER_LMA;
 
+	/*AP处理器会从该处开始执行*/
 	trampoline_header->start = (u64) secondary_startup_64;
 	trampoline_cr4_features = &trampoline_header->cr4;
 	*trampoline_cr4_features = mmu_cr4_features;
@@ -154,6 +156,7 @@ static int __init init_real_mode(void)
 	if (!real_mode_header)
 		panic("Real mode trampoline was not allocated");
 
+	/*初始化trampoline变量*/
 	setup_real_mode();
 	set_real_mode_permissions();
 

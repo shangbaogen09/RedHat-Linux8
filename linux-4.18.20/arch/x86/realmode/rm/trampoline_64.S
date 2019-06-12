@@ -75,6 +75,7 @@ ENTRY(trampoline_start)
 	movl	$X86_CR0_PE, %eax	# protected mode (PE) bit
 	movl	%eax, %cr0		# into protected mode
 
+	/*跳转到标号startup_32处执行*/
 	# flush prefetch and jump to startup_32
 	ljmpl	$__KERNEL32_CS, $pa_startup_32
 
@@ -129,6 +130,7 @@ ENTRY(startup_32)
 	movl	$MSR_EFER, %ecx
 	wrmsr
 
+	/*开启long mode模式*/
 	# Enable paging and in turn activate Long Mode
 	movl	$(X86_CR0_PG | X86_CR0_WP | X86_CR0_PE), %eax
 	movl	%eax, %cr0
@@ -139,12 +141,14 @@ ENTRY(startup_32)
 	 * EFER.LMA = 1). Now we want to jump in 64bit mode, to do that we use
 	 * the new gdt/idt that has __KERNEL_CS with CS.L = 1.
 	 */
+	/*执行标号startup_64处的函数*/
 	ljmpl	$__KERNEL_CS, $pa_startup_64
 
 	.section ".text64","ax"
 	.code64
 	.balign 4
 ENTRY(startup_64)
+	/*直接调用secondary_startup_64函数*/
 	# Now jump into the kernel using virtual addresses
 	jmpq	*tr_start(%rip)
 

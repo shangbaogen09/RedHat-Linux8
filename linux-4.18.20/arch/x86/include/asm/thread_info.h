@@ -54,6 +54,7 @@ struct task_struct;
 #include <linux/atomic.h>
 
 struct thread_info {
+	/*该flag中包含是否需要调度标记*/
 	unsigned long		flags;		/* low level flags */
 	u32			status;		/* thread synchronous flags */
 };

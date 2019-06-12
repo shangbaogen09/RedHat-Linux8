@@ -19,6 +19,7 @@
 
 #ifdef CONFIG_SMP
 
+/*系统默认定义了该宏*/
 #ifdef CONFIG_GENERIC_SMP_IDLE_THREAD
 /*
  * For the hotplug case we keep the task structs around and reuse
@@ -28,10 +29,13 @@ static DEFINE_PER_CPU(struct task_struct *, idle_threads);
 
 struct task_struct *idle_thread_get(unsigned int cpu)
 {
+	/*取出指定cpu编号的idle threads任务*/
 	struct task_struct *tsk = per_cpu(idle_threads, cpu);
 
 	if (!tsk)
 		return ERR_PTR(-ENOMEM);
+
+	/*初始化该idle task结构体*/
 	init_idle(tsk, cpu);
 	return tsk;
 }
