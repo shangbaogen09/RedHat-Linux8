@@ -167,6 +167,7 @@ void __weak arch_release_thread_stack(unsigned long *stack)
 {
 }
 
+/*默认没有定义该宏*/
 #ifndef CONFIG_ARCH_THREAD_STACK_ALLOCATOR
 
 /*
@@ -175,6 +176,7 @@ void __weak arch_release_thread_stack(unsigned long *stack)
  */
 # if THREAD_SIZE >= PAGE_SIZE || defined(CONFIG_VMAP_STACK)
 
+/*内核默认定义了该宏*/
 #ifdef CONFIG_VMAP_STACK
 /*
  * vmalloc() is a bit slow, and calling vfree() enough times will force a TLB
@@ -211,6 +213,7 @@ static unsigned long *alloc_thread_stack_node(struct task_struct *tsk, int node)
 	for (i = 0; i < NR_CACHED_STACKS; i++) {
 		struct vm_struct *s;
 
+		/*获取percpu的堆栈vma*/
 		s = this_cpu_xchg(cached_stacks[i], NULL);
 
 		if (!s)
@@ -220,6 +223,8 @@ static unsigned long *alloc_thread_stack_node(struct task_struct *tsk, int node)
 		memset(s->addr, 0, THREAD_SIZE);
 
 		tsk->stack_vm_area = s;
+
+		/*返回该堆栈段的起始地址*/
 		return s->addr;
 	}
 
@@ -1728,6 +1733,8 @@ static __latent_entropy struct task_struct *copy_process(
 	 * to stop root fork bombs.
 	 */
 	retval = -EAGAIN;
+
+	/*检查进程数是否超过max_threads由内存大小决定*/
 	if (nr_threads >= max_threads)
 		goto bad_fork_cleanup_count;
 
@@ -1740,6 +1747,7 @@ static __latent_entropy struct task_struct *copy_process(
 	p->vfork_done = NULL;
 	spin_lock_init(&p->alloc_lock);
 
+	/*初始化挂起信号*/
 	init_sigpending(&p->pending);
 
 	p->utime = p->stime = p->gtime = 0;
@@ -1836,6 +1844,8 @@ static __latent_entropy struct task_struct *copy_process(
 	retval = copy_semundo(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_security;
+
+	/*复制所有进程信息，包括文件系统、信号处理函数、信号、内存管理等*/
 	retval = copy_files(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_semundo;
@@ -2166,26 +2176,30 @@ long _do_fork(unsigned long clone_flags,
 	 */
 	trace_sched_process_fork(current, p);
 
-	/*分配一个进程id*/
+	/*得到新创建的进程的pid信息*/
 	pid = get_task_pid(p, PIDTYPE_PID);
+
+	/*由pid获取进程id*/
 	nr = pid_vnr(pid);
 
 	if (clone_flags & CLONE_PARENT_SETTID)
 		put_user(nr, parent_tidptr);
 
+	/*如果调用的vfork()方法，初始化vfork完成处理信息*/
 	if (clone_flags & CLONE_VFORK) {
 		p->vfork_done = &vfork;
 		init_completion(&vfork);
 		get_task_struct(p);
 	}
 
-	/*把进程加入就绪队列*/
+	/*将子进程加入到调度器中，为其分配CPU，准备执行*/
 	wake_up_new_task(p);
 
 	/* forking complete and child started to run, tell ptracer */
 	if (unlikely(trace))
 		ptrace_event_pid(trace, pid);
 
+	/*如果是vfork，将父进程加入至等待队列，等待子进程完成*/
 	if (clone_flags & CLONE_VFORK) {
 		if (!wait_for_vfork_done(p, &vfork))
 			ptrace_event_pid(PTRACE_EVENT_VFORK_DONE, pid);

@@ -206,7 +206,11 @@ static int kthread(void *_create)
 {
 	/* Copy data: it's on kthread's stack */
 	struct kthread_create_info *create = _create;
+
+	/*取出待创建节点的运行函数*/
 	int (*threadfn)(void *data) = create->threadfn;
+
+	/*取出待创建节点的运行函数参数*/
 	void *data = create->data;
 	struct completion *done;
 	struct kthread *self;
@@ -233,16 +237,25 @@ static int kthread(void *_create)
 	init_completion(&self->parked);
 	current->vfork_done = &self->exited;
 
+	/*设置运行状态为TASK_UNINTERRUPTIBLE*/
 	/* OK, tell user we're spawned, wait for stop or wakeup */
 	__set_current_state(TASK_UNINTERRUPTIBLE);
+
+	/*current表示当前新创建的thread的task_struct结构*/
 	create->result = current;
 	complete(done);
+
+	/*至此线程创建完毕,执行任务切换,让出CPU*/
 	schedule();
 
 	ret = -EINTR;
 	if (!test_bit(KTHREAD_SHOULD_STOP, &self->flags)) {
 		cgroup_kthread_ready();
 		__kthread_parkme(self);
+
+		/*新创建的线程由于执行了 schedule() 调度，此时并没有执行.
+		直到我们使用wake_up_process(p);唤醒新创建的线程
+		线程被唤醒后, 会接着执行threadfn(data)*/
 		ret = threadfn(data);
 	}
 	do_exit(ret);
@@ -265,6 +278,7 @@ static void create_kthread(struct kthread_create_info *create)
 #ifdef CONFIG_NUMA
 	current->pref_node_fork = create->node;
 #endif
+	/*创建线程，默认的运行函数为kthread*/
 	/* We want our own signal handler (we take no signals by default). */
 	pid = kernel_thread(kthread, create, CLONE_FS | CLONE_FILES | SIGCHLD);
 	if (pid < 0) {
@@ -568,20 +582,32 @@ int kthreadd(void *unused)
 	cgroup_init_kthreadd();
 
 	for (;;) {
+		 /*首先将线程状态设置为TASK_INTERRUPTIBLE, 如果当前没有要创建的线程则主动放弃 
+		  *CPU 完成调度.此进程变为阻塞态*/
 		set_current_state(TASK_INTERRUPTIBLE);
+
+		/*判断是否有需要创建的内核线程,如果没有则进行schedu*/
 		if (list_empty(&kthread_create_list))
 			schedule();
+
+		/*运行到这里表示有链表上有需要创建的内核线程,设置进程的状态为TASK_RUNNING*/
 		__set_current_state(TASK_RUNNING);
 
 		spin_lock(&kthread_create_lock);
+
+		/*循环遍历全局链表kthread_create_list，取出上面的创建节点*/
 		while (!list_empty(&kthread_create_list)) {
 			struct kthread_create_info *create;
 
+			/*取出链表上的创建节点*/
 			create = list_entry(kthread_create_list.next,
 					    struct kthread_create_info, list);
+
+			/*把该节点从链表中删除*/
 			list_del_init(&create->list);
 			spin_unlock(&kthread_create_lock);
 
+			/*调用该函数 进行实际的创建线程工作*/
 			create_kthread(create);
 
 			spin_lock(&kthread_create_lock);
