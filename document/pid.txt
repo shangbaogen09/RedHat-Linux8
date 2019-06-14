@@ -1,0 +1,76 @@
+struct task_struct {
+    /*进程标识符*/
+    pid_t               pid;
+
+    /*一个线程组所有线程与领头线程具有相同的pid，存入tgid字段，getpid()返回当前进程的tgid值而不是pid的值*/
+    pid_t               tgid;
+
+    /*指向其所在进程组的领头进程*/
+    struct task_struct      *group_leader;
+
+    /* PID/PID hash table linkage. */
+    struct pid_link         pids[PIDTYPE_MAX];
+
+    /*命名空间*/
+    /* Namespaces: */
+    struct nsproxy          *nsproxy;
+}
+
+/*该结构体会组成数组包含三项:索引为，PIDTYPE_PID,PIDTYPE_PGID,PIDTYPE_SID*/
+struct pid_link
+{
+    struct hlist_node node;
+    struct pid *pid;
+};
+
+struct pid
+{
+    atomic_t count;
+
+	/*表示该进程所处的命名空间的层次level*/
+    unsigned int level;
+
+	/*数组的第一项是指回pid_link的node*/
+    /* lists of tasks that use this pid */
+    struct hlist_head tasks[PIDTYPE_MAX];
+    struct rcu_head rcu;
+
+	/*该结构体内的nr值表示该进程的pid值*/
+    struct upid numbers[1];
+};
+
+struct upid {
+	/*表示在该命名空间所分配的进程的ID*/
+    int nr;
+
+	/*ns指向是该ID所属的命名空间*/
+    struct pid_namespace *ns;
+};
+
+enum pid_type
+{
+    PIDTYPE_PID,
+    PIDTYPE_PGID,
+    PIDTYPE_SID,
+    PIDTYPE_MAX,
+    /* only valid to __task_pid_nr_ns() */
+    __PIDTYPE_TGID
+};
+上面ID的类型PIDTYPE_MAX表示ID类型数目。之所以不包括线程组ID，是因为内核中已经有指向到线程组的 
+task_struct指针group_leader，线程组ID无非就是group_leader的PID
+
+struct hlist_node {
+    struct hlist_node *next, **pprev;
+};
+
+struct hlist_head {
+    struct hlist_node *first;
+}; 
+
+
+根据PID值怎样快速地找到task_struct结构体:
+1.首先通过 PID 计算 pid 挂接到哈希表 pid_hash[] 的表项
+2.遍历该表项，找到 pid 结构体中 nr 值与 PID 值相同的那个 pid
+3.再通过该 pid 结构体的 tasks 指针找到 node
+4.最后根据内核的 container_of 机制就能找到 task_struct 结构体
+

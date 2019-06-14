@@ -1,0 +1,462 @@
+ELF头部Elfxx_Ehdr
+
+elf头部用Elfxx_Ehdr结构(被定义在linux/uapi/linux/elf.h来表示, Elf32_Ehdr(32bit)和Elf64_Ehdr(64bit)
+
+成员					类型					描述
+e_ident[EI_NIDENT] 	unsigned char			目标文件标识信息, EI_NIDENT=16, 因此共占用128位
+e_type 	            Elf32_Half/Elf64_Half 	目标文件类型
+e_machine 	        Elf32_Half/Elf64_Half 	目标体系结构类型
+e_version 	        Elf32_Word/Elf64_Word 	目标文件版本
+e_entry 	        Elf32_Addr/Elf64_Addr 	程序入口的虚拟地址,若没有，可为0
+e_phoff 	        Elf32_Off/Elf64_Off 	程序头部表格（Program Header Table）的偏移量（按字节计算）,若没有，可为0
+e_shoff 	        Elf32_Off/Elf64_Off 	节区头部表格（Section Header Table）的偏移量（按字节计算）,若没有，可为0
+e_flags 	        Elf32_Word/Elf64_Word 	保存与文件相关的，特定于处理器的标志。标志名称采用 EF_machine_flag的格式
+e_ehsize 	        Elf32_Half/Elf64_Half 	ELF 头部的大小（以字节计算）
+e_phentsize			Elf32_Half/Elf64_Half 	程序头部表格的表项大小（按字节计算）
+e_phnum				Elf32_Half/Elf64_Half 	程序头部表格的表项数目。可以为 0
+e_shentsize			Elf32_Half/Elf64_Half 	节区头部表格的表项大小（按字节计算）
+e_shnum				Elf32_Half/Elf64_Half 	节区头部表格的表项数目。可以为 0
+e_shstrndx			Elf32_Half/Elf64_Half 	节区头部表格中与节区名称字符串表相关的表项的索引。如果文件没有节区名称字符串表，此参数可以为 SHN_UNDEF
+
+读取elf文件的头部信息:
+wrsadmin@pek-bshang-d1:~/ELF$ readelf -h example/add.o
+ELF Header:
+  Magic:   7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00 
+  Class:                             ELF64
+  Data:                              2's complement, little endian
+  Version:                           1 (current)
+  OS/ABI:                            UNIX - System V
+  ABI Version:                       0
+  Type:                              REL (Relocatable file)
+  Machine:                           Advanced Micro Devices X86-64
+  Version:                           0x1
+  Entry point address:               0x0
+  Start of program headers:          0 (bytes into file)
+  Start of section headers:          528 (bytes into file)
+  Flags:                             0x0
+  Size of this header:               64 (bytes)
+  Size of program headers:           0 (bytes)
+  Number of program headers:         0
+  Size of section headers:           64 (bytes)
+  Number of section headers:         11
+  Section header string table index: 10
+
+ELF魔数e_ident:
+-----------------------------------------------------------------------------------
+最开始的4个字节是所有ELF文件都必须相同的标识码，分别为0x7F、0x45、0x4c、0x46
+第一个字节对应ASCII字符里面的DEL控制符，后面3个字节刚好是ELF这3个字母的ASCII码。
+这4个字节又被称为ELF文件的魔数，几乎所有的可执行文件格式的最开始的几个字节都是魔数.
+
+接下来的一个字节是用来标识ELF的文件类的，0x01表示是32位的，0x02表示是64位的;
+第6个字是字节序，规定该ELF文件是大端的还是小端的。
+第7个字节规定ELF文件的主版本号，一般是1，因为ELF标准自1.2版以后就再也没有更新了。
+后面的9个字节ELF标准没有定义，一般填0，有些平台会使用这9个字节作为扩展标志.
+
+e_ident是一个16字节的数组，这个数组按位置从左到右都是有特定含义，每个数组元素
+的下标在标准中还存在别称，如byte0的下标0别名为EI_MAG0，具体如下:
+名称 	元素下标值 	含义
+EI_MAG0 	0 	文件标识
+EI_MAG1 	1 	文件标识
+EI_MAG2 	2 	文件标识
+EI_MAG3 	3 	文件标识
+EI_CLASS 	4 	文件类
+EI_DATA 	5 	数据编码
+EI_VERSION 	6 	文件版本
+EI_PAD 	    7 	补齐字节开始处
+EI_NIDENT 	16 	e_ident[]大小
+
+e_ident[EI_MAG0]~e_ident[EI_MAG3]即e_ident[0]~e_ident[3]:
+被称为魔数（Magic Number）,其值一般为0x7f,’E’,’L’,’F’
+
+e_ident[EI_CLASS]即e_ident[4]:
+识别目标文件运行在目标机器的类别，取值可为三种值：
+
+名称		元素下标值 	含义
+ELFCLASSNONE 	0	  非法类别
+ELFCLASS32		1	  32位目标
+ELFCLASS64		2	  64位目标
+
+e_ident[EI_DATA]（即e_ident[5]）：
+给出处理器特定数据的数据编码方式。即大端还是小端方式。取值可为3种：
+名称		元素下标值 	含义
+ELFDATANONE 	0	  非法数据编码
+ELFDATA2LSB 	1 	  高位在前
+ELFDATA2MSB 	2 	  低位在前
+------------------------------------------------------------------------------------
+
+目标文件类型e_type:
+------------------------------------------------------------------------------------
+文件类型e_type成员表示ELF文件类型，即前面提到过的3种ELF文件类型，每个文件类型对应一个常量。
+系统通过这个常量来判断ELF的真正文件类型，而不是通过文件的扩展名。相关常量以"ET_"开头
+
+如下定义:
+名称				   取值 	含义
+ET_NONE					0 	未知目标文件格式
+ET_REL					1 	可重定位文件
+ET_EXEC					2 	可执行文件
+ET_DYN					3 	共享目标文件
+ET_CORE					4 	Core 文件（转储格式）
+ET_LOPROC				0xff00 	特定处理器文件
+ET_HIPROC				0xffff 	特定处理器文件
+ET_LOPROC~ET_HIPROC 	0xff00~0xffff 	特定处理器文件
+------------------------------------------------------------------------------------
+
+
+目标体系结构类型e_machine
+-----------------------------------
+e_machine表示目标体系结构类型
+名称 	   取值 含义
+EM_NONE 	0 	未指定
+EM_M32		1 	AT&T WE 32100
+EM_SPARC 	2 	SPARC
+EM_386		3 	Intel 80386
+EM_68K		4 	Motorola 68000
+EM_88K		5 	Motorola 88000
+EM_860		7 	Intel 80860
+EM_MIPS 	8 	MIPS RS3000
+others		9~ 	预留
+-----------------------------------
+
+ELF版本e_version
+------------------------------------------------------------------------------------
+这个用来区分ELF标准的各个修订版本, 但是前面提到ELF最新版本就是1(1.2), 仍然是最新版. 
+
+程序头部Elf32_phdr
+-----------------------------------------------------------------------------------------------------------
+以程序运行的角度看ELF文件, 就需要程序头表,即要运行这个elf文件，需要将哪些东西载入到内存镜像。而节区头部表是
+以elf资源的角度来看待elf文件的，即这个elf文件到底存在哪些资源，以及这些资源之间的关联关系，程序头部是一个表，
+它的起始地址在elf头部结构中的e_phoff成员指定，数量由e_phnum表示，每个程序头部表项的大小由e_phentsize指出。
+
+可执行文件或者共享目标文件的程序头部是一个结构数组，每个结构描述了一个段或者系统准备程序执行所必需的其它信息。
+目标文件的"段"包含一个或者多个"节区"也就是段内容(Segment Contents)程序头部仅对于可执行文件和共享目标文件有意义。
+
+下面来看程序头号部表项的数据结构
+成员				类型			描述
+p_type		Elf32_Word/Elf64_Word 	段类型
+p_offset 	Elf32_Off/Elf64_Off 	段位置
+p_vaddr 	Elf32_Addr/Elf64_Addr 	给出段的第一个字节将被放到内存中的虚拟地址
+p_paddr 	Elf32_Addr/Elf64_Addr 	仅用于与物理地址相关的系统中(无mmu的系统中)
+p_filesz 	Elf32_Word/Elf64_Word 	给出段在文件映像中所占的字节数
+p_memsz 	Elf32_Word/Elf64_Word 	给出段在内存映像中占用的字节数
+p_flags 	Elf32_Word/Elf64_Word 	与段相关的标志
+p_align 	Elf32_Word/Elf64_Word 	对齐
+
+段类型p_type
+名称 	   取值 	说明
+PT_NULL 	0 	此数组元素未用。结构中其他成员都是未定义的
+PT_DYNAMIC 	2 	数组元素给出动态链接信息
+PT_INTERP 	3 	数组元素给出一个 NULL 结尾的字符串的位置和长度，该字符串将被当作解释器调用。
+PT_NOTE 	4 	此数组元素给出附加信息的位置和大小
+PT_SHLIB 	5 	此段类型被保留，不过语义未指定。包含这种类型的段的程序与 ABI不符
+PT_PHDR 	6 	此类型的数组元素如果存在，则给出了程序头部表自身的大小和位置，既包括在文件中也包括在内存中的信息。
+PT_LOPROC~PT_HIPROC 	0x70000000~0x7fffffff 	此范围的类型保留给处理器专用语义
+
+/*下面通过readelf读的节头表*/
+wrsadmin@pek-bshang-d1:~/ELF$ readelf -l example/testelf_dynamic 
+
+Elf file type is DYN (Shared object file)
+Entry point 0x690
+There are 9 program headers, starting at offset 64
+
+Program Headers:
+  Type           Offset             VirtAddr           PhysAddr
+                 FileSiz            MemSiz              Flags  Align
+  PHDR           0x0000000000000040 0x0000000000000040 0x0000000000000040
+                 0x00000000000001f8 0x00000000000001f8  R      0x8
+  INTERP         0x0000000000000238 0x0000000000000238 0x0000000000000238
+                 0x000000000000001c 0x000000000000001c  R      0x1
+      [Requesting program interpreter: /lib64/ld-linux-x86-64.so.2]
+  LOAD           0x0000000000000000 0x0000000000000000 0x0000000000000000
+                 0x0000000000000a08 0x0000000000000a08  R E    0x200000
+  LOAD           0x0000000000000d98 0x0000000000200d98 0x0000000000200d98
+                 0x0000000000000278 0x0000000000000280  RW     0x200000
+  DYNAMIC        0x0000000000000da8 0x0000000000200da8 0x0000000000200da8
+                 0x0000000000000200 0x0000000000000200  RW     0x8
+  NOTE           0x0000000000000254 0x0000000000000254 0x0000000000000254
+                 0x0000000000000044 0x0000000000000044  R      0x4
+  GNU_EH_FRAME   0x00000000000008c0 0x00000000000008c0 0x00000000000008c0
+                 0x000000000000003c 0x000000000000003c  R      0x4
+  GNU_STACK      0x0000000000000000 0x0000000000000000 0x0000000000000000
+                 0x0000000000000000 0x0000000000000000  RW     0x10
+  GNU_RELRO      0x0000000000000d98 0x0000000000200d98 0x0000000000200d98
+                 0x0000000000000268 0x0000000000000268  R      0x1
+
+ Section to Segment mapping:
+  Segment Sections...
+   00     
+   01     .interp 
+   02     .interp .note.ABI-tag .note.gnu.build-id .gnu.hash .dynsym .dynstr .gnu.version .gnu.version_r .rela.dyn .rela.plt .init .plt .plt.got .text .fini .rodata .eh_frame_hdr .eh_frame 
+   03     .init_array .fini_array .dynamic .got .data .bss 
+   04     .dynamic 
+   05     .note.ABI-tag .note.gnu.build-id 
+   06     .eh_frame_hdr 
+   07     
+   08     .init_array .fini_array .dynamic .got 
+wrsadmin@pek-bshang-d1:~/ELF$ 
+
+各段的语义如下
+段			描述
+PHDR 	保存了程序头表
+INTERP 	指定在程序已经从可执行文件映射到内存之后, 必须调用的解释器. 在这里解释器并不意味着二进制文件的内容必
+		须解释执行(比如Java的字节码需要Java虚拟机解释).它指的是这样一个程序:通过链接其他库, 来满足未解决的引
+		用.通常/lib/ld-linux.so.2, /lib/ld-linux-ia-64.so.2等库, 用于在虚拟地址空间中国插入程序运行所需的动态
+		库. 对几乎所有的程序来说, 可能C标准库都是必须映射的.还需要添加的各种库, 如GTK, QT, 数学库math, 线程库pthread等等
+LOAD 	表示一个需要从二进制文件映射到虚拟地址的段. 其中保存了常量数据(如字符串), 程序的目标代码等
+DYNAMIC 该段保存了由动态链接器(即, INTERP中指定的解释器)使用的信息
+NOTE 	保存了专有信息
+
+虚拟地址空间中的各个段, 填充了来自ELF文件中特定的段的数据. 因而readelf输出的第二部分指定了那些节载入到哪些段(节段映射).
+-------------------------------------------------------------------------------------------------------------------------
+
+节区头部表格
+-------------
+ELF文件在描述各段的内容时, 是指定了哪些节的数据映射到段中. 因此需要一个结构来管理各个节的内容, 即节头表
+
+节区头部表是以elf资源的角度来看待elf文件的，即这个elf文件到底存在哪些资源，以及这些资源之间的关联关系，
+而前面提到的程序头部表，则以程序运行来看elf文件的，即要运行这个elf文件，需要将哪些东西载入到内存镜像。
+
+ELF头部中:
+e_shoff 成员给出从文件头到节区头部表格的偏移字节数；
+e_shnum 给出表格中条目数目；
+e_shentsize 给出每个项目的字节数。
+从这些信息中可以确切地定位节区的具体位置、长度。
+
+从之前的描述中可知，每一项节区在节区头部表格中都存在着一项元素与它对应，因此可知，这个节区头部表格为一
+连续的空间，每一项元素为一结构体
+
+那么这个节区头部由elfxx_shdr（定义在include/uapi/linux/elf.h）, 32位elf32_shdr， 64位elf64_shdr
+
+结构体的成员如下
+成员				   类型						描述
+sh_name 	    Elf32_Word/Elf64_Word 	节区名，是节区头部字符串表节区（Section Header String Table Section）的索引。名字是一个 NULL 结尾的字符串
+sh_type 	    Elf32_Word/Elf64_Word 	节区类型
+sh_flags 	    Elf32_Word/Elf64_Word 	节区标志
+sh_addr 	    Elf32_Addr/Elf64_Addr 	如果节区将出现在进程的内存映像中，此成员给出节区的第一个字节应处的位置。否则，此字段为 0
+sh_offset 	    Elf32_Off/Elf64_Off 	此成员的取值给出节区的第一个字节与文件头之间的偏移
+sh_size 	    Elf32_Word/Elf64_Word 	此成员给出节区的长度（字节数）
+sh_link 	    Elf32_Word/Elf64_Word 	此成员给出节区头部表索引链接。其具体的解释依赖于节区类型
+sh_info 	    Elf32_Word/Elf64_Word 	此成员给出附加信息，其解释依赖于节区类型
+sh_addralign 	Elf32_Word/Elf64_Word 	某些节区带有地址对齐约束
+sh_entsize		Elf32_Word/Elf64_Word 	某些节区中包含固定大小的项目，如符号表。对于这类节区，此成员给出每个表项的长度字节数
+
+节区类型sh_type
+
+sh_type的取值如下:
+名称			取值 	说明
+SHT_NULL		 0 	   此值标志节区头部是非活动的，没有对应的节区。此节区头部中的其他成员取值无意义
+SHT_PROGBITS	 1 	   此节区包含程序定义的信息，其格式和含义都由程序来解释
+SHT_SYMTAB		 2 	   此节区包含一个符号表。一般，SHT_SYMTAB 节区提供用于链接编辑（指 ld 而言）的符号，尽管也可用来实现动态链接
+SHT_STRTAB		 3 	   此节区包含字符串表。目标文件可能包含多个字符串表节区
+SHT_RELA		 4 	   此节区包含重定位表项，其中可能会有补齐内容（addend），例如 32 位目标文件中的 Elf32_Rela 类型。目标文件可能拥有多个重定位节区
+SHT_HASH		 5 	   此节区包含符号哈希表。所有参与动态链接的目标都必须包含一个符号哈希表。目前，一个目标文件只能包含一个哈希表，不过此限制将来可能会解除
+SHT_DYNAMIC 	 6 	   此节区包含动态链接的信息。目前一个目标文件中只能包含一个动态节区，将来可能会取消这一限制
+SHT_NOTE		 7 	   此节区包含以某种方式来标记文件的信息
+SHT_NOBITS		 8 	   这种类型的节区不占用文件中的空间 ， 其他方面和SHT_PROGBITS相似。尽管此节区不包含任何字节，成员sh_offset 中还是会包含概念性的文件偏移
+SHT_REL			 9 	   此节区包含重定位表项，其中没有补齐（addends），例如 32 位目标文件中的 Elf32_rel 类型。目标文件中可以拥有多个重定位节区
+SHT_SHLIB		 10    此节区被保留，不过其语义是未规定的。包含此类型节区的程序与 ABI 不兼容
+SHT_DYNSYM		 11	   作为一个完整的符号表，它可能包含很多对动态链接而言不必要的符号。因此，目标文件也可以包含一个 
+					   SHT_DYNSYM节区，其中保存动态链接符号的一个最小集合，以节省空间
+SHT_LOPROC 	X70000000 	这一段（包括两个边界），是保留给处理器专用语义的
+SHT_HIPROC 	OX7FFFFFFF 	这一段（包括两个边界），是保留给处理器专用语义的
+SHT_LOUSER 	0X80000000 	此值给出保留给应用程序的索引下界
+SHT_HIUSER 	0X8FFFFFFF 	此值给出保留给应用程序的索引上界
+
+节区标志sh_flags
+
+sh_flag标志着此节区是否可以修改，是否可以执行，如下定义：
+名称			取值 	含义
+SHF_WRITE		0x1 	节区包含进程执行过程中将可写的数据
+SHF_ALLOC		0x2 	此节区在进程执行过程中占用内存。某些控制节区并不出现于目标文件的内存映像中，对于那些节区，此位应设置为 0
+SHF_EXECINSTR 	0x4 	节区包含可执行的机器指令
+SHF_MASKPROC 	0xF0000000 	所有包含于此掩码中的四位都用于处理器专用的语义
+
+sh_link 和 sh_info 字段
+
+sh_link和sh_info字段的具体含义依赖于sh_type的值
+sh_type					sh_link								sh_info
+SHT_DYNAMIC 	此节区中条目所用到的字符串表格的节区头部索引 	0
+SHT_HASH		此哈希表所适用的符号表的节区头部索引			0
+SHT_REL
+SHT_RELA		相关符号表的节区头部索引					重定位所适用的节区的节区头部索引
+SHT_SYMTAB
+SHT_DYNSYM		相关联的字符串表的节区头部索引				最后一个局部符号（绑定 STB_LOCAL）的符号表索引值加一
+
+特殊节区
+------------------------------------------------------------------------------
+有些节区是系统预订的，一般以点开头号，因此，我们有必要了解一些常用到的系统节区。
+名称			类型 	        属性 	                                    含义
+.bss		SHT_NOBITS		SHF_ALLOC +SHF_WRITE 	包含将出现在程序的内存映像中的未初始化数据。程序开始执行系统将把这些数据初始化为0。此节区不占用文件空间
+.comment 	SHT_PROGBITS 	(无)					包含版本控制信息
+.data		SHT_PROGBITS 	SHF_ALLOC + SHF_WRITE 	这些节区包含初始化了的数据，将出现在程序的内存映像中
+.data1		SHT_PROGBITS 	SHF_ALLOC + SHF_WRITE 	这些节区包含初始化了的数据，将出现在程序的内存映像中
+.debug		SHT_PROGBITS 	(无)					此节区包含用于符号调试的信息
+.dynamic 	SHT_DYNAMIC								此节区包含动态链接信息。节区的属性将包含SHF_ALLOC位。是否 SHF_WRITE 位被设置取决于处理器
+.dynstr 	SHT_STRTAB		SHF_ALLOC				此节区包含用于动态链接的字符串，大多数情况下这些字符串代表了与符号表项相关的名称
+.dynsym 	SHT_DYNSYM		SHF_ALLOC				此节区包含了动态链接符号表
+.fini		SHT_PROGBITS 	SHF_ALLOC+SHF_EXECINSTR 此节区包含了可执行的指令，是进程终止代码的一部分。程序正常退出时，系统将安排执行这里的代码
+.got		SHT_PROGBITS							此节区包含全局偏移表
+.hash		SHT_HASH		SHF_ALLOC				此节区包含了一个符号哈希表
+.init		SHT_PROGBITS 	SHF_ALLOC+SHF_EXECINSTR 此节区包含了可执行指令,是进程初始化代码的一部分,当程序开始执行时,系统要在开始调用main之前执行这些代码
+.interp 	SHT_PROGBITS			此节区包含程序解释器的路径名。如果程序包含一个可加载的段，段中包含此节区，那么节区的属性将包含 SHF_ALLOC 位，否则该位为 0
+.line		SHT_PROGBITS 	(无) 	此节区包含符号调试的行号信息，其中描述了源程序与机器指令之间的对应关系。其内容是未定义的
+.note		SHT_NOTE		(无) 	此节区中包含注释信息，独立的格式。
+.plt		SHT_PROGBITS			此节区包含过程链接表（procedure linkage table）
+.relname
+.relaname 	SHT_REL SHT_RELA 		这些节区中包含了重定位信息,传统上name根据重定位所适用的节区给定.例如.text节区的重定位节区名字将是:.rel.text或者.rela.text
+.rodata
+.rodata1 	SHT_PROGBITS 	SHF_ALLOC 	这些节区包含只读数据，这些数据通常参与进程映像的不可写段
+.shstrtab 	SHT_STRTAB					此节区包含节区名称
+.strtab 	SHT_STRTAB					此节区包含字符串，通常是代表与符号表项相关的名称。
+.symtab 	SHT_SYMTAB					此节区包含一个符号表。
+.text		SHT_PROGBITS 	SHF_ALLOC + SHF_EXECINSTR 	此节区包含程序的可执行指令
+
+/*使用readelf读取节头表*/
+wrsadmin@pek-bshang-d1:~/ELF$ readelf -S example/add.o
+There are 11 section headers, starting at offset 0x210:
+
+Section Headers:
+  [Nr] Name              Type             Address           Offset
+       Size              EntSize          Flags  Link  Info  Align
+  [ 0]                   NULL             0000000000000000  00000000
+       0000000000000000  0000000000000000           0     0     0
+  [ 1] .text             PROGBITS         0000000000000000  00000040
+       0000000000000015  0000000000000000  AX       0     0     1
+  [ 2] .data             PROGBITS         0000000000000000  00000055
+       0000000000000000  0000000000000000  WA       0     0     1
+  [ 3] .bss              NOBITS           0000000000000000  00000055
+       0000000000000000  0000000000000000  WA       0     0     1
+  [ 4] .comment          PROGBITS         0000000000000000  00000055
+       000000000000002b  0000000000000001  MS       0     0     1
+  [ 5] .note.GNU-stack   PROGBITS         0000000000000000  00000080
+       0000000000000000  0000000000000000           0     0     1
+  [ 6] .eh_frame         PROGBITS         0000000000000000  00000080
+       0000000000000038  0000000000000000   A       0     0     8
+  [ 7] .rela.eh_frame    RELA             0000000000000000  000001a0
+       0000000000000018  0000000000000018   I       8     6     8
+  [ 8] .symtab           SYMTAB           0000000000000000  000000b8
+       00000000000000d8  0000000000000018           9     8     8
+  [ 9] .strtab           STRTAB           0000000000000000  00000190
+       000000000000000b  0000000000000000           0     0     1
+  [10] .shstrtab         STRTAB           0000000000000000  000001b8
+       0000000000000054  0000000000000000           0     0     1
+Key to Flags:
+  W (write), A (alloc), X (execute), M (merge), S (strings), I (info),
+  L (link order), O (extra OS processing required), G (group), T (TLS),
+  C (compressed), x (unknown), o (OS specific), E (exclude),
+  l (large), p (processor specific)
+wrsadmin@pek-bshang-d1:~/ELF$
+
+字符串表
+-----------------------------------------------------------------------
+首先要知道，字符串表它本身就是一个节区，每一个节区都存在一个节区头部表项
+与之对应，所以字符串表这个节区也存在一个节区头部表项对应，而在elf文件头
+部结构中存在一个成员e_shstrndx给出这个节区头部表项的索引位置。因此可以通过
+
+shstrab  = (rt_uint8_t *)module_ptr +shdr[elf_module->e_shstrndx].sh_offset;
+
+来得到字符串表的起始位置。
+字符串表节区包含以NULL(ASCII码0)结尾的字符序列，通常称为字符串。ELF目标文件通常
+使用字符串来表示符号和节区名称。对字符串的引用通常以字符串在字符串表中的下标给出。
+
+对于各个节区而言，节区头部的sh_name成员包含其对应的节区头部字符串表节区的索引
+
+符号表（Symbol Table）
+-----------------------------------------------------------------------------
+首先，符号表同样本身是一节区，也存在一对应节区头部表项。
+目标文件的符号表中包含用来定位、重定位程序中符号定义和引用的信息。
+符号表索引是对此数组的索引。索引0表示表中的第一表项，同时也作为未定义符号的索引。
+符号表是由一个个符号元素组成，用elfxx_sym来结构来表示, 定义在include/uapi/linux/elf.h, 同样32位为elf32_sym, 64位对应elf64_sym
+每个元素的数据结构如下定义：
+成员				类型					描述
+st_name 	Elf32_Word/Elf64_Word 	名称，索引到字符串表
+st_value 	Elf32_AddrElf64_Addr 	给出相关联的符号的取值。依赖于具体的上下文
+st_size 	Elf32_Word/Elf64_Word 	相关的尺寸大小
+st_info 	unsigned char			给出符号的类型和绑定属性
+st_other 	unsigned char			该成员当前包含 0，其含义没有定义
+st_shndx 	Elf32_Half/Elf64_Half 	给出相关的节区头部表索引。某些索引具有特殊含义
+
+st_info给出符号的类型和绑定属性
+-----------------------------------------------
+st_info 中包含符号类型和绑定信息，操纵方式如：
+
+#define ELF32_ST_BIND(i) ((i)>>4)
+#define ELF32_ST_TYPE(i) ((i)&0xf)
+#define ELF32_ST_INFO(b, t) (((b)<<4) + ((t)&0xf))
+
+st_info 的高四位（ELF32_ST_BIND(i)）
+-----------------------------------------------------------
+表示符号绑定，用于确定链接可见性和行为。具体的绑定类型如：
+名称		取值 	说明
+STB_LOCAL 	0 	局部符号在包含该符号定义的目标文件以外不可见。相同名称的局部符号可以存在于多个文件中，互不影响
+STB_GLOBAL 	1 	全局符号对所有将组合的目标文件都是可见的。一个文件中对某个全局符号的定义将满足另一个文件对相同全局符号的未定义引用
+STB_WEAK 	2 	弱符号与全局符号类似，不过他们的定义优先级比较低
+STB_LOPROC 	13 	处于这个范围的取值是保留给处理器专用语义的
+STB_HIPROC 	15 	处于这个范围的取值是保留给处理器专用语义的
+
+st_info的低四位ELF32_ST_TYPE(i)
+--------------------------------------------------------------------------------------------
+定义如下
+名称		取值 	说明
+STT_NOTYPE 	0 	符号的类型没有指定
+STT_OBJECT 	1 	符号与某个数据对象相关，比如一个变量、数组等等
+STT_FUNC 	2 	符号与某个函数或者其他可执行代码相关
+STT_SECTION 3 	符号与某个节区相关。这种类型的符号表项主要用于重定位，通常具有 STB_LOCAL 绑定
+STT_FILE 	4 	传统上符号的名称给出了与目标文件相关的源文件的名称。
+STT_LOPROC~STT_HIPROC 	13~15 	此范围的符号类型值保留给处理器专用语义用途
+
+在共享目标文件中的函数符号（类型为 STT_FUNC）具有特别的重要性。当其他目标文件引用了来自某个共享目标中的函数时，链接编辑器自动为所引用的符号创建过
+程链接表项。类型不是 STT_FUNC 的共享目标符号不会自动通过过程链接表进行引用。
+
+如果一个符号的取值引用了某个节区中的特定位置，那么它的节区索引成员（st_shndx）包含了其在节区头部表中的索引。
+当节区在重定位过程中被移动时，符号的取值也会随之变化，对符号的引用始终会“指向”程序中的相同位置
+
+
+st_shndx
+-----------------------------------------------------------------------------------------
+如前面所述，st_shndx给出相关的节区头部表索引。但其值也存在一些特殊值，具有某些特殊的含义：
+名称					说明
+SHN_ABS 		符号具有绝对取值，不会因为重定位而发生变化
+SHN_COMMON 		符号标注了一个尚未分配的公共块。符号的取值给出了对齐约束，与节区的sh_addralign成员类似。
+				就是说链接编辑器将为符号分配存储空间，地址位于st_value的倍数处。符号的大小给出了所需要的字节数
+SHN_UNDEF 		此节区表索引值意味着符号没有定义。当链接编辑器将此目标文件与其他定义了该符号的目标文件进行组合时，此文件中对该符号的引用将被链接到实际定义的位置
+
+st_value
+----------------------------------------------------------
+不同的目标文件类型中符号表项对 st_value 成员具有不同的解释：
+1. 在可重定位文件中，st_value 中遵从了节区索引为 SHN_COMMON 的符号的对齐约束。
+
+2. 在可重定位的文件中，st_value 中包含已定义符号的节区偏移。就是说，st_value 是从 st_shndx 所标识的节区头部开始计算，到符号位置的偏移。
+
+3. 在可执行和共享目标文件中，st_value 包含一个虚地址。为了使得这些文件的符号对动态链接器更有用，节区偏移（针对文 件的解释）让位于虚拟地址（针对内存的解释），因为这时与节区号无关。
+
+重定位信息
+----------------------------------------------------------
+重定位是将符号引用与符号定义进行连接的过程。例如，当程序调用了一个函数时，
+相关的调用指令必须把控制传输到适当的目标执行地址。
+
+重定位表项
+可重定位文件必须包含如何修改其节区内容的信息，从而允许可执行文件和共享目标
+文件保存进程的程序映像的正确信息。重定位表项就是这样一些数据。
+
+可重定位表项的数据结构如下定义:
+
+Elf32_Rel
+成员				类型					描述
+r_offset 	Elf32_Addr/Elf64_Addr 	给出了重定位动作所适用的位置
+r_info		Elf32_Word/Elf64_Word 	给出要进行重定位的符号表索引，以及将实施的重定位类型
+
+Elf32_Rela
+成员				类型					描述
+r_offset 	Elf32_Addr/Elf64_Addr 	给出了重定位动作所适用的位置
+r_info		Elf32_Word/Elf64_Word 	给出要进行重定位的符号表索引，以及将实施的重定位类型
+r_addend 	Elf32_Word				给出一个常量补齐，用来计算将被填充到可重定位字段的数值
+
+重定位节区会引用两个其它节区：符号表、要修改的节区。节区头部的 sh_info 和sh_link 成员给出这些关系。
+不同目标文件的重定位表项对 r_offset 成员具有略微不同的解释。
+
+r_info通常分为高8位和低8位，分别表示不同的含义：
+#define ELF32_R_SYM(i) ((i)>>8)
+#define ELF32_R_TYPE(i) ((unsigned char)(i))
+#define ELF32_R_INFO(s, t) (((s)<<8) + (unsigned char)(t))
+
+高8位用作要进行重定位的符号表索引，通过它可以得出一个符号表项，而低8位表示将实施的重定位类型，它是和处理器相关的。
