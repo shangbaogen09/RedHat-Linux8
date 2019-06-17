@@ -581,6 +581,7 @@ static inline void cpumask_copy(struct cpumask *dstp,
  * cpumask_of - the cpumask containing just a given cpu
  * @cpu: the cpu (<= nr_cpu_ids)
  */
+/*获取只包含给定cpu的掩码*/
 #define cpumask_of(cpu) (get_cpu_mask(cpu))
 
 /**

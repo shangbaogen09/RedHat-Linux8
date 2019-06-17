@@ -1151,6 +1151,7 @@ static noinline void __init kernel_init_freeable(void)
 	do_pre_smp_initcalls();
 	lockup_detector_init();
 
+	/*多处理器系统的初始化*/
 	smp_init();
 	sched_init_smp();
 

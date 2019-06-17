@@ -726,7 +726,9 @@ static void set_load_weight(struct task_struct *p, bool update_load)
 	/*
 	 * SCHED_IDLE tasks get minimal weight:
 	 */
+	/*如果调度策略是idle*/
 	if (idle_policy(p->policy)) {
+		/*默认权重为80*/
 		load->weight = scale_load(WEIGHT_IDLEPRIO);
 		load->inv_weight = WMULT_IDLEPRIO;
 		return;
@@ -739,6 +741,7 @@ static void set_load_weight(struct task_struct *p, bool update_load)
 	if (update_load && p->sched_class == &fair_sched_class) {
 		reweight_task(p, prio);
 	} else {
+		/*由优先级获取对应的权重值*/
 		load->weight = scale_load(sched_prio_to_weight[prio]);
 		load->inv_weight = sched_prio_to_wmult[prio];
 	}
@@ -1041,7 +1044,10 @@ static int migration_cpu_stop(void *data)
  */
 void set_cpus_allowed_common(struct task_struct *p, const struct cpumask *new_mask)
 {
+	/*把新掩码拷贝到任务的cpus_allowed字段中,表示处理器可以在指定掩码处理器上运行*/
 	cpumask_copy(&p->cpus_allowed, new_mask);
+
+	/*计算给定位图中置为1的个数*/
 	p->nr_cpus_allowed = cpumask_weight(new_mask);
 }
 
@@ -5514,6 +5520,8 @@ void init_idle(struct task_struct *idle, int cpu)
 	/*设置idle进程的部分成员变量*/
 	__sched_fork(0, idle);
 	idle->state = TASK_RUNNING;
+
+	/*开始执行时间赋值为当前时间*/
 	idle->se.exec_start = sched_clock();
 	idle->flags |= PF_IDLE;
 

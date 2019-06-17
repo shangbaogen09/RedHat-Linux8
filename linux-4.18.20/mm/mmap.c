@@ -1834,7 +1834,8 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
 		vma_set_anonymous(vma);
 	}
 
-	/*将新的vma插入到线性链表，红黑树以及对应文件的地址空间adress_space->i_mmap或者adress_space->i_mmap_nonlinear*/
+	/*将新的vma插入到线性链表，红黑树以及对应文件的地址空间adress_space->i_mmap
+	 *或者adress_space->i_mmap_nonlinear*/
 	vma_link(mm, vma, prev, rb_link, rb_parent);
 	/* Once vma denies write, undo our temporary denial count */
 	if (file) {

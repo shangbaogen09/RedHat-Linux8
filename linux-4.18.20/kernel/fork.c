@@ -2149,7 +2149,7 @@ long _do_fork(unsigned long clone_flags,
 	 * requested, no event is reported; otherwise, report if the event
 	 * for the type of forking is enabled.
 	 */
-	/*init进程的clone_flags中带有CLONE_UNTRACED标记*/
+	/*init进程的clone_flags中带有CLONE_UNTRACED标记,所以不走该分支*/
 	if (!(clone_flags & CLONE_UNTRACED)) {
 		if (clone_flags & CLONE_VFORK)
 			trace = PTRACE_EVENT_VFORK;

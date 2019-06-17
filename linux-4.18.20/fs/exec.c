@@ -1873,7 +1873,7 @@ static int __do_execve_file(int fd, struct filename *filename,
 	if (retval < 0)
 		goto out;
 
-	/*记录可执行文件名的位置*/
+	/*指向栈中可执行文件名的位置*/
 	bprm->exec = bprm->p;
 
 	/*把用户态的环境变量复制到该进程的用户栈中*/

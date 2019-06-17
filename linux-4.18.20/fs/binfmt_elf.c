@@ -1028,6 +1028,7 @@ static int load_elf_binary(struct linux_binprm *bprm)
 		 * If we are loading ET_EXEC or we have already performed
 		 * the ET_DYN load_addr calculations, proceed normally.
 		 */
+		/*如果elf文件类型是可执行的，则设置对应的elf_flags*/
 		if (loc->elf_ex.e_type == ET_EXEC || load_addr_set) {
 			elf_flags |= elf_fixed;
 		} else if (loc->elf_ex.e_type == ET_DYN) {
@@ -1179,6 +1180,7 @@ static int load_elf_binary(struct linux_binprm *bprm)
 		goto out_free_dentry;
 	}
 
+	/*如果是动态连接器*/
 	if (elf_interpreter) {
 		unsigned long interp_map_addr = 0;
 
@@ -1267,6 +1269,8 @@ static int load_elf_binary(struct linux_binprm *bprm)
 #endif
 
 	finalize_exec(bprm);
+
+	/*构造进程的用户空间现场*/
 	start_thread(regs, elf_entry, bprm->p);
 	retval = 0;
 out:

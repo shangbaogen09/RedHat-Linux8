@@ -499,11 +499,16 @@ static inline int entity_before(struct sched_entity *a,
 
 static void update_min_vruntime(struct cfs_rq *cfs_rq)
 {
+	/*取出当前队列中正在运行的进程*/
 	struct sched_entity *curr = cfs_rq->curr;
+
+	/*取出红黑树中最左边节点*/
 	struct rb_node *leftmost = rb_first_cached(&cfs_rq->tasks_timeline);
 
+	/*取出公平调度队列中的最小vruntime值*/
 	u64 vruntime = cfs_rq->min_vruntime;
 
+	/*取出当前正在运行任务的调度实体的虚拟运行时间*/
 	if (curr) {
 		if (curr->on_rq)
 			vruntime = curr->vruntime;
@@ -511,8 +516,11 @@ static void update_min_vruntime(struct cfs_rq *cfs_rq)
 			curr = NULL;
 	}
 
+	/*如果红黑树的左节点不为空*/
 	if (leftmost) { /* non-empty tree */
 		struct sched_entity *se;
+
+		/*取出左节点上挂载的调度实体*/
 		se = rb_entry(leftmost, struct sched_entity, run_node);
 
 		if (!curr)
@@ -521,6 +529,7 @@ static void update_min_vruntime(struct cfs_rq *cfs_rq)
 			vruntime = min_vruntime(vruntime, se->vruntime);
 	}
 
+	/*更新队列中的最新的vruntime*/
 	/* ensure we never gain time by being placed backwards. */
 	cfs_rq->min_vruntime = max_vruntime(cfs_rq->min_vruntime, vruntime);
 #ifndef CONFIG_64BIT
@@ -4241,12 +4250,15 @@ enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 	enqueue_runnable_load_avg(cfs_rq, se);
 	account_entity_enqueue(cfs_rq, se);
 
+	/*是由唤醒操作引起的，则要重新计算虚拟运行时间*/
 	if (flags & ENQUEUE_WAKEUP)
 		place_entity(cfs_rq, se, 0);
 
 	check_schedstat_required();
 	update_stats_enqueue(cfs_rq, se, flags);
 	check_spread(cfs_rq, se);
+
+	/*把该进程入队*/
 	if (!curr)
 		__enqueue_entity(cfs_rq, se);
 

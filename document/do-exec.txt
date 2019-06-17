@@ -1,0 +1,11 @@
+exec()函数族
+exec函数一共有六个，其中execve为内核级系统调用，其他
+(execl，execle，execlp，execv，execvp)都是调用execve的库函数。
+
+int execl(const char *path, const char *arg, ...);
+int execlp(const char *file, const char *arg, ...);
+int execle(const char *path, const char *arg, ..., char * const envp[]);
+int execv(const char *path, char *const argv[]);
+int execvp(const char *file, char *const argv[]);
+
+

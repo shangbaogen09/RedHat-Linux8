@@ -570,6 +570,7 @@ void __init smp_init(void)
 	int num_nodes, num_cpus;
 	unsigned int cpu;
 
+	/*为每个cpu准备一个idle线程*/
 	idle_threads_init();
 	cpuhp_threads_init();
 

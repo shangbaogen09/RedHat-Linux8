@@ -15,8 +15,10 @@ struct filename;
  * This structure is used to hold the arguments that are used when loading binaries.
  */
 struct linux_binprm {
+	/*保存可执行文件的头128字节*/
 	char buf[BINPRM_BUF_SIZE];
 #ifdef CONFIG_MMU
+	/*表示该进程堆栈段的vma*/
 	struct vm_area_struct *vma;
 	unsigned long vma_pages;
 #else
@@ -52,13 +54,19 @@ struct linux_binprm {
 	unsigned int taso:1;
 #endif
 	unsigned int recursion_depth; /* only for search_binary_handler() */
+
+	/*要执行的文件*/
 	struct file * file;
 	struct cred *cred;	/* new credentials */
 	int unsafe;		/* how unsafe this exec is (mask of LSM_UNSAFE_*) */
 	unsigned int per_clear;	/* bits to clear in current->personality */
 	/*参数和环境变量的数目*/
 	int argc, envc;
+
+	/*要执行的文件的名称*/
 	const char * filename;	/* Name of binary as seen by procps */
+
+	/*要执行的文件的真实名称，通常和filename相同*/
 	const char * interp;	/* Name of the binary really executed. Most
 				   of the time same as filename, but could be
 				   different for binfmt_{misc,script} */
@@ -66,6 +74,7 @@ struct linux_binprm {
 	unsigned interp_data;
 	unsigned long loader, exec;
 
+	/*进程的堆栈的最大限制值*/
 	struct rlimit rlim_stack; /* Saved RLIMIT_STACK used during exec. */
 } __randomize_layout;
 
