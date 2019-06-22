@@ -145,6 +145,8 @@ static int smpboot_thread_fn(void *data)
 		case HP_THREAD_NONE:
 			__set_current_state(TASK_RUNNING);
 			preempt_enable();
+
+			/*针对watchdog线程为watchdog_enable*/
 			if (ht->setup)
 				ht->setup(td->cpu);
 			td->status = HP_THREAD_ACTIVE;
@@ -165,6 +167,8 @@ static int smpboot_thread_fn(void *data)
 		} else {
 			__set_current_state(TASK_RUNNING);
 			preempt_enable();
+	
+			/*针对watchdog线程调用对应的watchdog函数*/
 			ht->thread_fn(td->cpu);
 		}
 	}
@@ -173,18 +177,21 @@ static int smpboot_thread_fn(void *data)
 static int
 __smpboot_create_thread(struct smp_hotplug_thread *ht, unsigned int cpu)
 {
+	/*取出percpu的指针*/
 	struct task_struct *tsk = *per_cpu_ptr(ht->store, cpu);
 	struct smpboot_thread_data *td;
 
 	if (tsk)
 		return 0;
 
+	/*分配一个局部变量用来保存要创建线程的全部信息*/
 	td = kzalloc_node(sizeof(*td), GFP_KERNEL, cpu_to_node(cpu));
 	if (!td)
 		return -ENOMEM;
 	td->cpu = cpu;
 	td->ht = ht;
 
+	/*调用该函数创建线程，运行函数为smpboot_thread_fn*/
 	tsk = kthread_create_on_cpu(smpboot_thread_fn, td, cpu,
 				    ht->thread_comm);
 	if (IS_ERR(tsk)) {
@@ -195,8 +202,11 @@ __smpboot_create_thread(struct smp_hotplug_thread *ht, unsigned int cpu)
 	 * Park the thread so that it could start right on the CPU
 	 * when it is available.
 	 */
+	/*设置该线程的状态为park*/
 	kthread_park(tsk);
 	get_task_struct(tsk);
+
+	/*存储到percpu变量中*/
 	*per_cpu_ptr(ht->store, cpu) = tsk;
 	if (ht->create) {
 		/*
@@ -297,13 +307,20 @@ int smpboot_register_percpu_thread_cpumask(struct smp_hotplug_thread *plug_threa
 	unsigned int cpu;
 	int ret = 0;
 
+	/*分配一个cpumask结构体*/
 	if (!alloc_cpumask_var(&plug_thread->cpumask, GFP_KERNEL))
 		return -ENOMEM;
+
+	/*把传入的参数拷贝到该结构体中*/
 	cpumask_copy(plug_thread->cpumask, cpumask);
 
 	get_online_cpus();
 	mutex_lock(&smpboot_threads_lock);
+
+	/*为系统中的每一个cpu创建一个线程*/
 	for_each_online_cpu(cpu) {
+
+		/*具体的创建函数*/
 		ret = __smpboot_create_thread(plug_thread, cpu);
 		if (ret) {
 			smpboot_destroy_threads(plug_thread);
@@ -313,6 +330,8 @@ int smpboot_register_percpu_thread_cpumask(struct smp_hotplug_thread *plug_threa
 		if (cpumask_test_cpu(cpu, cpumask))
 			smpboot_unpark_thread(plug_thread, cpu);
 	}
+
+	/*把结构体加入到链表hotplug_threads末尾*/
 	list_add(&plug_thread->list, &hotplug_threads);
 out:
 	mutex_unlock(&smpboot_threads_lock);

@@ -212,13 +212,17 @@ static int kthread(void *_create)
 
 	/*取出待创建节点的运行函数参数*/
 	void *data = create->data;
+
+	/*定义一个局部完成结构体指针*/
 	struct completion *done;
 	struct kthread *self;
 	int ret;
 
+	/*分配一个kthread结构体内存*/
 	self = kzalloc(sizeof(*self), GFP_KERNEL);
 	set_kthread_struct(self);
 
+	/*取出create->done的值赋值为done变量*/
 	/* If user was SIGKILLed, I release the structure. */
 	done = xchg(&create->done, NULL);
 	if (!done) {
@@ -232,6 +236,7 @@ static int kthread(void *_create)
 		do_exit(-ENOMEM);
 	}
 
+	/*初始化kthread结构体成员*/
 	self->data = data;
 	init_completion(&self->exited);
 	init_completion(&self->parked);
@@ -243,19 +248,22 @@ static int kthread(void *_create)
 
 	/*current表示当前新创建的thread的task_struct结构*/
 	create->result = current;
+
+	/*唤醒create->done上等待的线程,该函数定义在kernel/sched/completion.c*/
 	complete(done);
 
 	/*至此线程创建完毕,执行任务切换,让出CPU*/
 	schedule();
 
 	ret = -EINTR;
+
+	/*新创建的线程由于执行了schedule()调度此时并没有执行.
+	 *直到我们使用wake_up_process(p);唤醒新创建的线程*/
 	if (!test_bit(KTHREAD_SHOULD_STOP, &self->flags)) {
 		cgroup_kthread_ready();
 		__kthread_parkme(self);
 
-		/*新创建的线程由于执行了 schedule() 调度，此时并没有执行.
-		直到我们使用wake_up_process(p);唤醒新创建的线程
-		线程被唤醒后, 会接着执行threadfn(data)*/
+		/*线程被唤醒后会接着执行threadfn(data)*/
 		ret = threadfn(data);
 	}
 	do_exit(ret);
@@ -302,26 +310,34 @@ struct task_struct *__kthread_create_on_node(int (*threadfn)(void *data),
 {
 	DECLARE_COMPLETION_ONSTACK(done);
 	struct task_struct *task;
+
+	/*为要创建的线程分配一个struct kthread_create_info结构体来包含要创建线程的信息*/
 	struct kthread_create_info *create = kmalloc(sizeof(*create),
 						     GFP_KERNEL);
 
 	if (!create)
 		return ERR_PTR(-ENOMEM);
+
+	/*使用传入的参数初始化分配的结构体成员*/
 	create->threadfn = threadfn;
 	create->data = data;
 	create->node = node;
 	create->done = &done;
 
 	spin_lock(&kthread_create_lock);
+
+	/*把该结构体加入到全局链表kthread_create_list中*/
 	list_add_tail(&create->list, &kthread_create_list);
 	spin_unlock(&kthread_create_lock);
 
+	/*唤醒内核2号线程kthreadd_task，用来创建线程*/
 	wake_up_process(kthreadd_task);
 	/*
 	 * Wait for completion in killable state, for I might be chosen by
 	 * the OOM killer while kthreadd is trying to allocate memory for
 	 * new kernel thread.
 	 */
+	/*等待创建完成，进入休眠状态*/
 	if (unlikely(wait_for_completion_killable(&done))) {
 		/*
 		 * If I was SIGKILLed before kthreadd (or new kernel thread)
@@ -336,6 +352,8 @@ struct task_struct *__kthread_create_on_node(int (*threadfn)(void *data),
 		 */
 		wait_for_completion(&done);
 	}
+
+	/*把创建的返回结果task struct保存到局部变量task中*/
 	task = create->result;
 	if (!IS_ERR(task)) {
 		static const struct sched_param param = { .sched_priority = 0 };
@@ -355,6 +373,8 @@ struct task_struct *__kthread_create_on_node(int (*threadfn)(void *data),
 		set_cpus_allowed_ptr(task, cpu_all_mask);
 	}
 	kfree(create);
+	
+	/*向上层返回创建的task struct*/
 	return task;
 }
 
@@ -449,6 +469,7 @@ EXPORT_SYMBOL(kthread_bind);
  * Description: This helper function creates and names a kernel thread
  * The thread will be woken and put into park mode.
  */
+/*在特定的cpu上创建一个线程*/
 struct task_struct *kthread_create_on_cpu(int (*threadfn)(void *data),
 					  void *data, unsigned int cpu,
 					  const char *namefmt)
@@ -513,6 +534,7 @@ int kthread_park(struct task_struct *k)
 	if (WARN_ON(k->flags & PF_EXITING))
 		return -ENOSYS;
 
+	/*设置该内核线程的标志为KTHREAD_SHOULD_PARK*/
 	set_bit(KTHREAD_SHOULD_PARK, &kthread->flags);
 	if (k != current) {
 		wake_up_process(k);
@@ -583,7 +605,7 @@ int kthreadd(void *unused)
 
 	for (;;) {
 		 /*首先将线程状态设置为TASK_INTERRUPTIBLE, 如果当前没有要创建的线程则主动放弃 
-		  *CPU 完成调度.此进程变为阻塞态*/
+		  *CPU完成调度.此进程变为阻塞态*/
 		set_current_state(TASK_INTERRUPTIBLE);
 
 		/*判断是否有需要创建的内核线程,如果没有则进行schedu*/

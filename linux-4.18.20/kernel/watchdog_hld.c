@@ -70,6 +70,7 @@ void watchdog_update_hrtimer_threshold(u64 period)
 	 * hrtimer is guaranteed to fire at least once within the real
 	 * watchdog threshold.
 	 */
+	/*更新该值为8s*/
 	watchdog_hrtimer_sample_threshold = period * 2;
 }
 

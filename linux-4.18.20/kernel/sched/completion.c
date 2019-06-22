@@ -31,8 +31,11 @@ void complete(struct completion *x)
 
 	spin_lock_irqsave(&x->wait.lock, flags);
 
+	/*把对应的变量加1*/
 	if (x->done != UINT_MAX)
 		x->done++;
+
+	/*唤醒在完成变量等待队列睡眠的线程,模式是TASK_NORMAL,只唤醒一个*/
 	__wake_up_locked(&x->wait, TASK_NORMAL, 1);
 	spin_unlock_irqrestore(&x->wait.lock, flags);
 }
@@ -70,14 +73,19 @@ do_wait_for_common(struct completion *x,
 		   long (*action)(long), long timeout, int state)
 {
 	if (!x->done) {
+		/*调用该宏定义一个等待节点*/
 		DECLARE_WAITQUEUE(wait, current);
 
+		/*把等待队列节点加入到等待队列链表的末尾*/
 		__add_wait_queue_entry_tail_exclusive(&x->wait, &wait);
 		do {
+			/*判断是否有信号等待处理,如果有则直接退出不能休眠*/
 			if (signal_pending_state(state, current)) {
 				timeout = -ERESTARTSYS;
 				break;
 			}
+
+			/*设置进程的状态为传入的state*/
 			__set_current_state(state);
 			spin_unlock_irq(&x->wait.lock);
 			timeout = action(timeout);

@@ -1813,15 +1813,23 @@ signed long __sched schedule_timeout(signed long timeout)
 
 	expire = timeout + jiffies;
 
+	/*初始化一个定时器*/
 	timer.task = current;
 	timer_setup_on_stack(&timer.timer, process_timeout, 0);
+
+	/*修改定时器的到期时间，启动定时器*/
 	__mod_timer(&timer.timer, expire, 0);
+
+	/*进行调度*/
 	schedule();
+
+	/*再次唤醒该任务后，删除该定时器*/
 	del_singleshot_timer_sync(&timer.timer);
 
 	/* Remove the timer from the object tracker */
 	destroy_timer_on_stack(&timer.timer);
 
+	/*返回还没有到超时值的差值*/
 	timeout = expire - jiffies;
 
  out:

@@ -1149,6 +1149,8 @@ static noinline void __init kernel_init_freeable(void)
 	init_mm_internals();
 
 	do_pre_smp_initcalls();
+
+	/*内核的soft lockup和hard lockup初始化*/
 	lockup_detector_init();
 
 	/*多处理器系统的初始化*/

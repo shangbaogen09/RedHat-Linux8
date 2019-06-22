@@ -173,7 +173,11 @@ static bool softlockup_threads_initialized __read_mostly;
 static u64 __read_mostly sample_period;
 
 static DEFINE_PER_CPU(unsigned long, watchdog_touch_ts);
+
+/*定义了一个percpu的struct task_struct指针*/
 static DEFINE_PER_CPU(struct task_struct *, softlockup_watchdog);
+
+/*每个cpu都有一个watchdog hrtimer*/
 static DEFINE_PER_CPU(struct hrtimer, watchdog_hrtimer);
 static DEFINE_PER_CPU(bool, softlockup_touch_sync);
 static DEFINE_PER_CPU(bool, soft_watchdog_warn);
@@ -224,8 +228,10 @@ static void __lockup_detector_cleanup(void);
  * the thresholds with a factor: we make the soft threshold twice the amount of
  * time the hard threshold is.
  */
+/*watchdog_thresh默认定义为10s*/
 static int get_softlockup_thresh(void)
 {
+	/*返回计算后的值为20s*/
 	return watchdog_thresh * 2;
 }
 
@@ -248,6 +254,7 @@ static void set_sample_period(void)
 	 * and hard thresholds) to increment before the
 	 * hardlockup detector generates a warning
 	 */
+	/*默认的采样频率的4s*/
 	sample_period = get_softlockup_thresh() * ((u64)NSEC_PER_SEC / 5);
 	watchdog_update_hrtimer_threshold(sample_period);
 }
@@ -452,28 +459,37 @@ static void watchdog_set_prio(unsigned int policy, unsigned int prio)
 {
 	struct sched_param param = { .sched_priority = prio };
 
+	/*为当前进程设置调度参数*/
 	sched_setscheduler(current, policy, &param);
 }
 
 static void watchdog_enable(unsigned int cpu)
 {
+	/*取出当前cpu的hrtimer*/
 	struct hrtimer *hrtimer = this_cpu_ptr(&watchdog_hrtimer);
 
 	/*
 	 * Start the timer first to prevent the NMI watchdog triggering
 	 * before the timer has a chance to fire.
 	 */
+	/*初始化该hrtimer*/
 	hrtimer_init(hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	hrtimer->function = watchdog_timer_fn;
+
+	/*启动该hrtimer，默认是4s运行一次*/
 	hrtimer_start(hrtimer, ns_to_ktime(sample_period),
 		      HRTIMER_MODE_REL_PINNED);
 
+	/*初始化变量watchdog_touch_ts的初始化为当前时间*/
 	/* Initialize timestamp */
 	__touch_watchdog();
+
+	/*配置每隔10s产生nmi中断*/
 	/* Enable the perf event */
 	if (watchdog_enabled & NMI_WATCHDOG_ENABLED)
 		watchdog_nmi_enable(cpu);
 
+	/*设置该线程的调度策略为SCHED_FIFO,优先级为实时进程的最大值*/
 	watchdog_set_prio(SCHED_FIFO, MAX_RT_PRIO - 1);
 }
 
@@ -512,11 +528,16 @@ static int watchdog_should_run(unsigned int cpu)
  */
 static void watchdog(unsigned int cpu)
 {
+	/*在4s的hrtimer定时器中会唤醒该watchdog线程，把定时器中记录的hrtimer_interrupts
+	 *更新保存到soft_lockup_hrtimer_cnt变量中,该更新会导致该线程调度出处理器*/
 	__this_cpu_write(soft_lockup_hrtimer_cnt,
 			 __this_cpu_read(hrtimer_interrupts));
+
+	/*更新watchdog运行时间戳变量watchdog_touch_ts*/
 	__touch_watchdog();
 }
 
+/*提供给kernel的threadd内核线程的要创建的线程信息*/
 static struct smp_hotplug_thread watchdog_threads = {
 	.store			= &softlockup_watchdog,
 	.thread_should_run	= watchdog_should_run,
@@ -586,12 +607,14 @@ static __init void lockup_detector_setup(void)
 	 * If sysctl is off and watchdog got disabled on the command line,
 	 * nothing to do here.
 	 */
+	/*根据系统配置，初始化watchdog_enabled变量的值*/
 	lockup_detector_update_enable();
 
 	if (!IS_ENABLED(CONFIG_SYSCTL) &&
 	    !(watchdog_enabled && watchdog_thresh))
 		return;
 
+	/*为每个cpu创建一个watchdog线程*/
 	ret = smpboot_register_percpu_thread_cpumask(&watchdog_threads,
 						     &watchdog_allowed_mask);
 	if (ret) {
@@ -600,6 +623,8 @@ static __init void lockup_detector_setup(void)
 	}
 
 	mutex_lock(&watchdog_mutex);
+
+	/*标志softlockup线程初始化完毕*/
 	softlockup_threads_initialized = true;
 	lockup_detector_reconfigure();
 	mutex_unlock(&watchdog_mutex);
@@ -781,7 +806,10 @@ void __init lockup_detector_init(void)
 	cpumask_copy(&watchdog_cpumask,
 		     housekeeping_cpumask(HK_FLAG_TIMER));
 
+	/*探测硬件是否支持定期发出nmi中断*/
 	if (!watchdog_nmi_probe())
 		nmi_watchdog_available = true;
+	
+	/*初始化系统的lockup机制*/
 	lockup_detector_setup();
 }

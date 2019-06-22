@@ -4500,6 +4500,7 @@ change:
 static int _sched_setscheduler(struct task_struct *p, int policy,
 			       const struct sched_param *param, bool check)
 {
+	/*使用传入的参数初始化一个attr变量*/
 	struct sched_attr attr = {
 		.sched_policy   = policy,
 		.sched_priority = param->sched_priority,
@@ -4513,6 +4514,7 @@ static int _sched_setscheduler(struct task_struct *p, int policy,
 		attr.sched_policy = policy;
 	}
 
+	/*调用该函数进行实际的设置*/
 	return __sched_setscheduler(p, &attr, check, true);
 }
 /**
@@ -4528,6 +4530,7 @@ static int _sched_setscheduler(struct task_struct *p, int policy,
 int sched_setscheduler(struct task_struct *p, int policy,
 		       const struct sched_param *param)
 {
+	/*调用该函数设置调度参数*/
 	return _sched_setscheduler(p, policy, param, true);
 }
 EXPORT_SYMBOL_GPL(sched_setscheduler);

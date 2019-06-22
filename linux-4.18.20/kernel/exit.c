@@ -762,6 +762,7 @@ static inline void check_stack_usage(void) {}
 
 void __noreturn do_exit(long code)
 {
+	/*获取当前任务的task_struct*/
 	struct task_struct *tsk = current;
 	int group_dead;
 
@@ -770,8 +771,11 @@ void __noreturn do_exit(long code)
 
 	WARN_ON(blk_needs_flush_plug(tsk));
 
+	/*不能在中断中退出*/
 	if (unlikely(in_interrupt()))
 		panic("Aiee, killing interrupt handler!");
+
+	/*不能尝试杀死idle进程*/
 	if (unlikely(!tsk->pid))
 		panic("Attempted to kill the idle task!");
 
@@ -948,9 +952,11 @@ do_group_exit(int exit_code)
 
 	BUG_ON(exit_code & 0x80); /* core dumps don't get here */
 
+	/*检查退出进程的SIGNAL_GROUP_EXIT标志是否不为0，如果不为0，说明内核已经开始为线程组执行退出的过程。
+	 *在这种情况下，就把存放在current->signal->group_exit_code的值当作退出码*/
 	if (signal_group_exit(sig))
 		exit_code = sig->group_exit_code;
-	else if (!thread_group_empty(current)) {
+	else if (!thread_group_empty(current)) {/*检查线程组链表是否不为空*/
 		struct sighand_struct *const sighand = current->sighand;
 
 		spin_lock_irq(&sighand->siglock);
@@ -958,13 +964,17 @@ do_group_exit(int exit_code)
 			/* Another thread got here before we took the lock.  */
 			exit_code = sig->group_exit_code;
 		else {
+			/*设置进程的SIGNAL_GROUP_EXIT标志并把终止代号放到current->signal->group_exit_code字段*/
 			sig->group_exit_code = exit_code;
 			sig->flags = SIGNAL_GROUP_EXIT;
+
+			/*调用zap_other_threads()函数杀死current线程组中的其它进程*/
 			zap_other_threads(current);
 		}
 		spin_unlock_irq(&sighand->siglock);
 	}
 
+	/*调用do_exit()函数，把进程的终止代码传递给它*/
 	do_exit(exit_code);
 	/* NOTREACHED */
 }

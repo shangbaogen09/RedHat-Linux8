@@ -1225,6 +1225,7 @@ int zap_other_threads(struct task_struct *p)
 
 	p->signal->group_stop_count = 0;
 
+	/*扫描与current->tgid对应的PIDTYPE_TGID类型的散列表中的每PID链表*/
 	while_each_thread(p, t) {
 		task_clear_jobctl_pending(t, JOBCTL_PENDING_MASK);
 		count++;
@@ -1233,6 +1234,8 @@ int zap_other_threads(struct task_struct *p)
 		if (t->exit_state)
 			continue;
 		sigaddset(&t->pending.signal, SIGKILL);
+
+		/*向表中所有不同于current的进程发送SIGKILL信号*/
 		signal_wake_up(t, 1);
 	}
 

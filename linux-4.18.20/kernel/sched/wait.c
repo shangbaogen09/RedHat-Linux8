@@ -161,6 +161,7 @@ EXPORT_SYMBOL(__wake_up);
  */
 void __wake_up_locked(struct wait_queue_head *wq_head, unsigned int mode, int nr)
 {
+	/*通用的唤醒流程*/
 	__wake_up_common(wq_head, mode, nr, 0, NULL, NULL);
 }
 EXPORT_SYMBOL_GPL(__wake_up_locked);
