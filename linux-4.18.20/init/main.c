@@ -418,6 +418,7 @@ static noinline void __ref rest_init(void)
 	rcu_read_unlock();
 
 	numa_default_policy();
+
 	/*创建2号进程，所有的内核线程都是直接或者间接的以kthreadd为父进程*/
 	pid = kernel_thread(kthreadd, NULL, CLONE_FS | CLONE_FILES);
 	rcu_read_lock();
@@ -433,6 +434,7 @@ static noinline void __ref rest_init(void)
 	 */
 	system_state = SYSTEM_SCHEDULING;
 
+	/*完成机制保证1号线程的初始化在2号线程创建完后执行*/
 	complete(&kthreadd_done);
 
 	/*

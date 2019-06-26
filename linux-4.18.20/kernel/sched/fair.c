@@ -4408,13 +4408,19 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 	if (delta_exec < sysctl_sched_min_granularity)
 		return;
 
+	/*取出红黑树的最左节点*/
 	se = __pick_first_entity(cfs_rq);
+
+	/*该节点与红黑树最左节点的差值*/
 	delta = curr->vruntime - se->vruntime;
 
 	if (delta < 0)
 		return;
 
+	/*curr进程与红黑树中最左进程left虚拟运行时间的差值大于curr的期望运行时间
+	  ideal_runtime,此时说明红黑树中最左结点left比curr节点更渴望处理器*/
 	if (delta > ideal_runtime)
+		/*设置当前进程的TIF_NEED_RESCHED标记*/
 		resched_curr(rq_of(cfs_rq));
 }
 
@@ -10028,10 +10034,14 @@ static void task_tick_fair(struct rq *rq, struct task_struct *curr, int queued)
 	/*取出该进程的调度实体*/
 	struct sched_entity *se = &curr->se;
 
+	/* 在不支持组调度条件下, 只循环一次在组调度的条件下, 调度实体存在层次关系,
+     * 更新子调度实体的同时必须更新父调度实体 */
 	for_each_sched_entity(se) {
+
+		/*获取当当前运行的进程所在的CFS就绪队列*/
 		cfs_rq = cfs_rq_of(se);
 
-		/*处理当前的se*/
+		/*完成周期性调度*/
 		entity_tick(cfs_rq, se, queued);
 	}
 

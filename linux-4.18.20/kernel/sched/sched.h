@@ -882,10 +882,9 @@ struct rq {
 	unsigned int		clock_update_flags;
 
     /*用以记录目前rq的clock值，基本上该值会等于通过sched_clock_cpu(cpu_of(rq))的返回值，
-    并会在每次调用scheduler_tick时通过函数update_rq_clock更新目前rq clock值。
-    函数sched_clock_cpu会通过sched_clock_local或ched_clock_remote取得
-    对应的sched_clock_data,而处理的sched_clock_data值，
-    会通过函数sched_clock_tick在每次调用scheduler_tick时进行更新；
+    并会在每次调用scheduler_tick时通过函数update_rq_clock更新目前rq clock值。函数
+	sched_clock_cpu会通过sched_clock_local或ched_clock_remote取得对应的sched_clock_data,
+	而处理的sched_clock_data值,会通过函数sched_clock_tick在每次调用scheduler_tick时进行更新；
     */
 	u64			clock;
 	u64			clock_task;

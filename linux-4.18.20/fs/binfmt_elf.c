@@ -732,6 +732,8 @@ static int load_elf_binary(struct linux_binprm *bprm)
 	unsigned long start_code, end_code, start_data, end_data;
 	unsigned long reloc_func_desc __maybe_unused = 0;
 	int executable_stack = EXSTACK_DEFAULT;
+
+	/*当前任务的用户现场寄存器空间指针*/
 	struct pt_regs *regs = current_pt_regs();
 
 	/*承载文件头部的结构体*/

@@ -74,3 +74,147 @@ struct hlist_head {
 3.再通过该 pid 结构体的 tasks 指针找到 node
 4.最后根据内核的 container_of 机制就能找到 task_struct 结构体
 
+/*系统中pid的类型*/
+enum pid_type
+{
+	/*进程的PID*/
+    PIDTYPE_PID,
+
+	/*进程组ID*/
+    PIDTYPE_PGID,
+
+	/*会话ID*/
+    PIDTYPE_SID,
+    PIDTYPE_MAX,
+    /* only valid to __task_pid_nr_ns() */
+    __PIDTYPE_TGID
+};
+
+struct task_struct {
+
+    /*进程标识符*/
+    pid_t               pid;
+
+    /*一个线程组所有线程与领头线程具有相同的pid，存入tgid
+	  字段，getpid()返回当前进程的tgid值而不是pid的值*/
+    pid_t               tgid;
+
+    /*当一个进程是线程时，这个成员指向主线程，当是一个进
+	  程时且该进程属于一个进程组，则该成员指向进程组长*/
+    struct task_struct      *group_leader;
+
+    /* PID/PID hash table linkage. */
+    struct pid_link         pids[PIDTYPE_MAX];
+
+    /*命名空间*/
+    /* Namespaces: */
+    struct nsproxy          *nsproxy;
+}
+
+struct pid_link
+{
+    struct hlist_node node;->[通过该节点链接到pid->tasks[PIDTYPE_MAX]对应的链表中]
+    struct pid *pid;
+};
+
+struct pid
+{
+	/*记录该结构体的引用计数*/
+    atomic_t count;
+
+	/*命名空间层数*/
+    unsigned int level;
+
+	/*使用该PID作为PID/PGID/SID的相关进程*/
+    /* lists of tasks that use this pid */
+    struct hlist_head tasks[PIDTYPE_MAX];
+    struct rcu_head rcu;
+
+	/*各层次上的upid结构体*/
+    struct upid numbers[1];
+};
+
+struct upid {
+	/*pid的取值*/
+    int nr;
+
+	/*所属的pid name space*/
+    struct pid_namespace *ns;
+};
+
+/*进程命名空间结构体定义*/
+struct nsproxy {
+    atomic_t count;
+    struct uts_namespace 	*uts_ns;
+    struct ipc_namespace 	*ipc_ns;
+    struct mnt_namespace 	*mnt_ns;
+    struct pid_namespace 	*pid_ns_for_children;
+    struct net       	 	*net_ns;
+    struct cgroup_namespace *cgroup_ns;
+};
+
+/*进程0的命名空间初始化*/
+-------------------------------------------------------------------
+struct nsproxy init_nsproxy = {
+    .count          = ATOMIC_INIT(1),
+    .uts_ns         = &init_uts_ns,
+#if defined(CONFIG_POSIX_MQUEUE) || defined(CONFIG_SYSVIPC)
+    .ipc_ns         = &init_ipc_ns,
+#endif
+    .mnt_ns         = NULL,
+    .pid_ns_for_children    = &init_pid_ns,
+#ifdef CONFIG_NET
+    .net_ns         = &init_net,
+#endif
+#ifdef CONFIG_CGROUPS
+    .cgroup_ns      = &init_cgroup_ns,
+#endif
+};
+
+/*变量init_task在内核的数据段中,是进程0的任务结构*/
+struct task_struct init_task
+= {
+	......
+
+    .nsproxy    = &init_nsproxy,
+    .pids = {
+        [PIDTYPE_PID]  = INIT_PID_LINK(PIDTYPE_PID),
+        [PIDTYPE_PGID] = INIT_PID_LINK(PIDTYPE_PGID),
+        [PIDTYPE_SID]  = INIT_PID_LINK(PIDTYPE_SID),
+    },
+	......
+};
+EXPORT_SYMBOL(init_task);
+
+/*pid命名空间结构体*/
+struct pid_namespace {
+    struct kref kref;
+    struct idr idr;
+    struct rcu_head rcu;
+    unsigned int pid_allocated;
+
+	/*本空间中替代init接收孤儿进程*/
+    struct task_struct *child_reaper;
+
+	/*为命名空间分配pid的slab缓存*/
+    struct kmem_cache *pid_cachep;
+
+	/*被命名空间层级*/
+    unsigned int level;
+
+	/*父命名空间*/
+    struct pid_namespace *parent;
+    struct user_namespace *user_ns;
+    struct ucounts *ucounts;
+    struct work_struct proc_work;
+    kgid_t pid_gid;
+    int hide_pid;
+    int reboot; /* group exit code if this pidns was rebooted */
+    struct ns_common ns;
+} __randomize_layout;
+
+
+全局会话标示SID:task_struct->group_leader->pids[PIDTYPE_SID].pid
+全局PID标示：task_struct->pid
+全局TGID标示：task_struct->tgid
+全局进程组标示PGID:task_struct->group_leader->pids[PIDTYPE_PGID].pid
