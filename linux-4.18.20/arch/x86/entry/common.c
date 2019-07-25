@@ -255,7 +255,6 @@ __visible inline void syscall_return_slowpath(struct pt_regs *regs)
 	    WARN(irqs_disabled(), "syscall %ld left IRQs disabled", regs->orig_ax))
 		local_irq_enable();
 
-	/*主要工作由该函数来完成*/
 	rseq_syscall(regs);
 
 	/*
@@ -266,6 +265,7 @@ __visible inline void syscall_return_slowpath(struct pt_regs *regs)
 		syscall_slow_exit_work(regs, cached_flags);
 
 	local_irq_disable();
+	/*主要工作由该函数来完成*/
 	prepare_exit_to_usermode(regs);
 }
 

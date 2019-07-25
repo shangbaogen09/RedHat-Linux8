@@ -502,3 +502,9 @@ find命令把匹配到的文件传递给xargs命令，而xargs命令每次只获
 　　find . -name "*.html" | wc -l
 知道一个目录下代码总行数以及单个文件行数：（得到的是每个及所有html文件中内容的行数）
 　　find . -name "*.html" | xargs wc -l
+
+/*解压rpm包获取rpm包的内容*/
+rpm2cpio *.rpm |cpio -div
+
+/*查看rpm的内容*/
+rpm -qpl *.rpm

@@ -945,6 +945,8 @@ void __noclone __crash_kexec(struct pt_regs *regs)
 			crash_setup_regs(&fixed_regs, regs);
 			crash_save_vmcoreinfo();
 			machine_crash_shutdown(&fixed_regs);
+
+			/*加载启动第二个kernel*/
 			machine_kexec(kexec_crash_image);
 		}
 		mutex_unlock(&kexec_mutex);
@@ -963,15 +965,20 @@ void crash_kexec(struct pt_regs *regs)
 	 */
 	this_cpu = raw_smp_processor_id();
 	old_cpu = atomic_cmpxchg(&panic_cpu, PANIC_CPU_INVALID, this_cpu);
+
+	/*如果是第一个cpu发生了panic*/
 	if (old_cpu == PANIC_CPU_INVALID) {
 		/* This is the 1st CPU which comes here, so go ahead. */
 		printk_safe_flush_on_panic();
+
+		/*调用该函数加载第二个内核*/
 		__crash_kexec(regs);
 
 		/*
 		 * Reset panic_cpu to allow another panic()/crash_kexec()
 		 * call.
 		 */
+		/*把panic cpu再次设置为无效值*/
 		atomic_set(&panic_cpu, PANIC_CPU_INVALID);
 	}
 }

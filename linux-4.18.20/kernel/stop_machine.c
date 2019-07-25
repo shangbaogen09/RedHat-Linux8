@@ -356,6 +356,7 @@ int stop_two_cpus(unsigned int cpu1, unsigned int cpu2, cpu_stop_fn_t fn, void *
 bool stop_one_cpu_nowait(unsigned int cpu, cpu_stop_fn_t fn, void *arg,
 			struct cpu_stop_work *work_buf)
 {
+	/*初始化一个cpu的cpu_stop_work节点*/
 	*work_buf = (struct cpu_stop_work){ .fn = fn, .arg = arg, };
 	return cpu_stop_queue_work(cpu, work_buf);
 }

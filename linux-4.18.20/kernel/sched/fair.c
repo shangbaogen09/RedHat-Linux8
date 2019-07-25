@@ -4476,9 +4476,19 @@ pick_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 	 * If curr is set we have to see if its left of the leftmost entity
 	 * still in the tree, provided there was anything in the tree at all.
 	 */
+	/* 如果
+     * left == NULL  或者
+     * curr != NULL curr进程比left进程更优(即curr的虚拟运行时间更小)
+     * 说明curr进程是自动放弃运行权利, 且其比最左进程更优
+     * 因此将left指向了curr, 即curr是最优的进程
+     */
 	if (!left || (curr && entity_before(curr, left)))
 		left = curr;
 
+	/* se = left存储了cfs_rq队列中最优的那个进程
+     * 如果进程curr是一个自愿放弃CPU的进程(其比最左进程更优), 则取se = curr
+     * 否则进程se就取红黑树中最左的进程left, 它必然是当前就绪队列上最优的
+     */
 	se = left; /* ideally we run the leftmost entity */
 
 	/*
@@ -6816,7 +6826,7 @@ static void task_dead_fair(struct task_struct *p)
 }
 #endif /* CONFIG_SMP */
 
-/*计算睡眠的最小粒度，放在频繁唤醒*/
+/*计算睡眠的最小粒度，防止频繁唤醒*/
 static unsigned long wakeup_gran(struct sched_entity *se)
 {
 	unsigned long gran = sysctl_sched_wakeup_granularity;
@@ -6860,7 +6870,7 @@ wakeup_preempt_entity(struct sched_entity *curr, struct sched_entity *se)
 	if (vdiff <= 0)
 		return -1;
 
-	/*计算睡眠的最小粒度，防止频繁抢占*/
+	/*把睡眠的最小粒度换算为虚拟运行时间*/
 	gran = wakeup_gran(se);
 
 	/*计算的差值大于最小粒度才允许抢占*/
@@ -8680,6 +8690,7 @@ static struct sched_group *find_busiest_group(struct lb_env *env)
 	 * Compute the various statistics relavent for load balancing at
 	 * this level.
 	 */
+	/*更新sd的状态，也就是遍历对应的sd，将sds里面的结构体数据填满*/
 	update_sd_lb_stats(env, &sds);
 	local = &sds.local_stat;
 	busiest = &sds.busiest_stat;
@@ -8945,12 +8956,14 @@ redo:
 		goto out_balanced;
 	}
 
+	/*通过find_busiest_group获取当前调度域中的最忙的调度组*/
 	group = find_busiest_group(&env);
 	if (!group) {
 		schedstat_inc(sd->lb_nobusyg[idle]);
 		goto out_balanced;
 	}
 
+	/*找到最忙的调度队列，遍历该组中的所有 CPU 队列，经过依次比较各个队列的负载，找到最忙的那个队列*/
 	busiest = find_busiest_queue(&env, group);
 	if (!busiest) {
 		schedstat_inc(sd->lb_nobusyq[idle]);
@@ -8965,6 +8978,8 @@ redo:
 	env.src_rq = busiest;
 
 	ld_moved = 0;
+
+	/*busiest->nr_running运行数大于1的时候，进行pull操作*/
 	if (busiest->nr_running > 1) {
 		/*
 		 * Attempt to move tasks. If find_busiest_group has found
@@ -8983,6 +8998,7 @@ more_balance:
 		 * cur_ld_moved - load moved in current iteration
 		 * ld_moved     - cumulative load moved across iterations
 		 */
+		/*进行实际的迁移操作*/
 		cur_ld_moved = detach_tasks(&env);
 
 		/*
@@ -9115,6 +9131,7 @@ more_balance:
 			raw_spin_unlock_irqrestore(&busiest->lock, flags);
 
 			if (active_balance) {
+				/*如果pull失败，开始触发push操作*/
 				stop_one_cpu_nowait(cpu_of(busiest),
 					active_load_balance_cpu_stop, busiest,
 					&busiest->active_balance_work);
@@ -9875,6 +9892,9 @@ static int idle_balance(struct rq *this_rq, struct rq_flags *rf)
 	 */
 	rq_unpin_lock(this_rq, rf);
 
+	/*sysctl_sched_migration_cost对应proc控制文件是/proc/sys/kernel
+	  /sched_migration_cost，开关代表如果CPU队列空闲了500ms
+	  sysctl_sched_migration_cost默认值）以上，则进行pull，否则则返回*/
 	if (this_rq->avg_idle < sysctl_sched_migration_cost ||
 	    !this_rq->rd->overload) {
 
@@ -9893,6 +9913,8 @@ static int idle_balance(struct rq *this_rq, struct rq_flags *rf)
 
 	update_blocked_averages(this_cpu);
 	rcu_read_lock();
+
+	/*遍历当前CPU所在的调度域*/
 	for_each_domain(this_cpu, sd) {
 		int continue_balancing = 1;
 		u64 t0, domain_cost;
