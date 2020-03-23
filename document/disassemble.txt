@@ -1,0 +1,186 @@
+在debug二进制程序的时候，偶尔会用到反汇编，有时候也想反汇编指定的函数，那么以下有两种方法可以试试：用objdump的-d参数或者gdb的disassemble命令：
+
+一、用objdump的-d参数，但不能指定函数名，objdump还有另外两个参数--start-address和--stop-address，我们只要指定反汇编的起始地址和结束地址那应该就可以了，那怎么得到函数的起止地址呢，这就需要nm工具了，整合成shell脚本如下：
+
+#!/bin/sh
+#file: /usr/bin/dis
+#disassemble a function
+#author: jusse@2013.12.12
+
+routine=$1
+func=$2
+
+if [ -z "$routine" ]; then
+    exit
+fi
+
+start=$(nm -n $routine | grep "\w\s$func" | awk '{print "0x"$1;exit}')
+end=$(nm -n $routine | grep -A1 "\w\s$func" | awk '{getline; print "0x"$1;exit}')
+
+if [ -z "$func" ]; then
+    objdump -d $routine
+else
+    echo "start-address: $start, end-address: $end"
+    objdump -d $routine --start-address=$start --stop-address=$end
+fi
+
+
+保存到/usr/bin/dis，并添加可执行权限，这样就可以随时反汇编指定的函数了，比如反汇编nginx的ngx_array_init函数的结果如下： 
+root@jusse:~/work/#dis ./nginx ngx_array_init
+start-address: 0x0000000000404404, end-address: 0x000000000040448a
+
+nginx:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000404404 <ngx_array_init>:
+  404404:       55                      push   %rbp
+  404405:       48 89 e5                mov    %rsp,%rbp
+  404408:       48 83 ec 20             sub    $0x20,%rsp
+  40440c:       48 89 7d f8             mov    %rdi,-0x8(%rbp)
+  404410:       48 89 75 f0             mov    %rsi,-0x10(%rbp)
+  404414:       48 89 55 e8             mov    %rdx,-0x18(%rbp)
+  404418:       48 89 4d e0             mov    %rcx,-0x20(%rbp)
+  40441c:       48 8b 45 f8             mov    -0x8(%rbp),%rax
+  404420:       48 c7 40 08 00 00 00    movq   $0x0,0x8(%rax)
+  404427:       00
+  404428:       48 8b 45 f8             mov    -0x8(%rbp),%rax
+  40442c:       48 8b 55 e0             mov    -0x20(%rbp),%rdx
+  404430:       48 89 50 10             mov    %rdx,0x10(%rax)
+  404434:       48 8b 45 f8             mov    -0x8(%rbp),%rax
+  404438:       48 8b 55 e8             mov    -0x18(%rbp),%rdx
+  40443c:       48 89 50 18             mov    %rdx,0x18(%rax)
+  404440:       48 8b 45 f8             mov    -0x8(%rbp),%rax
+  404444:       48 8b 55 f0             mov    -0x10(%rbp),%rdx
+  404448:       48 89 50 20             mov    %rdx,0x20(%rax)
+  40444c:       48 8b 45 e8             mov    -0x18(%rbp),%rax
+  404450:       48 89 c2                mov    %rax,%rdx
+  404453:       48 0f af 55 e0          imul   -0x20(%rbp),%rdx
+  404458:       48 8b 45 f0             mov    -0x10(%rbp),%rax
+  40445c:       48 89 d6                mov    %rdx,%rsi
+  40445f:       48 89 c7                mov    %rax,%rdi
+  404462:       e8 4e 37 00 00          callq  407bb5 <ngx_palloc>
+  404467:       48 8b 55 f8             mov    -0x8(%rbp),%rdx
+  40446b:       48 89 02                mov    %rax,(%rdx)
+  40446e:       48 8b 45 f8             mov    -0x8(%rbp),%rax
+  404472:       48 8b 00                mov    (%rax),%rax
+  404475:       48 85 c0                test   %rax,%rax
+  404478:       75 09                   jne    404483 <ngx_array_init+0x7f>
+  40447a:       48 c7 c0 ff ff ff ff    mov    $0xffffffffffffffff,%rax
+  404481:       eb 05                   jmp    404488 <ngx_array_init+0x84>
+  404483:       b8 00 00 00 00          mov    $0x0,%eax
+  404488:       c9                      leaveq
+  404489:       c3                      retq
+
+二、用gdb的disassemble命令：
+
+root@jusse:~/work/#gdb -q ./nginx
+Reading symbols from /home/wangzuxi/work/svn/l7waf_build/install_dir/sbin/nginx...done.
+(gdb) disassemble ngx_array_init
+Dump of assembler code for function ngx_array_init:
+   0x00000000004cb21c <+0>:     push   %rbp
+   0x00000000004cb21d <+1>:     mov    %rsp,%rbp
+   0x00000000004cb220 <+4>:     sub    $0x20,%rsp
+   0x00000000004cb224 <+8>:     mov    %rdi,-0x8(%rbp)
+   0x00000000004cb228 <+12>:    mov    %rsi,-0x10(%rbp)
+   0x00000000004cb22c <+16>:    mov    %rdx,-0x18(%rbp)
+   0x00000000004cb230 <+20>:    mov    %rcx,-0x20(%rbp)
+   0x00000000004cb234 <+24>:    mov    -0x8(%rbp),%rax
+   0x00000000004cb238 <+28>:    movq   $0x0,0x8(%rax)
+   0x00000000004cb240 <+36>:    mov    -0x8(%rbp),%rax
+   0x00000000004cb244 <+40>:    mov    -0x20(%rbp),%rdx
+   0x00000000004cb248 <+44>:    mov    %rdx,0x10(%rax)
+   0x00000000004cb24c <+48>:    mov    -0x8(%rbp),%rax
+   0x00000000004cb250 <+52>:    mov    -0x18(%rbp),%rdx
+   0x00000000004cb254 <+56>:    mov    %rdx,0x18(%rax)
+   0x00000000004cb258 <+60>:    mov    -0x8(%rbp),%rax
+   0x00000000004cb25c <+64>:    mov    -0x10(%rbp),%rdx
+   0x00000000004cb260 <+68>:    mov    %rdx,0x20(%rax)
+   0x00000000004cb264 <+72>:    mov    -0x18(%rbp),%rax
+   0x00000000004cb268 <+76>:    mov    %rax,%rdx
+   0x00000000004cb26b <+79>:    imul   -0x20(%rbp),%rdx
+   0x00000000004cb270 <+84>:    mov    -0x10(%rbp),%rax
+   0x00000000004cb274 <+88>:    mov    %rdx,%rsi
+   0x00000000004cb277 <+91>:    mov    %rax,%rdi
+   0x00000000004cb27a <+94>:    callq  0x407bb5 <ngx_palloc>
+   0x00000000004cb27f <+99>:    mov    -0x8(%rbp),%rdx
+   0x00000000004cb283 <+103>:   mov    %rax,(%rdx)
+   0x00000000004cb286 <+106>:   mov    -0x8(%rbp),%rax
+   0x00000000004cb28a <+110>:   mov    (%rax),%rax
+   0x00000000004cb28d <+113>:   test   %rax,%rax
+   0x00000000004cb290 <+116>:   jne    0x4cb29b <ngx_array_init+127>
+   0x00000000004cb292 <+118>:   mov    $0xffffffffffffffff,%rax
+   0x00000000004cb299 <+125>:   jmp    0x4cb2a0 <ngx_array_init+132>
+   0x00000000004cb29b <+127>:   mov    $0x0,%eax
+   0x00000000004cb2a0 <+132>:   leaveq 
+   0x00000000004cb2a1 <+133>:   retq   
+End of assembler dump.
+(gdb) q
+
+
+可以看出反汇编代码与第一种方法的结果是一样的，但这么用gdb有点费劲了，还可以像下面这么玩：
+
+#!/bin/sh
+#file: /usr/bin/gdbdis
+#disassemble a function use gdb
+#author: jusse@2014.11.20
+
+if test $# -ne 2; then
+echo "Usage: `basename $0 .sh` file function" 1>&2
+echo "For exampl: `basename $0 .sh` xxx func" 1>&2
+exit 1
+fi
+
+result=""
+GDB=${GDB:-/usr/bin/gdb}
+# Run GDB, strip out unwanted noise.
+result=`$GDB -quiet $1 <<EOF
+disassemble $2
+EOF`
+
+echo "$result" | egrep -A 1000 -e "^\(gdb\)" | egrep -B 1000 -e "^\(gdb\)"
+
+同样反汇编nginx的ngx_array_init函数的结果是一样的：
+
+./gdbdis ./nginx ngx_array_init
+(gdb) Dump of assembler code for function ngx_array_init:
+   0x00000000004cb21c <+0>:     push   %rbp
+   0x00000000004cb21d <+1>:     mov    %rsp,%rbp
+   0x00000000004cb220 <+4>:     sub    $0x20,%rsp
+   0x00000000004cb224 <+8>:     mov    %rdi,-0x8(%rbp)
+   0x00000000004cb228 <+12>:    mov    %rsi,-0x10(%rbp)
+   0x00000000004cb22c <+16>:    mov    %rdx,-0x18(%rbp)
+   0x00000000004cb230 <+20>:    mov    %rcx,-0x20(%rbp)
+   0x00000000004cb234 <+24>:    mov    -0x8(%rbp),%rax
+   0x00000000004cb238 <+28>:    movq   $0x0,0x8(%rax)
+   0x00000000004cb240 <+36>:    mov    -0x8(%rbp),%rax
+   0x00000000004cb244 <+40>:    mov    -0x20(%rbp),%rdx
+   0x00000000004cb248 <+44>:    mov    %rdx,0x10(%rax)
+   0x00000000004cb24c <+48>:    mov    -0x8(%rbp),%rax
+   0x00000000004cb250 <+52>:    mov    -0x18(%rbp),%rdx
+   0x00000000004cb254 <+56>:    mov    %rdx,0x18(%rax)
+   0x00000000004cb258 <+60>:    mov    -0x8(%rbp),%rax
+   0x00000000004cb25c <+64>:    mov    -0x10(%rbp),%rdx
+   0x00000000004cb260 <+68>:    mov    %rdx,0x20(%rax)
+   0x00000000004cb264 <+72>:    mov    -0x18(%rbp),%rax
+   0x00000000004cb268 <+76>:    mov    %rax,%rdx
+   0x00000000004cb26b <+79>:    imul   -0x20(%rbp),%rdx
+   0x00000000004cb270 <+84>:    mov    -0x10(%rbp),%rax
+   0x00000000004cb274 <+88>:    mov    %rdx,%rsi
+   0x00000000004cb277 <+91>:    mov    %rax,%rdi
+   0x00000000004cb27a <+94>:    callq  0x407bb5 <ngx_palloc>
+   0x00000000004cb27f <+99>:    mov    -0x8(%rbp),%rdx
+   0x00000000004cb283 <+103>:   mov    %rax,(%rdx)
+   0x00000000004cb286 <+106>:   mov    -0x8(%rbp),%rax
+   0x00000000004cb28a <+110>:   mov    (%rax),%rax
+   0x00000000004cb28d <+113>:   test   %rax,%rax
+   0x00000000004cb290 <+116>:   jne    0x4cb29b <ngx_array_init+127>
+   0x00000000004cb292 <+118>:   mov    $0xffffffffffffffff,%rax
+   0x00000000004cb299 <+125>:   jmp    0x4cb2a0 <ngx_array_init+132>
+   0x00000000004cb29b <+127>:   mov    $0x0,%eax
+   0x00000000004cb2a0 <+132>:   leaveq 
+   0x00000000004cb2a1 <+133>:   retq   
+End of assembler dump.
+(gdb) quit
+
