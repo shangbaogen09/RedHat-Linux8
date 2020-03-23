@@ -1,0 +1,95 @@
+linux kernel debug方法总结
+
+1、最常用的方法是printk插桩；
+
+2、借住proc文件系统查看相关参数：/proc/interrrupts、/proc/timer_list、/proc/cpuinfo等，或者自己创建proc文件，帮助debug；
+   内核中有三个常用的伪文件系统：procfs，debugfs和sysfs。
+   
+       procfs — The proc filesystem is a pseudo-filesystem which provides an interface to kernel data structures.
+       sysfs — The filesystem for exporting kernel objects.
+       debugfs — Debugfs exists as a simple way for kernel developers to make information available to user space.
+   
+   它们都用于Linux内核和用户空间的数据交换，但是适用的场景有所差异：
+   
+       procfs 历史最早，最初就是用来跟内核交互的唯一方式，用来获取处理器、内存、设备驱动、进程等各种信息。
+       sysfs 跟 kobject 框架紧密联系，而 kobject 是为设备驱动模型而存在的，所以 sysfs 是为设备驱动服务的。
+       debugfs 从名字来看就是为debug而生，所以更加灵活。
+   
+   它们仨的挂载方式类似，做个实验：
+   
+       $ sudo mkdir /tmp/{proc,sys,debug}
+       $ sudo mount -t proc nondev /tmp/proc/
+       $ sudo mount -t sys nondev /tmp/sys/
+       $ sudo mount -t debugfs nondev /tmp/debug/
+   
+   不过，默认情况下，它们分别挂载在/proc，/sys/，/sys/kernel/debug/。
+   
+   下面简单介绍这三个文件系统的用法。在介绍之前，请记下他们的官方文档：
+   
+       procfs — Documentation/filesystems/proc.txt
+       sysfs — Documentation/filesystems/sysfs.txt
+       debugfs — Documentation/filesystems/debugfs.txt
+
+     procfs/sysfs/debugfs:http://tinylab.org/show-the-usage-of-procfs-sysfs-debugfs/
+
+       （1）procfs:挂载在/proc,Documentation/filesystems/proc.txt
+
+       （2）sysfs:挂载在/sys,Documentation/filesystems/sysfs.txt
+
+       （3）debugfs:挂载在/sys/kernel/debug/,Documentation/filesystems/debugfs.txt
+
+3、Sysrq魔法键（Linux Magic System Request Key）
+
+   参考Documentation/sysrq.txt文件：
+
+  （1）开启Sysrq魔法键功能：在kernel的配置文件中加入：CONFIG_MAFIC_SYSRQ
+
+           make menuconfig->Kernel hacking->Magic SysRq key
+
+ （2）Enable magic sysrq key function
+
+          cat  /proc/sys/kernel/sysrq可以查看当前打开的magic sysrq key function
+
+          echo "number" > /proc/sys/kernel/sysrq可以打开某项magic sysrq key function,number可以是十进制也可以是十六进制
+
+   写入的number可以是以下几个或者几个的或：
+
+   0 - disable sysrq completely
+   1 - enable all functions of sysrq
+  >1 - bitmask of allowed sysrq functions (see below for detailed function
+       description):
+          2 =   0x2 - enable control of console logging level
+          4 =   0x4 - enable control of keyboard (SAK, unraw)
+          8 =   0x8 - enable debugging dumps of processes etc.
+         16 =  0x10 - enable sync command
+         32 =  0x20 - enable remount read-only
+         64 =  0x40 - enable signalling of processes (term, kill, oom-kill)
+        128 =  0x80 - allow reboot/poweroff
+        256 = 0x100 - allow nicing of all RT tasks
+
+  （3）怎么使用magic sysrq key?
+
+       X86平台：alt + print screen + "command key"
+
+       比较常用的：
+
+                 alt + print screen + b: reboot system
+
+                 alt + print screen + '0' ~ '9':设置console log level
+
+4、core dump:主要获取应用程序崩溃时的现场信息，如程序运行时的内存、寄存器状态、堆栈指针、内存管理信息、函数调用堆栈等
+
+  （1）ulimit -c查看core dump机制是否使能，若为0则不产生core dump
+
+   （2）ulimit -c unlimited使能core dump
+
+具体参考https://www.cnblogs.com/justin-y-lin/p/5598305.html
+
+其他：
+
+1、优秀的内核调试总结网站
+
+     https://www.cnblogs.com/justin-y-lin/p/5424529.html
+————————————————
+版权声明：本文为CSDN博主「坚持是一种生活姿态」的原创文章，遵循 CC 4.0 BY-SA 版权协议，转载请附上原文出处链接及本声明。
+原文链接：https://blog.csdn.net/qq_38712943/article/details/81705469
