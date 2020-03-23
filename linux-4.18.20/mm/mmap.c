@@ -641,7 +641,7 @@ static void vma_link(struct mm_struct *mm, struct vm_area_struct *vma,
 	/*进行mm结构中链表和红黑树插入操作*/
 	__vma_link(mm, vma, prev, rb_link, rb_parent);
 
-	/*插入到对应文件的地址空间adress_space->i_mmap或者adress_space->i_mmap_nonlinear*/
+	/*插入到对应文件的地址空间adress_space->i_mmap*/
 	__vma_link_file(vma);
 
 	if (mapping)

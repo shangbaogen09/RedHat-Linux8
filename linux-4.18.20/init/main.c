@@ -738,6 +738,7 @@ asmlinkage __visible void __init start_kernel(void)
 	key_init();
 	security_init();
 	dbg_late_init();
+	/**/
 	vfs_caches_init();
 	pagecache_init();
 	signals_init();
